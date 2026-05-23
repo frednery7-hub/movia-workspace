@@ -1,0 +1,15 @@
+{
+  "name": "@movia/shared-data",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@movia/shared-types": "workspace:*",
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4"
+  },
+  "exports": {
+    "./graph/graph-builder": "./src/graph/graph-builder.ts"
+  }
+}

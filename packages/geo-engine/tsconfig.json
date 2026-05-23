@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "target": "ES2022",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["node", "jest"],
+    "paths": {
+      "@movia/shared-types": ["../shared-types/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*"]
+}

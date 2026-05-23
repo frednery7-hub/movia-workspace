@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+  CIRCULAR
+}
+
+model Line {
+  id            String         @id
+  name          String         @unique
+  color         String
+  trackSegments TrackSegment[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("lines")
+}
+
+model Station {
+  id                   String            @id
+  name                 String
+  shortCode            String
+  latitude             Float
+  longitude            Float
+  isUnderground        Boolean           @default(false)
+  hasElevator          Boolean           @default(false)
+  hasEscalator         Boolean           @default(false)
+  wheelchairAccessible Boolean           @default(true)
+  platforms            Platform[]
+  entrances            StationEntrance[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@map("stations")
+}
+
+model Platform {
+  id            String             @id
+  stationId     String
+  lineId        String
+  station       Station            @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  fromSegments  TrackSegment[]     @relation("SegmentFrom")
+  toSegments    TrackSegment[]     @relation("SegmentTo")
+  transfersFrom InternalTransfer[] @relation("TransferFrom")
+  transfersTo   InternalTransfer[] @relation("TransferTo")
+  createdAt     DateTime           @default(now())
+
+  @@unique([stationId, lineId])
+  @@index([stationId])
+  @@index([lineId])
+  @@map("platforms")
+}
+
+model TrackSegment {
+  id                     String               @id
+  fromPlatformId         String
+  toPlatformId           String
+  lineId                 String
+  direction              Direction
+  sequence               Int
+  distanceMeters         Float
+  averageDurationSeconds Int
+  fromPlatform           Platform             @relation("SegmentFrom", fields: [fromPlatformId], references: [id], onDelete: Cascade)
+  toPlatform             Platform             @relation("SegmentTo",   fields: [toPlatformId],   references: [id], onDelete: Cascade)
+  line                   Line                 @relation(fields: [lineId], references: [id])
+  timeProfiles           SegmentTimeProfile[]
+  createdAt              DateTime             @default(now())
+
+  @@unique([fromPlatformId, toPlatformId, lineId, direction])
+  @@index([fromPlatformId])
+  @@index([toPlatformId])
+  @@index([lineId])
+  @@map("track_segments")
+}
+
+model SegmentTimeProfile {
+  id               String       @id @default(uuid())
+  segmentId        String
+  serviceId        String
+  startTimeSeconds Int
+  endTimeSeconds   Int
+  durationSeconds  Int
+  segment          TrackSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
+
+  @@unique([segmentId, serviceId, startTimeSeconds])
+  @@index([segmentId])
+  @@index([serviceId])
+  @@map("segment_time_profiles")
+}
+
+model InternalTransfer {
+  id                    String   @id @default(uuid())
+  fromPlatformId        String
+  toPlatformId          String
+  walkingSeconds        Int      @default(180)
+  accessibilityFriendly Boolean  @default(true)
+  platformChange        Boolean  @default(false)
+  fromPlatform          Platform @relation("TransferFrom", fields: [fromPlatformId], references: [id], onDelete: Cascade)
+  toPlatform            Platform @relation("TransferTo",   fields: [toPlatformId],   references: [id], onDelete: Cascade)
+  createdAt             DateTime @default(now())
+
+  @@unique([fromPlatformId, toPlatformId])
+  @@index([fromPlatformId])
+  @@index([toPlatformId])
+  @@map("internal_transfers")
+}
+
+model StationEntrance {
+  id         String   @id @default(uuid())
+  stationId  String
+  latitude   Float
+  longitude  Float
+  accessible Boolean  @default(true)
+  station    Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@map("station_entrances")
+}

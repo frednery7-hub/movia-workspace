@@ -1,0 +1,13 @@
+{
+  "name": "@movia/route-engine",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@movia/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4"
+  }
+}

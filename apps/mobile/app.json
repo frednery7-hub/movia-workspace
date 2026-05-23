@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Movia",
+    "slug": "movia",
+    "scheme": "movia",
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "android": {
+      "usesCleartextTraffic": true
+    }
+  }
+}

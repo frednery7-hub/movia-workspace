@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "prisma/seed.ts", "prisma/migrations"],
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "sourceMap": true,
+    "declaration": false,
+    "incremental": false
+  }
+}

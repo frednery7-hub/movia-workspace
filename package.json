@@ -1,0 +1,40 @@
+{
+  "name": "movia-workspace",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "prettier --write .",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "clean": "rimraf node_modules apps/*/node_modules packages/*/node_modules .turbo dist",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5",
+    "prettier": "^3.4.2",
+    "rimraf": "^5.0.5",
+    "turbo": "^2.0.0"
+  },
+  "dependencies": {
+    "docx": "^9.6.1"
+  },
+  "lint-staged": {
+    "apps/backend/src/**/*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "packages/**/*.ts": [
+      "prettier --write"
+    ]
+  }
+}
