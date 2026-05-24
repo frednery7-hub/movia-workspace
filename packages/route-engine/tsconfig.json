@@ -9,8 +9,9 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
+    "isolatedModules": true,
     "noEmit": true,
-    "types": ["node"],
+    "types": ["node", "jest"],
     "paths": {
       "@movia/shared-types": ["../shared-types/src/index.ts"]
     }
