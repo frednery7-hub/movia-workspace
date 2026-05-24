@@ -10,7 +10,7 @@ import { MinHeap } from "./min-heap";
 
 const VIRTUAL_ORIGIN_ID = "__virtual_origin__";
 const VIRTUAL_DESTINATION_ID = "__virtual_destination__";
-const WALKING_SPEED_MS = 1.4; // m/s (~5 km/h)
+const WALKING_SPEED_MS = 1.4;
 
 export interface RouteQuery {
   origin: NearestEntranceResult;
@@ -39,7 +39,6 @@ export class RouteEngine {
     );
   }
 
-  // ── Injeta WalkEdges efemeras — nao altera o grafo estatico ──
   private injectWalkEdges(
     origin: NearestEntranceResult,
     destination: NearestEntranceResult,
@@ -94,7 +93,6 @@ export class RouteEngine {
     };
   }
 
-  // ── Dijkstra com early termination ───────────────────────────
   private dijkstra(
     graph: WeightedGraph,
     originId: string,
@@ -130,7 +128,6 @@ export class RouteEngine {
     return this.reconstructPath(graph, prev, originId, destinationId);
   }
 
-  // ── Reconstrucao do caminho ───────────────────────────────────
   private reconstructPath(
     graph: WeightedGraph,
     prev: Map<string, PrevEntry>,
@@ -146,14 +143,17 @@ export class RouteEngine {
 
       const fromNode = graph.nodes.get(entry.nodeId);
       const toNode = graph.nodes.get(current);
-      if (!fromNode || !toNode) break;
 
-      segments.unshift({
-        edge: entry.edge,
-        fromNode,
-        toNode,
-        cumulativeCost: 0,
-      });
+      // Skipa arestas de nos virtuais mas continua percorrendo o caminho
+      if (fromNode && toNode) {
+        segments.unshift({
+          edge: entry.edge,
+          fromNode,
+          toNode,
+          cumulativeCost: 0,
+        });
+      }
+
       current = entry.nodeId;
     }
 

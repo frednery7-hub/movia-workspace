@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { GeoModule } from './geo/geo.module';
 import { EtaModule } from './eta/eta.module';
+import { GraphModule } from './graph/graph.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { EtaModule } from './eta/eta.module';
     LinesModule,
     HealthModule,
     GeoModule,
+    GraphModule,
     EtaModule,
   ],
   providers: [

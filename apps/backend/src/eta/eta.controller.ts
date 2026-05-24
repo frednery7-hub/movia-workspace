@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Request } from '@nestjs/common';
+import { Controller, Get, Param, Query, Request } from '@nestjs/common';
 import { EtaService } from './eta.service';
 
 interface JwtRequest {
@@ -13,7 +13,12 @@ export class EtaController {
   async getEta(
     @Request() req: JwtRequest,
     @Param('destinationId') destinationId: string,
+    @Query('from') originStationId: string,
   ) {
-    return this.etaService.computeEta(req.user.sub, destinationId);
+    return this.etaService.computeEta(
+      req.user.sub,
+      originStationId ?? destinationId,
+      destinationId,
+    );
   }
 }
