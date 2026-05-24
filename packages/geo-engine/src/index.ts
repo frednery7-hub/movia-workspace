@@ -11,3 +11,16 @@ export type {
   StationRecord,
   EntranceRecord,
 } from "./spatial-index.ts";
+export {
+  computeConfidenceScore,
+  NAVIGATION_THRESHOLDS,
+  QUALITY_POLICIES,
+} from "./confidence-score.ts";
+export type {
+  ConfidenceInput,
+  ConfidenceOutput,
+  NavigationMode,
+  ScoreBreakdown,
+} from "./confidence-score.ts";
+export { NavigationStateMachine, RECOVERY_THRESHOLD } from "./state-machine.ts";
+export type { StateMachineInput, StateMachineOutput } from "./state-machine.ts";

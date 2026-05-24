@@ -8,6 +8,7 @@ import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { GeoModule } from './geo/geo.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
     AuthModule,
     LinesModule,
     HealthModule,
+    GeoModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

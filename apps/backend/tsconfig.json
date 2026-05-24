@@ -17,6 +17,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "paths": {
       "@movia/shared-data/*": ["../../packages/shared-data/src/*"],
       "@movia/shared-types": ["../../packages/shared-types/src/index.ts"]
