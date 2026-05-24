@@ -1,10 +1,11 @@
-version: '3.8'
 networks:
   movia_network:
     driver: bridge
+
 volumes:
   movia_pg_data:
   movia_redis_data:
+
 services:
   postgres:
     container_name: movia_postgres
@@ -12,24 +13,25 @@ services:
     restart: unless-stopped
     env_file:
       - ../apps/backend/.env
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - movia_pg_data:/var/lib/postgresql/data
     networks:
       - movia_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-movia} -d ${POSTGRES_DB:-movia_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-movia_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
+
   redis:
     container_name: movia_redis
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --save 60 1 --loglevel warning
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - movia_redis_data:/data
     networks:
