@@ -9,6 +9,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { GeoModule } from './geo/geo.module';
+import { EtaModule } from './eta/eta.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { GeoModule } from './geo/geo.module';
     LinesModule,
     HealthModule,
     GeoModule,
+    EtaModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

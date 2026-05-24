@@ -19,9 +19,11 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    "baseUrl": "./",
     "paths": {
       "@movia/shared-data/*": ["../../packages/shared-data/src/*"],
-      "@movia/shared-types": ["../../packages/shared-types/src/index.ts"]
+      "@movia/shared-types": ["../../packages/shared-types/src/index.ts"],
+      "@movia/route-engine": ["../../packages/route-engine/src/index.ts"]
     }
   },
   "include": ["src/**/*", "prisma/seed.ts"]
