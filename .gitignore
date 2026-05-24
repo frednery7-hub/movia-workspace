@@ -16,3 +16,10 @@ npm-debug.log*
 pnpm-debug.log*
 .DS_Store
 docker-compose.override.yml
+
+# Artefatos de compilacao nos pacotes
+packages/**/src/**/*.js
+packages/**/src/**/*.js.map
+!packages/**/jest.config.js
+!packages/**/babel.config.js
+!packages/**/commitlint.config.js
