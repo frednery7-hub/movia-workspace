@@ -76,4 +76,4 @@ jobs:
 
       # ── Step 6: Security Smoke Tests ─────────────────────────
       - name: Security Smoke Tests
-        run: pnpm --filter backend test:e2e --testPathPattern=security-smoke
+        run: pnpm --filter backend test:e2e
