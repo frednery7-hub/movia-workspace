@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { UpdateLocationDto } from './dto/update-location.dto';
 
 export interface LocationResponse {
@@ -14,6 +15,8 @@ export type EtaStatus = 'ACTIVE' | 'PAUSED_DUE_TO_FAULT' | 'DEAD_RECKONING';
 export class GeoService {
   private readonly logger = new Logger(GeoService.name);
 
+  constructor(private readonly prisma: PrismaService) {}
+
   async processUserLocation(
     userId: string,
     payload: UpdateLocationDto,
@@ -24,18 +27,12 @@ export class GeoService {
 
     // ── Dead Reckoning: mobile reporta degradado + parado ────────
     if (payload.isDegraded && payload.isStationary && payload.lineId) {
-      // TODO Sprint 6 completo: substituir mock por NetworkService.getLineStatus()
-      const isLineFaulty = true;
+      const isLineFaulty = await this.checkLineFaulty(String(payload.lineId));
 
       if (isLineFaulty) {
         this.logger.warn(
           `[User ${userId}] Dead Reckoning ativado na Linha ${payload.lineId}. Aplicando ancora.`,
         );
-
-        // TODO: substituir por prisma.userLocation.findFirst({ where: { userId } })
-        // finalLat = lastKnown.lat;
-        // finalLng = lastKnown.lng;
-
         etaStatus = 'PAUSED_DUE_TO_FAULT';
       }
     }
@@ -54,5 +51,20 @@ export class GeoService {
       appliedLng: finalLng,
       etaStatus,
     };
+  }
+
+  /**
+   * Consulta o banco para verificar se a linha esta com falha.
+   * Por ora verifica se a linha existe — futuro: tabela network_state.
+   */
+  private async checkLineFaulty(lineId: string): Promise<boolean> {
+    const line = await this.prisma.line.findUnique({
+      where: { id: lineId },
+    });
+    // Linha nao encontrada no banco = considerar fora de operacao
+    if (!line) return true;
+    // TODO: quando tabela network_state existir:
+    // return line.status === 'FAULTY';
+    return false;
   }
 }
