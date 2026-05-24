@@ -1,0 +1,79 @@
+name: Security Gate
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: movia_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:root@localhost:5432/movia_db?schema=public
+      JWT_SECRET: ci_secret_minimo_32_caracteres_aqui
+      NODE_ENV: test
+      ALLOWED_ORIGINS: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Step 1: Secret Scanning ───────────────────────────────
+      - name: Secret Scanning (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Step 2: Dependency Audit ──────────────────────────────
+      - name: Dependency Audit
+        run: pnpm audit --audit-level=critical
+
+      # ── Step 3: Build ─────────────────────────────────────────
+      - name: Build Backend
+        run: pnpm --filter backend build
+
+      # ── Step 4: Prisma Migrate ────────────────────────────────
+      - name: Prisma Migrate
+        run: pnpm --filter backend exec prisma migrate deploy
+
+      # ── Step 5: Seed ──────────────────────────────────────────
+      - name: Seed Database
+        run: pnpm --filter backend exec prisma db seed
+
+      # ── Step 6: Security Smoke Tests ─────────────────────────
+      - name: Security Smoke Tests
+        run: pnpm --filter backend test:e2e --testPathPattern=security-smoke
