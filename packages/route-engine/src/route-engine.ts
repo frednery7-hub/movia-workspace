@@ -6,7 +6,7 @@ import type {
   RouteResult,
   RouteSegment,
 } from "@movia/shared-types";
-import { MinHeap } from "./min-heap.ts";
+import { MinHeap } from "./min-heap";
 
 const VIRTUAL_ORIGIN_ID = "__virtual_origin__";
 const VIRTUAL_DESTINATION_ID = "__virtual_destination__";
