@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './common/http-exception.filter';
 import helmet from 'helmet';
 
 async function bootstrap() {
-  // ── Trava de inicializacao segura ────────────────────────────
   if (!process.env.JWT_SECRET) {
     console.error('FATAL: JWT_SECRET nao definido. Servidor abortado.');
     process.exit(1);
@@ -12,15 +12,25 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  // ── Helmet — blindagem de headers HTTP ───────────────────────
-  app.use(helmet());
+  // ── Helmet ───────────────────────────────────────────────────
+  app.use(
+    helmet({
+      contentSecurityPolicy: true,
+      crossOriginEmbedderPolicy: true,
+      referrerPolicy: { policy: 'no-referrer' },
+      permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+    }),
+  );
 
-  // ── ValidationPipe global — whitelist estrito ────────────────
+  // ── Filtro global de excecoes ─────────────────────────────────
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
+  // ── ValidationPipe global ────────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // remove campos nao declarados no DTO
-      forbidNonWhitelisted: true, // rejeita requests com campos extras
-      transform: true, // converte tipos automaticamente
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
 
