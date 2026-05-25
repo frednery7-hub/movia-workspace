@@ -3,12 +3,24 @@
     "name": "Movia",
     "slug": "movia",
     "scheme": "movia",
+    "newArchEnabled": true,
     "plugins": [
       "expo-router",
       "expo-secure-store"
     ],
     "android": {
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": false,
+      "adaptiveIcon": {
+        "backgroundColor": "#1a1a2e"
+      }
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "movia"
+      }
     }
   }
 }

@@ -1,7 +1,12 @@
-import axios                from 'axios';
-import { IdentityService }  from '../security/identity.service';
+import axios               from 'axios';
+import { IdentityService } from '../security/identity.service';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3000';
+
+// Em producao, bloqueia URLs sem HTTPS
+if (process.env.NODE_ENV === 'production' && !API_URL.startsWith('https://')) {
+  throw new Error('FATAL: EXPO_PUBLIC_API_URL deve usar HTTPS em producao.');
+}
 
 export const api = axios.create({
   baseURL: API_URL,
