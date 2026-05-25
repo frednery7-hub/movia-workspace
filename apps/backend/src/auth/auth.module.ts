@@ -6,9 +6,11 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [
+    PrismaModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -21,8 +23,8 @@ import { JwtStrategy } from './jwt.strategy';
     ThrottlerModule.forRoot([
       {
         name: 'session',
-        ttl: 60_000, // janela de 1 minuto
-        limit: 5, // max 5 requisicoes por minuto por IP
+        ttl: 60_000,
+        limit: 5,
       },
     ]),
   ],

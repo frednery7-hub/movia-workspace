@@ -125,3 +125,18 @@ model StationEntrance {
 
   @@map("station_entrances")
 }
+model DeviceSession {
+  id           String   @id @default(cuid())
+  deviceId     String
+  refreshToken String   @unique
+  language     String   @default("es-CL")
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  revoked      Boolean  @default(false)
+
+  @@index([deviceId])
+  @@index([refreshToken])
+  @@map("device_sessions")
+}
