@@ -25,5 +25,5 @@
       "@movia/route-engine": ["../../packages/route-engine/src/index.ts"]
     }
   },
-  "include": ["src/**/*", "prisma/seed.ts"]
+  "include": ["src/**/*", "prisma/seed.ts", "test/**/*"]
 }
