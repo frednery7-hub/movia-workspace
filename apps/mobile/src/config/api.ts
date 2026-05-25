@@ -1,0 +1,17 @@
+import axios                from 'axios';
+import { IdentityService }  from '../security/identity.service';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3000';
+
+export const api = axios.create({
+  baseURL: API_URL,
+  timeout: 10_000,
+});
+
+api.interceptors.request.use(async (config) => {
+  const token = await IdentityService.getSessionToken();
+  if (token && config.headers) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
