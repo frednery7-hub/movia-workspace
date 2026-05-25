@@ -1,12 +1,10 @@
 import { Controller, Post, Get, Body, Request } from '@nestjs/common';
-import { IsString, IsNotEmpty } from 'class-validator';
 import { AuthService } from './auth.service';
 import { Public } from './public.decorator';
+import { CreateSessionDto } from './dto/session.dto';
 
-export class SessionDto {
-  @IsString()
-  @IsNotEmpty()
-  deviceId!: string;
+interface JwtRequest {
+  user: { sub: string; deviceId: string; language: string };
 }
 
 @Controller('auth')
@@ -15,12 +13,12 @@ export class AuthController {
 
   @Public()
   @Post('session')
-  session(@Body() dto: SessionDto): { access_token: string } {
-    return this.authService.generateToken(dto.deviceId);
+  session(@Body() dto: CreateSessionDto): { access_token: string } {
+    return this.authService.generateToken(dto.deviceId, dto.language);
   }
 
   @Get('me')
-  me(@Request() req: { user: unknown }): { user: unknown } {
+  me(@Request() req: JwtRequest): { user: unknown } {
     return { user: req.user };
   }
 }

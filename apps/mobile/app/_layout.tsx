@@ -1,9 +1,9 @@
-import { useEffect, useState }             from 'react';
-import { Slot }                             from 'expo-router';
-import * as SplashScreen                    from 'expo-splash-screen';
-import { GestureHandlerRootView }           from 'react-native-gesture-handler';
-import { IdentityService }                  from '../src/security/identity.service';
-import { api }                              from '../src/config/api';
+import { useEffect, useState }              from 'react';
+import { Slot }                              from 'expo-router';
+import * as SplashScreen                     from 'expo-splash-screen';
+import { GestureHandlerRootView }            from 'react-native-gesture-handler';
+import { IdentityService }                   from '../src/security/identity.service';
+import { api }                               from '../src/config/api';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -13,17 +13,21 @@ export default function RootLayout() {
   useEffect(() => {
     async function boot() {
       try {
-        const deviceId = await IdentityService.getDeviceIdentifier();
-        let token      = await IdentityService.getSessionToken();
+        const deviceId    = await IdentityService.getDeviceIdentifier();
+        const deviceLang  = await IdentityService.getPreferredLanguage();
+        let token         = await IdentityService.getSessionToken();
 
         if (!token) {
           console.log('Iniciando handshake com o servidor...');
-          const response = await api.post('/auth/session', { deviceId });
+          const response = await api.post('/auth/session', {
+            deviceId,
+            language: deviceLang,
+          });
           token = response.data.access_token;
           await IdentityService.saveSessionToken(token!);
-          console.log('Passaporte JWT adquirido com sucesso.');
+          console.log(`Passaporte JWT adquirido. Idioma: ${deviceLang}`);
         } else {
-          console.log('Sessao JWT restaurada.');
+          console.log(`Sessao JWT restaurada. Idioma: ${deviceLang}`);
         }
       } catch (error) {
         console.error('Falha na inicializacao segura:', error);
