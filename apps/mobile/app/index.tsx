@@ -3,12 +3,28 @@ import { View, Text, ActivityIndicator, StyleSheet, Dimensions } from 'react-nat
 import MapView, { Marker, Polyline }                            from 'react-native-maps';
 import { api }                                                   from '../src/config/api';
 
+interface Station {
+  id:        string;
+  name:      string;
+  latitude:  number;
+  longitude: number;
+  lat?:      number;
+  lng?:      number;
+}
+
+interface Line {
+  id:       string;
+  name:     string;
+  color:    string;
+  stations?: Station[];
+}
+
 export default function HomeScreen() {
-  const [lines, setLines]     = useState<any[]>([]);
+  const [lines, setLines]     = useState<Line[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/lines')
+    api.get<Line[]>('/lines')
       .then(res => {
         setLines(res.data);
         setLoading(false);
@@ -42,19 +58,19 @@ export default function HomeScreen() {
         {lines.map(line => (
           <React.Fragment key={line.id}>
             <Polyline
-              coordinates={line.stations?.map((s: any) => ({
-                latitude:  s.latitude ?? s.lat,
-                longitude: s.longitude ?? s.lng,
+              coordinates={line.stations?.map(s => ({
+                latitude:  s.latitude ?? s.lat ?? 0,
+                longitude: s.longitude ?? s.lng ?? 0,
               })) ?? []}
               strokeColor={line.color}
               strokeWidth={5}
             />
-            {line.stations?.map((station: any) => (
+            {line.stations?.map(station => (
               <Marker
                 key={station.id}
                 coordinate={{
-                  latitude:  station.latitude ?? station.lat,
-                  longitude: station.longitude ?? station.lng,
+                  latitude:  station.latitude ?? station.lat ?? 0,
+                  longitude: station.longitude ?? station.lng ?? 0,
                 }}
                 title={station.name}
                 description={`Linha ${line.name}`}
