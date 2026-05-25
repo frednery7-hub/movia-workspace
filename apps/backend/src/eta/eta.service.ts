@@ -4,6 +4,7 @@ import { GraphService } from '../graph/graph.service';
 import { EtaEngine, RouteEngine } from '@movia/route-engine';
 import type { LineStatusMap } from '@movia/route-engine';
 import type { NearestEntranceResult } from '@movia/shared-types';
+import { maskId } from '../common/mask.util';
 
 export interface EtaResponse {
   destination: string;
@@ -32,7 +33,6 @@ export class EtaService {
     const graph = this.graphService.getGraph();
     const lineStatuses = await this.getLineStatuses();
 
-    // ── Valida estacoes ───────────────────────────────────────────
     const originStation = await this.prisma.station.findUnique({
       where: { id: originStationId },
     });
@@ -49,7 +49,6 @@ export class EtaService {
         `Estacao destino nao encontrada: ${destinationId}`,
       );
 
-    // ── Monta NearestEntranceResult para origem e destino ─────────
     const origin: NearestEntranceResult = {
       stationId: originStationId,
       entranceId: null,
@@ -76,7 +75,6 @@ export class EtaService {
       },
     };
 
-    // ── RouteEngine — Dijkstra real ───────────────────────────────
     const routeEngine = new RouteEngine(graph);
     const route = routeEngine.route({ origin, destination });
 
@@ -86,11 +84,10 @@ export class EtaService {
       );
     }
 
-    // ── EtaEngine — calculo preditivo ─────────────────────────────
     const result = this.etaEngine.compute({ route, lineStatuses });
 
     this.logger.log(
-      `[User ${userId}] ETA ${originStationId} → ${destinationId}: ${result.etaSeconds}s`,
+      `ETA calculado — user: ${maskId(userId)} rota: ${originStationId}→${destinationId} eta: ${result.etaSeconds}s`,
     );
 
     return {
