@@ -9,8 +9,9 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { GeoModule } from './geo/geo.module';
-import { EtaModule } from './eta/eta.module';
 import { GraphModule } from './graph/graph.module';
+import { EtaModule } from './eta/eta.module';
+import { RolesGuard } from './common/roles.guard';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { GraphModule } from './graph/graph.module';
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}

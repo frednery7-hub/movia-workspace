@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { maskId } from '../common/mask.util';
 import type { JwtPayload } from './jwt.strategy';
+import type { Role } from '../common/roles.decorator';
 import * as crypto from 'crypto';
 
 export interface SessionTokens {
@@ -21,13 +22,14 @@ export class AuthService {
   async generateToken(
     deviceId: string,
     language = 'es-CL',
+    role: Role = 'anonymous_device',
     ipAddress?: string,
   ): Promise<SessionTokens> {
-    const payload: JwtPayload = { sub: deviceId, deviceId, language };
+    const payload: JwtPayload = { sub: deviceId, deviceId, language, role };
 
     const access_token = this.jwtService.sign(payload);
     const refresh_token = crypto.randomBytes(64).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await this.prisma.deviceSession.create({
       data: {
@@ -51,7 +53,6 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token invalido ou expirado.');
     }
 
-    // Rotacao — invalida o token antigo
     await this.prisma.deviceSession.update({
       where: { id: session.id },
       data: { revoked: true },

@@ -2,11 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import type { Role } from '../common/roles.decorator';
 
 export interface JwtPayload {
   sub: string;
   deviceId: string;
   language: string;
+  role: Role;
   iat?: number;
   exp?: number;
 }
