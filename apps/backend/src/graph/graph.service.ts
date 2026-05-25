@@ -67,7 +67,7 @@ export class GraphService implements OnModuleInit {
         fromNodeId: seg.fromPlatformId,
         toNodeId: seg.toPlatformId,
         lineId: seg.lineId,
-        direction: seg.direction as 'INBOUND' | 'OUTBOUND',
+        direction: seg.direction,
         distanceMeters: seg.distanceMeters,
         sequence: seg.sequence,
         cost: seg.averageDurationSeconds,

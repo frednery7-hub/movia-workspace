@@ -16,6 +16,14 @@
     "clean": "rimraf node_modules apps/*/node_modules packages/*/node_modules .turbo dist",
     "prepare": "husky"
   },
+  "pnpm": {
+    "overrides": {
+      "tar": ">=7.5.11",
+      "uuid": ">=9.0.0",
+      "@xmldom/xmldom": ">=0.8.10",
+      "postcss": ">=8.5.10"
+    }
+  },
   "devDependencies": {
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
