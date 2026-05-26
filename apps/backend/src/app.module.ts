@@ -13,6 +13,7 @@ import { GraphModule } from './graph/graph.module';
 import { EtaModule } from './eta/eta.module';
 import { RolesGuard } from './common/roles.guard';
 import { PrivacyModule } from './privacy/privacy.module';
+import { CleanupService } from './common/cleanup.service';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { PrivacyModule } from './privacy/privacy.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    CleanupService,
   ],
 })
 export class AppModule {}

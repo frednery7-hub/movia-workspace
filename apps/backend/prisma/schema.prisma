@@ -140,3 +140,22 @@ model DeviceSession {
   @@index([refreshToken])
   @@map("device_sessions")
 }
+model NetworkState {
+  id             String   @id @default(cuid())
+  lineId         String   @unique
+  status         LineStatus @default(NORMAL)
+  delaySeconds   Int      @default(0)
+  message        String?
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  @@index([lineId])
+  @@map("network_state")
+}
+
+enum LineStatus {
+  NORMAL
+  DELAYED
+  FAULTY
+  SUSPENDED
+}
