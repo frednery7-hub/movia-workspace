@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
+import { LoggingInterceptor } from './common/logging.interceptor';
 import helmet from 'helmet';
 
 async function bootstrap() {
@@ -12,7 +13,6 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  // ── Helmet ───────────────────────────────────────────────────
   app.use(
     helmet({
       contentSecurityPolicy: true,
@@ -22,10 +22,13 @@ async function bootstrap() {
     }),
   );
 
-  // ── Filtro global de excecoes ─────────────────────────────────
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  app.setGlobalPrefix('v1', {
+    exclude: ['health', 'health/ready', 'health/live'],
+  });
 
-  // ── ValidationPipe global ────────────────────────────────────
+  app.useGlobalFilters(new GlobalExceptionFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor());
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -34,7 +37,6 @@ async function bootstrap() {
     }),
   );
 
-  // ── CORS dinamico ────────────────────────────────────────────
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
     .split(',')
     .map((o) => o.trim())
