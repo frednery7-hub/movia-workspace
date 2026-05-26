@@ -12,6 +12,7 @@ import { GeoModule } from './geo/geo.module';
 import { GraphModule } from './graph/graph.module';
 import { EtaModule } from './eta/eta.module';
 import { RolesGuard } from './common/roles.guard';
+import { PrivacyModule } from './privacy/privacy.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { RolesGuard } from './common/roles.guard';
     GeoModule,
     GraphModule,
     EtaModule,
+    PrivacyModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
