@@ -1,5 +1,6 @@
 import * as Crypto      from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
+import { api }          from '../config/api';
 
 const DEVICE_ID_KEY  = 'movia_secure_device_id';
 const JWT_TOKEN_KEY  = 'movia_jwt_token';
@@ -7,6 +8,9 @@ const LANGUAGE_KEY   = 'movia_language';
 const DEFAULT_LANG   = 'es-CL';
 
 let cachedLanguage: string | null = null;
+
+const isDev = process.env.NODE_ENV !== 'production';
+const log   = (...args: unknown[]) => { if (isDev) console.log(...args); };
 
 export class IdentityService {
 
@@ -16,7 +20,7 @@ export class IdentityService {
       if (!deviceId) {
         deviceId = Crypto.randomUUID();
         await SecureStore.setItemAsync(DEVICE_ID_KEY, deviceId);
-        console.log('Novo DeviceID seguro gerado e armazenado.');
+        log('Novo DeviceID seguro gerado e armazenado.');
       }
       return deviceId;
     } catch (error) {
@@ -39,7 +43,7 @@ export class IdentityService {
 
   static async getPreferredLanguage(): Promise<string> {
     if (cachedLanguage) return cachedLanguage;
-    const stored = await SecureStore.getItemAsync(LANGUAGE_KEY);
+    const stored   = await SecureStore.getItemAsync(LANGUAGE_KEY);
     cachedLanguage = stored ?? DEFAULT_LANG;
     return cachedLanguage;
   }
@@ -51,5 +55,22 @@ export class IdentityService {
 
   static getCachedLanguage(): string {
     return cachedLanguage ?? DEFAULT_LANG;
+  }
+
+  static async fullLogout(): Promise<void> {
+    try {
+      const token = await IdentityService.getSessionToken();
+      if (token) {
+        await api.delete('/v1/auth/session', {
+          data: { refresh_token: token },
+        });
+      }
+    } catch {
+      // Ignora erro de rede — destroi localmente de qualquer forma
+    } finally {
+      await SecureStore.deleteItemAsync(JWT_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(DEVICE_ID_KEY);
+      cachedLanguage = null;
+    }
   }
 }
