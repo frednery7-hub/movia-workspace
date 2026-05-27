@@ -1,4 +1,4 @@
-import { Controller, Get, Delete, Request } from '@nestjs/common';
+import { Controller, Get, Delete, Post, Request } from '@nestjs/common';
 import { PrivacyService } from './privacy.service';
 
 interface JwtRequest {
@@ -17,5 +17,15 @@ export class PrivacyController {
   @Delete('data')
   async deleteData(@Request() req: JwtRequest) {
     return this.privacyService.deleteData(req.user.deviceId);
+  }
+
+  @Post('block')
+  async blockDevice(@Request() req: JwtRequest) {
+    return this.privacyService.blockDevice(req.user.deviceId);
+  }
+
+  @Delete('block')
+  async unblockDevice(@Request() req: JwtRequest) {
+    return this.privacyService.unblockDevice(req.user.deviceId);
   }
 }

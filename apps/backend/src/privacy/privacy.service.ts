@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { maskId } from '../common/mask.util';
 
@@ -14,6 +14,7 @@ export class PrivacyService {
         createdAt: true,
         expiresAt: true,
         revoked: true,
+        blocked: true,
       },
     });
 
@@ -41,6 +42,45 @@ export class PrivacyService {
     return {
       deleted: true,
       message: 'Todos os dados associados ao dispositivo foram removidos.',
+    };
+  }
+
+  async blockDevice(
+    deviceId: string,
+  ): Promise<{ blocked: boolean; message: string }> {
+    const sessions = await this.prisma.deviceSession.findMany({
+      where: { deviceId, revoked: false },
+    });
+
+    if (sessions.length === 0) {
+      throw new NotFoundException(
+        'Nenhuma sessao ativa encontrada para este dispositivo.',
+      );
+    }
+
+    await this.prisma.deviceSession.updateMany({
+      where: { deviceId },
+      data: { blocked: true },
+    });
+
+    return {
+      blocked: true,
+      message:
+        'Tratamento de dados suspenso conforme direito de bloqueio (Ley 21.719 Art. 11).',
+    };
+  }
+
+  async unblockDevice(
+    deviceId: string,
+  ): Promise<{ blocked: boolean; message: string }> {
+    await this.prisma.deviceSession.updateMany({
+      where: { deviceId },
+      data: { blocked: false },
+    });
+
+    return {
+      blocked: false,
+      message: 'Bloqueio removido. Tratamento de dados retomado.',
     };
   }
 }

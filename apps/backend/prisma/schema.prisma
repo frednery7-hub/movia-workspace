@@ -13,6 +13,13 @@ enum Direction {
   CIRCULAR
 }
 
+enum LineStatus {
+  NORMAL
+  DELAYED
+  FAULTY
+  SUSPENDED
+}
+
 model Line {
   id            String         @id
   name          String         @unique
@@ -125,6 +132,7 @@ model StationEntrance {
 
   @@map("station_entrances")
 }
+
 model DeviceSession {
   id           String   @id @default(cuid())
   deviceId     String
@@ -135,27 +143,22 @@ model DeviceSession {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   revoked      Boolean  @default(false)
+  blocked      Boolean  @default(false)
 
   @@index([deviceId])
   @@index([refreshToken])
   @@map("device_sessions")
 }
+
 model NetworkState {
-  id             String   @id @default(cuid())
-  lineId         String   @unique
-  status         LineStatus @default(NORMAL)
-  delaySeconds   Int      @default(0)
-  message        String?
-  updatedAt      DateTime @updatedAt
-  createdAt      DateTime @default(now())
+  id           String     @id @default(cuid())
+  lineId       String     @unique
+  status       LineStatus @default(NORMAL)
+  delaySeconds Int        @default(0)
+  message      String?
+  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime   @default(now())
 
   @@index([lineId])
   @@map("network_state")
-}
-
-enum LineStatus {
-  NORMAL
-  DELAYED
-  FAULTY
-  SUSPENDED
 }
