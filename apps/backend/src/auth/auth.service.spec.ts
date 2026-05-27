@@ -1,7 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
+import { createHash } from 'crypto';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 const mockPrisma = {
   deviceSession: {
@@ -49,11 +54,21 @@ describe('AuthService', () => {
     it('usa es-CL como idioma padrao', async () => {
       mockPrisma.deviceSession.create.mockResolvedValue({});
       await service.generateToken('550e8400-e29b-41d4-a716-446655440000');
-      const [callArg] = mockPrisma.deviceSession.create.mock.calls[0] as [
-        { data: { language: string } },
-      ];
-
+      const callArg = mockPrisma.deviceSession.create.mock.calls[0][0] as {
+        data: { language: string };
+      };
       expect(callArg.data.language).toBe('es-CL');
+    });
+
+    it('salva hash do refresh token no banco', async () => {
+      mockPrisma.deviceSession.create.mockResolvedValue({});
+      const result = await service.generateToken(
+        '550e8400-e29b-41d4-a716-446655440000',
+      );
+      const callArg = mockPrisma.deviceSession.create.mock.calls[0][0] as {
+        data: { refreshToken: string };
+      };
+      expect(callArg.data.refreshToken).toBe(hashToken(result.refresh_token));
     });
   });
 
@@ -89,11 +104,12 @@ describe('AuthService', () => {
   });
 
   describe('revokeSession', () => {
-    it('revoga a sessao corretamente', async () => {
+    it('revoga a sessao usando hash do token', async () => {
+      const rawToken = 'valid-refresh-token';
       mockPrisma.deviceSession.updateMany.mockResolvedValue({ count: 1 });
-      await service.revokeSession('valid-refresh-token');
+      await service.revokeSession(rawToken);
       expect(mockPrisma.deviceSession.updateMany).toHaveBeenCalledWith({
-        where: { refreshToken: 'valid-refresh-token' },
+        where: { refreshToken: hashToken(rawToken) },
         data: { revoked: true },
       });
     });
