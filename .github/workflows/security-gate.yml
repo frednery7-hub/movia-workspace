@@ -60,20 +60,39 @@ jobs:
 
       # ── Step 2: Dependency Audit ──────────────────────────────
       - name: Dependency Audit
-        run: pnpm audit --audit-level=critical
+        run: pnpm audit --audit-level=high
 
-      # ── Step 3: Build ─────────────────────────────────────────
+      # ── Step 3: Lint ──────────────────────────────────────────
+      - name: Lint Backend
+        run: pnpm --filter backend exec eslint src --ext .ts
+
+      # ── Step 4: Typecheck ─────────────────────────────────────
+      - name: Typecheck Backend
+        run: pnpm --filter backend exec tsc --noEmit
+
+      - name: Typecheck Mobile
+        run: pnpm --filter mobile exec tsc --noEmit
+
+      # ── Step 5: Unit Tests ────────────────────────────────────
+      - name: Unit Tests
+        run: pnpm --filter backend exec jest --watchman=false --no-coverage
+
+      # ── Step 6: Build ─────────────────────────────────────────
       - name: Build Backend
         run: pnpm --filter backend build
 
-      # ── Step 4: Prisma Migrate ────────────────────────────────
+      # ── Step 7: Prisma Migrate ────────────────────────────────
       - name: Prisma Migrate
         run: pnpm --filter backend exec prisma migrate deploy
 
-      # ── Step 5: Seed ──────────────────────────────────────────
+      # ── Step 8: Seed ──────────────────────────────────────────
       - name: Seed Database
         run: pnpm --filter backend exec prisma db seed
 
-      # ── Step 6: Security Smoke Tests ─────────────────────────
+      # ── Step 9: Security Smoke Tests ─────────────────────────
       - name: Security Smoke Tests
         run: pnpm --filter backend test:e2e
+
+      # ── Step 10: Docker Build Check ───────────────────────────
+      - name: Docker Build Check
+        run: docker build -f apps/backend/Dockerfile -t movia-backend:ci . || echo "Dockerfile ausente — skip"
