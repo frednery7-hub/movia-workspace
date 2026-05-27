@@ -1,12 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { maskId } from '../common/mask.util';
 
 @Injectable()
 export class PrivacyService {
+  private readonly logger = new Logger(PrivacyService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async exportData(deviceId: string) {
+    this.logger.log(
+      `PRIVACY_AUDIT export_requested device:${maskId(deviceId)}`,
+    );
+
     const sessions = await this.prisma.deviceSession.findMany({
       where: { deviceId },
       select: {
@@ -35,9 +41,17 @@ export class PrivacyService {
   async deleteData(
     deviceId: string,
   ): Promise<{ deleted: boolean; message: string }> {
+    this.logger.warn(
+      `PRIVACY_AUDIT delete_requested device:${maskId(deviceId)}`,
+    );
+
     await this.prisma.deviceSession.deleteMany({
       where: { deviceId },
     });
+
+    this.logger.warn(
+      `PRIVACY_AUDIT delete_completed device:${maskId(deviceId)}`,
+    );
 
     return {
       deleted: true,
@@ -48,6 +62,10 @@ export class PrivacyService {
   async blockDevice(
     deviceId: string,
   ): Promise<{ blocked: boolean; message: string }> {
+    this.logger.warn(
+      `PRIVACY_AUDIT block_requested device:${maskId(deviceId)}`,
+    );
+
     const sessions = await this.prisma.deviceSession.findMany({
       where: { deviceId, revoked: false },
     });
@@ -63,6 +81,8 @@ export class PrivacyService {
       data: { blocked: true },
     });
 
+    this.logger.warn(`PRIVACY_AUDIT block_applied device:${maskId(deviceId)}`);
+
     return {
       blocked: true,
       message:
@@ -73,6 +93,10 @@ export class PrivacyService {
   async unblockDevice(
     deviceId: string,
   ): Promise<{ blocked: boolean; message: string }> {
+    this.logger.log(
+      `PRIVACY_AUDIT unblock_requested device:${maskId(deviceId)}`,
+    );
+
     await this.prisma.deviceSession.updateMany({
       where: { deviceId },
       data: { blocked: false },
@@ -82,5 +106,19 @@ export class PrivacyService {
       blocked: false,
       message: 'Bloqueio removido. Tratamento de dados retomado.',
     };
+  }
+
+  async updateLanguage(
+    deviceId: string,
+    language: string,
+  ): Promise<{ updated: boolean }> {
+    this.logger.log(
+      `PRIVACY_AUDIT language_update device:${maskId(deviceId)} lang:${language}`,
+    );
+    await this.prisma.deviceSession.updateMany({
+      where: { deviceId, revoked: false, blocked: false },
+      data: { language },
+    });
+    return { updated: true };
   }
 }

@@ -1,5 +1,20 @@
-import { Controller, Get, Delete, Post, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Delete,
+  Post,
+  Patch,
+  Body,
+  Request,
+} from '@nestjs/common';
 import { PrivacyService } from './privacy.service';
+import { IsString, IsIn } from 'class-validator';
+
+class UpdateLanguageDto {
+  @IsString()
+  @IsIn(['es-CL', 'pt-BR', 'en-US'])
+  language!: string;
+}
 
 interface JwtRequest {
   user: { sub: string; deviceId: string };
@@ -27,5 +42,13 @@ export class PrivacyController {
   @Delete('block')
   async unblockDevice(@Request() req: JwtRequest) {
     return this.privacyService.unblockDevice(req.user.deviceId);
+  }
+
+  @Patch('language')
+  async updateLanguage(
+    @Request() req: JwtRequest,
+    @Body() dto: UpdateLanguageDto,
+  ) {
+    return this.privacyService.updateLanguage(req.user.deviceId, dto.language);
   }
 }
