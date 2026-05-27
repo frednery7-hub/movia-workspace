@@ -1,4 +1,11 @@
-import { IsNumber, IsBoolean, IsOptional, Min, Max } from 'class-validator';
+import {
+  IsNumber,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class UpdateLocationDto {
   @IsNumber()
@@ -22,7 +29,7 @@ export class UpdateLocationDto {
   @IsBoolean()
   isDegraded!: boolean;
 
-  @IsNumber()
+  @IsString()
   @IsOptional()
-  lineId?: number;
+  lineId?: string;
 }
