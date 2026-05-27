@@ -91,4 +91,40 @@ describe('Security Smoke Tests (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
   });
+  // ── Validação de payload ──────────────────────────────────────
+  it('POST /v1/auth/session — 400 com deviceId invalido', () => {
+    return request(app.getHttpServer())
+      .post('/v1/auth/session')
+      .send({ deviceId: 'nao-e-uuid' })
+      .expect(400);
+  });
+
+  it('POST /v1/auth/session — 400 sem deviceId', () => {
+    return request(app.getHttpServer())
+      .post('/v1/auth/session')
+      .send({})
+      .expect(400);
+  });
+
+  it('POST /v1/auth/session — 400 com campo extra', () => {
+    return request(app.getHttpServer())
+      .post('/v1/auth/session')
+      .send({ deviceId: SMOKE_DEVICE_ID, malicious: 'injection' })
+      .expect(400);
+  });
+
+  it('GET /v1/auth/me — 401 com token invalido', () => {
+    return request(app.getHttpServer())
+      .get('/v1/auth/me')
+      .set('Authorization', 'Bearer token.invalido.aqui')
+      .expect(401);
+  });
+
+  it('POST /v1/geo/location — 400 com payload malformado', () => {
+    return request(app.getHttpServer())
+      .post('/v1/geo/location')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ lat: 'nao-e-numero' })
+      .expect(400);
+  });
 });
