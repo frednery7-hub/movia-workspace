@@ -49,7 +49,10 @@ describe('AuthService', () => {
     it('usa es-CL como idioma padrao', async () => {
       mockPrisma.deviceSession.create.mockResolvedValue({});
       await service.generateToken('550e8400-e29b-41d4-a716-446655440000');
-      const callArg = mockPrisma.deviceSession.create.mock.calls[0][0];
+      const [callArg] = mockPrisma.deviceSession.create.mock.calls[0] as [
+        { data: { language: string } },
+      ];
+
       expect(callArg.data.language).toBe('es-CL');
     });
   });
