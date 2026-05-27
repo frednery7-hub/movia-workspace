@@ -16,11 +16,6 @@
     },
     "ios": {
       "supportsTablet": true
-    },
-    "extra": {
-      "eas": {
-        "projectId": "movia"
-      }
     }
   }
 }

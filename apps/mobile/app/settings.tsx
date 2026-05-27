@@ -1,9 +1,9 @@
-import { useState }                                               from 'react';
+import { useState }                                                    from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
-import { router }                                                  from 'expo-router';
-import { IdentityService }                                         from '../src/security/identity.service';
-import { ConsentService }                                          from '../src/privacy/consent.service';
-import { api }                                                     from '../src/config/api';
+import { router }                                                       from 'expo-router';
+import { IdentityService }                                              from '../src/security/identity.service';
+import { ConsentService }                                               from '../src/privacy/consent.service';
+import { api }                                                          from '../src/config/api';
 
 export default function SettingsScreen() {
   const [loading, setLoading] = useState<string | null>(null);
@@ -16,7 +16,9 @@ export default function SettingsScreen() {
         style: 'destructive',
         onPress: async () => {
           setLoading('logout');
-          await IdentityService.fullLogout();
+          await IdentityService.fullLogout(async (token) => {
+            await api.delete('/auth/session', { data: { refresh_token: token } });
+          });
           router.replace('/consent');
           setLoading(null);
         },
@@ -85,13 +87,7 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>PRIVACIDAD</Text>
-
-        <TouchableOpacity
-          style={styles.item}
-          onPress={handleExportData}
-          activeOpacity={0.7}
-          disabled={loading === 'export'}
-        >
+        <TouchableOpacity style={styles.item} onPress={handleExportData} activeOpacity={0.7} disabled={loading === 'export'}>
           <Text style={styles.itemIcon}>📦</Text>
           <View style={styles.itemText}>
             <Text style={styles.itemTitle}>Exportar mis datos</Text>
@@ -99,15 +95,8 @@ export default function SettingsScreen() {
           </View>
           <Text style={styles.itemArrow}>›</Text>
         </TouchableOpacity>
-
         <View style={styles.divider} />
-
-        <TouchableOpacity
-          style={styles.item}
-          onPress={handleRevokeConsent}
-          activeOpacity={0.7}
-          disabled={loading === 'consent'}
-        >
+        <TouchableOpacity style={styles.item} onPress={handleRevokeConsent} activeOpacity={0.7} disabled={loading === 'consent'}>
           <Text style={styles.itemIcon}>🔒</Text>
           <View style={styles.itemText}>
             <Text style={styles.itemTitle}>Revocar consentimiento</Text>
@@ -115,15 +104,8 @@ export default function SettingsScreen() {
           </View>
           <Text style={styles.itemArrow}>›</Text>
         </TouchableOpacity>
-
         <View style={styles.divider} />
-
-        <TouchableOpacity
-          style={styles.item}
-          onPress={handleDeleteData}
-          activeOpacity={0.7}
-          disabled={loading === 'delete'}
-        >
+        <TouchableOpacity style={styles.item} onPress={handleDeleteData} activeOpacity={0.7} disabled={loading === 'delete'}>
           <Text style={styles.itemIcon}>🗑️</Text>
           <View style={styles.itemText}>
             <Text style={[styles.itemTitle, { color: '#E31837' }]}>Eliminar mis datos</Text>
@@ -135,13 +117,7 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>SESIÓN</Text>
-
-        <TouchableOpacity
-          style={styles.item}
-          onPress={handleLogout}
-          activeOpacity={0.7}
-          disabled={loading === 'logout'}
-        >
+        <TouchableOpacity style={styles.item} onPress={handleLogout} activeOpacity={0.7} disabled={loading === 'logout'}>
           <Text style={styles.itemIcon}>🚪</Text>
           <View style={styles.itemText}>
             <Text style={[styles.itemTitle, { color: '#E31837' }]}>Cerrar sesión</Text>
@@ -159,13 +135,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: '#f8f8f6' },
   content:      { padding: 20 },
-  header: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            10,
-    marginBottom:   24,
-    paddingTop:     8,
-  },
+  header:       { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24, paddingTop: 8 },
   backBtn:      { padding: 4 },
   backText:     { fontSize: 28, color: '#1a1a2e', lineHeight: 28 },
   title:        { fontSize: 20, fontWeight: '500', color: '#1a1a2e' },

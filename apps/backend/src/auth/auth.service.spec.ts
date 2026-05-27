@@ -21,6 +21,22 @@ const mockJwt = {
   sign: jest.fn().mockReturnValue('mock.jwt.token'),
 };
 
+interface DeviceSessionCreateArg {
+  data: {
+    language: string;
+    refreshToken: string;
+  };
+}
+
+function getDeviceSessionCreateArg(): DeviceSessionCreateArg {
+  const calls = mockPrisma.deviceSession.create.mock.calls as [
+    DeviceSessionCreateArg,
+  ][];
+  const [call] = calls;
+  if (!call) throw new Error('deviceSession.create nao foi chamado');
+  return call[0];
+}
+
 describe('AuthService', () => {
   let service: AuthService;
 
@@ -54,9 +70,7 @@ describe('AuthService', () => {
     it('usa es-CL como idioma padrao', async () => {
       mockPrisma.deviceSession.create.mockResolvedValue({});
       await service.generateToken('550e8400-e29b-41d4-a716-446655440000');
-      const callArg = mockPrisma.deviceSession.create.mock.calls[0][0] as {
-        data: { language: string };
-      };
+      const callArg = getDeviceSessionCreateArg();
       expect(callArg.data.language).toBe('es-CL');
     });
 
@@ -65,9 +79,7 @@ describe('AuthService', () => {
       const result = await service.generateToken(
         '550e8400-e29b-41d4-a716-446655440000',
       );
-      const callArg = mockPrisma.deviceSession.create.mock.calls[0][0] as {
-        data: { refreshToken: string };
-      };
+      const callArg = getDeviceSessionCreateArg();
       expect(callArg.data.refreshToken).toBe(hashToken(result.refresh_token));
     });
   });

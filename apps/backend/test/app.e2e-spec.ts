@@ -1,8 +1,8 @@
-import { Test, TestingModule }              from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import request                              from 'supertest';
-import { App }                              from 'supertest/types';
-import { AppModule }                        from '../src/app.module';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import { AppModule } from '../src/app.module';
 
 const SMOKE_DEVICE_ID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -18,9 +18,9 @@ describe('Security Smoke Tests (e2e)', () => {
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
       new ValidationPipe({
-        whitelist:            true,
+        whitelist: true,
         forbidNonWhitelisted: true,
-        transform:            true,
+        transform: true,
       }),
     );
     app.setGlobalPrefix('v1', {
@@ -69,11 +69,11 @@ describe('Security Smoke Tests (e2e)', () => {
     return request(app.getHttpServer())
       .post('/v1/geo/location')
       .send({
-        lat:          -33.4385,
-        lng:          -70.6374,
-        confidence:   0.9,
+        lat: -33.4385,
+        lng: -70.6374,
+        confidence: 0.9,
         isStationary: false,
-        isDegraded:   false,
+        isDegraded: false,
       })
       .expect(401);
   });
