@@ -11,6 +11,10 @@ export interface SessionTokens {
   expires_in: number;
 }
 
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -25,15 +29,15 @@ export class AuthService {
     ipAddress?: string,
   ): Promise<SessionTokens> {
     const payload: JwtPayload = { sub: deviceId, deviceId, language, role };
-
     const access_token = this.jwtService.sign(payload);
     const refresh_token = crypto.randomBytes(64).toString('hex');
+    const refreshTokenHash = hashToken(refresh_token);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await this.prisma.deviceSession.create({
       data: {
         deviceId,
-        refreshToken: refresh_token,
+        refreshToken: refreshTokenHash,
         language,
         ipAddress,
         expiresAt,
@@ -44,8 +48,10 @@ export class AuthService {
   }
 
   async refreshSession(refreshToken: string): Promise<SessionTokens> {
+    const refreshTokenHash = hashToken(refreshToken);
+
     const session = await this.prisma.deviceSession.findUnique({
-      where: { refreshToken },
+      where: { refreshToken: refreshTokenHash },
     });
 
     if (!session || session.revoked || session.expiresAt < new Date()) {
@@ -61,8 +67,10 @@ export class AuthService {
   }
 
   async revokeSession(refreshToken: string): Promise<void> {
+    const refreshTokenHash = hashToken(refreshToken);
+
     await this.prisma.deviceSession.updateMany({
-      where: { refreshToken },
+      where: { refreshToken: refreshTokenHash },
       data: { revoked: true },
     });
   }
