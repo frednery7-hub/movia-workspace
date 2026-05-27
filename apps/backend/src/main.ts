@@ -13,6 +13,7 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule);
+  const isProd = process.env.NODE_ENV === 'production';
 
   app.use(
     helmet({
@@ -43,8 +44,15 @@ async function bootstrap() {
     .map((o) => o.trim())
     .filter(Boolean);
 
+  if (isProd && allowedOrigins.length === 0) {
+    console.error(
+      'FATAL: ALLOWED_ORIGINS nao definido em producao. Servidor abortado.',
+    );
+    process.exit(1);
+  }
+
   app.enableCors({
-    origin: process.env.NODE_ENV === 'production' ? allowedOrigins : '*',
+    origin: isProd ? allowedOrigins : 'http://localhost:8081',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
