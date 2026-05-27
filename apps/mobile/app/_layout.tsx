@@ -1,24 +1,29 @@
-import { useEffect, useState }    from 'react';
-import { Slot, router }            from 'expo-router';
-import { View, Text, StyleSheet }  from 'react-native';
-import * as SplashScreen           from 'expo-splash-screen';
-import { GestureHandlerRootView }  from 'react-native-gesture-handler';
-import { IdentityService }         from '../src/security/identity.service';
-import { ConsentService }          from '../src/privacy/consent.service';
-import { api }                     from '../src/config/api';
+import { useEffect, useState }   from 'react';
+import { Slot, router }           from 'expo-router';
+import { View, Text, StyleSheet } from 'react-native';
+import * as SplashScreen          from 'expo-splash-screen';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { IdentityService }        from '../src/security/identity.service';
+import { ConsentService }         from '../src/privacy/consent.service';
+import { api }                    from '../src/config/api';
 
 SplashScreen.preventAutoHideAsync();
 
 const MAX_RETRIES = 3;
 
+interface SessionResponse {
+  access_token:  string;
+  refresh_token: string;
+}
+
 async function fetchSessionWithRetry(
   deviceId: string,
   language: string,
   attempt = 1,
-): Promise<string> {
+): Promise<SessionResponse> {
   try {
-    const response = await api.post('/auth/session', { deviceId, language });
-    return response.data.access_token as string;
+    const response = await api.post<SessionResponse>('/auth/session', { deviceId, language });
+    return response.data;
   } catch (error) {
     if (attempt < MAX_RETRIES) {
       await new Promise(r => setTimeout(r, 1000 * attempt));
@@ -28,31 +33,57 @@ async function fetchSessionWithRetry(
   }
 }
 
+// Interceptor de resposta — renova token em 401
+api.interceptors.response.use(
+  res => res,
+  async error => {
+    if (error.response?.status === 401) {
+      try {
+        const refreshToken = await IdentityService.getRefreshToken();
+        if (refreshToken) {
+          const res = await api.post<SessionResponse>('/auth/refresh', {
+            refresh_token: refreshToken,
+          });
+          await IdentityService.saveAccessToken(res.data.access_token);
+          await IdentityService.saveRefreshToken(res.data.refresh_token);
+          error.config.headers.Authorization = `Bearer ${res.data.access_token}`;
+          return api.request(error.config);
+        }
+      } catch {
+        await IdentityService.destroySession();
+        router.replace('/consent');
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
 export default function RootLayout() {
-  const [isReady,    setIsReady]    = useState(false);
-  const [bootError,  setBootError]  = useState<string | null>(null);
+  const [isReady,   setIsReady]   = useState(false);
+  const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
     async function boot() {
       try {
         const deviceId   = await IdentityService.getDeviceIdentifier();
         const deviceLang = await IdentityService.getPreferredLanguage();
-        let token        = await IdentityService.getSessionToken();
+        let accessToken  = await IdentityService.getSessionToken();
 
-        if (!token) {
-          token = await fetchSessionWithRetry(deviceId, deviceLang);
-          await IdentityService.saveSessionToken(token);
+        if (!accessToken) {
+          const session = await fetchSessionWithRetry(deviceId, deviceLang);
+          await IdentityService.saveAccessToken(session.access_token);
+          await IdentityService.saveRefreshToken(session.refresh_token);
         } else {
           try {
             await api.get('/auth/me');
           } catch {
             await IdentityService.destroySession();
-            token = await fetchSessionWithRetry(deviceId, deviceLang);
-            await IdentityService.saveSessionToken(token);
+            const session = await fetchSessionWithRetry(deviceId, deviceLang);
+            await IdentityService.saveAccessToken(session.access_token);
+            await IdentityService.saveRefreshToken(session.refresh_token);
           }
         }
 
-        // ── Verifica consentimento LGPD ───────────────────────
         const hasConsent = await ConsentService.hasValidConsent();
         if (!hasConsent) {
           setIsReady(true);

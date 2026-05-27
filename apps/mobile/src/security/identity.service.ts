@@ -2,10 +2,11 @@ import * as Crypto      from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { api }          from '../config/api';
 
-const DEVICE_ID_KEY  = 'movia_secure_device_id';
-const JWT_TOKEN_KEY  = 'movia_jwt_token';
-const LANGUAGE_KEY   = 'movia_language';
-const DEFAULT_LANG   = 'es-CL';
+const DEVICE_ID_KEY    = 'movia_secure_device_id';
+const ACCESS_TOKEN_KEY = 'movia_access_token';
+const REFRESH_TOKEN_KEY = 'movia_refresh_token';
+const LANGUAGE_KEY     = 'movia_language';
+const DEFAULT_LANG     = 'es-CL';
 
 let cachedLanguage: string | null = null;
 
@@ -29,18 +30,35 @@ export class IdentityService {
     }
   }
 
-  static async saveSessionToken(token: string): Promise<void> {
-    await SecureStore.setItemAsync(JWT_TOKEN_KEY, token);
+  // ── Access Token ─────────────────────────────────────────────
+  static async saveAccessToken(token: string): Promise<void> {
+    await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, token);
   }
 
   static async getSessionToken(): Promise<string | null> {
-    return await SecureStore.getItemAsync(JWT_TOKEN_KEY);
+    return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+  }
+
+  // ── Refresh Token ─────────────────────────────────────────────
+  static async saveRefreshToken(token: string): Promise<void> {
+    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, token);
+  }
+
+  static async getRefreshToken(): Promise<string | null> {
+    return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+  }
+
+  // ── Compatibilidade retroativa ────────────────────────────────
+  static async saveSessionToken(token: string): Promise<void> {
+    await IdentityService.saveAccessToken(token);
   }
 
   static async destroySession(): Promise<void> {
-    await SecureStore.deleteItemAsync(JWT_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
   }
 
+  // ── Idioma ───────────────────────────────────────────────────
   static async getPreferredLanguage(): Promise<string> {
     if (cachedLanguage) return cachedLanguage;
     const stored   = await SecureStore.getItemAsync(LANGUAGE_KEY);
@@ -57,18 +75,20 @@ export class IdentityService {
     return cachedLanguage ?? DEFAULT_LANG;
   }
 
+  // ── Logout completo ──────────────────────────────────────────
   static async fullLogout(): Promise<void> {
     try {
-      const token = await IdentityService.getSessionToken();
-      if (token) {
-        await api.delete('/v1/auth/session', {
-          data: { refresh_token: token },
+      const refreshToken = await IdentityService.getRefreshToken();
+      if (refreshToken) {
+        await api.delete('/auth/session', {
+          data: { refresh_token: refreshToken },
         });
       }
     } catch {
       // Ignora erro de rede — destroi localmente de qualquer forma
     } finally {
-      await SecureStore.deleteItemAsync(JWT_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
       await SecureStore.deleteItemAsync(DEVICE_ID_KEY);
       cachedLanguage = null;
     }
