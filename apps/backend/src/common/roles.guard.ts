@@ -5,8 +5,13 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { Request } from 'express';
 import { ROLES_KEY } from './roles.decorator';
 import type { Role } from './roles.decorator';
+
+interface AuthenticatedRequest extends Request {
+  user?: { role?: Role };
+}
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -18,11 +23,10 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    // Sem roles definidas — rota livre para qualquer autenticado
     if (!requiredRoles || requiredRoles.length === 0) return true;
 
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as { role?: Role } | undefined;
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.user;
 
     if (!user) throw new ForbiddenException('Sem identidade no request.');
 

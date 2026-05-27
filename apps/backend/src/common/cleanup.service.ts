@@ -1,20 +1,25 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-/**
- * Limpeza automatica de sessoes expiradas — politica de retencao LGPD.
- * Roda na inicializacao e a cada 24h.
- */
 @Injectable()
 export class CleanupService implements OnModuleInit {
   private readonly logger = new Logger(CleanupService.name);
+  private intervalHandle?: ReturnType<typeof setInterval>;
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async onModuleInit(): Promise<void> {
-    await this.purgeExpiredSessions();
-    // Agenda limpeza diaria
-    setInterval(() => this.purgeExpiredSessions(), 24 * 60 * 60 * 1000);
+  onModuleInit(): void {
+    void this.purgeExpiredSessions();
+    this.intervalHandle = setInterval(
+      () => {
+        void this.purgeExpiredSessions();
+      },
+      24 * 60 * 60 * 1000,
+    );
+  }
+
+  onModuleDestroy(): void {
+    if (this.intervalHandle) clearInterval(this.intervalHandle);
   }
 
   async purgeExpiredSessions(): Promise<void> {
@@ -30,7 +35,6 @@ export class CleanupService implements OnModuleInit {
           ],
         },
       });
-
       if (result.count > 0) {
         this.logger.log(
           `Retencao: ${result.count} sessoes expiradas removidas.`,
