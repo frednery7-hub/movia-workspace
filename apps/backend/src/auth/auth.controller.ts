@@ -4,13 +4,10 @@ import { AuthService } from './auth.service';
 import type { SessionTokens } from './auth.service';
 import { Public } from './public.decorator';
 import { CreateSessionDto } from './dto/session.dto';
+import { RefreshDto } from './dto/refresh.dto';
 
 interface JwtRequest {
   user: { sub: string; deviceId: string; language: string };
-}
-
-export class RefreshDto {
-  refresh_token!: string;
 }
 
 @Controller('auth')
