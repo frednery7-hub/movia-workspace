@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GraphService } from '../graph/graph.service';
 import { EtaEngine, RouteEngine } from '@movia/route-engine';
@@ -23,38 +28,50 @@ export interface EtaResponse {
 }
 
 @Injectable()
-export class EtaService {
+export class EtaService implements OnModuleInit {
   private readonly logger = new Logger(EtaService.name);
   private readonly etaEngine = new EtaEngine();
+
+  // Singleton do motor + cache de estações em RAM
+  private routeEngine!: RouteEngine;
+  private stationsCache = new Map<string, string>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly graphService: GraphService,
   ) {}
 
+  async onModuleInit(): Promise<void> {
+    this.logger.log('Inicializando motor de rotas e cache de estacoes...');
+
+    const graph = this.graphService.getGraph();
+    this.routeEngine = new RouteEngine(graph);
+
+    const allStations = await this.prisma.station.findMany({
+      select: { id: true, name: true },
+    });
+
+    allStations.forEach((s) => this.stationsCache.set(s.id, s.name));
+    this.logger.log(`Cache carregado com ${this.stationsCache.size} estacoes.`);
+  }
+
   async computeEta(
     userId: string,
     originStationId: string,
     destinationId: string,
   ): Promise<EtaResponse> {
-    const graph = this.graphService.getGraph();
     const lineStatuses = await this.getLineStatuses();
 
-    const originStation = await this.prisma.station.findUnique({
-      where: { id: originStationId },
-    });
-    const destStation = await this.prisma.station.findUnique({
-      where: { id: destinationId },
-    });
-
-    if (!originStation)
+    if (!this.stationsCache.has(originStationId)) {
       throw new NotFoundException(
         `Estacao origem nao encontrada: ${originStationId}`,
       );
-    if (!destStation)
+    }
+    if (!this.stationsCache.has(destinationId)) {
       throw new NotFoundException(
         `Estacao destino nao encontrada: ${destinationId}`,
       );
+    }
 
     const origin: NearestEntranceResult = {
       stationId: originStationId,
@@ -76,8 +93,7 @@ export class EtaService {
       confidence: { nearestStationConfidence: 1, snappingConfidence: 1 },
     };
 
-    const routeEngine = new RouteEngine(graph);
-    const route = routeEngine.route({ origin, destination });
+    const route = this.routeEngine.route({ origin, destination });
 
     if (!route) {
       throw new NotFoundException(
@@ -87,7 +103,6 @@ export class EtaService {
 
     const result = this.etaEngine.compute({ route, lineStatuses });
 
-    // Extrai estações únicas em ordem dos segmentos TRACK
     const stationIds: string[] = [];
     const lineIds: string[] = [];
 
@@ -102,15 +117,9 @@ export class EtaService {
       }
     }
 
-    const stations = await this.prisma.station.findMany({
-      where: { id: { in: stationIds } },
-      select: { id: true, name: true },
-    });
-    const stationMap = Object.fromEntries(stations.map((s) => [s.id, s.name]));
-
     const path: RouteStation[] = stationIds.map((id, index) => ({
       id,
-      name: stationMap[id] ?? id,
+      name: this.stationsCache.get(id) ?? id,
       lineId: lineIds[index] ?? '',
     }));
 
