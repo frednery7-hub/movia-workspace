@@ -1,6 +1,20 @@
 import * as Crypto      from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
+/**
+ * @warning LIMITE DE 2KB POR CHAVE NO ANDROID SECURESTORE
+ * Este serviço é exclusivo para: UUIDs de dispositivo e tokens JWT.
+ * NUNCA armazene cache pesado, mapas offline ou dados volumosos aqui.
+ * Para dados pesados, use AsyncStorage ou banco local (SQLite).
+ */
+
+/**
+ * @warning LIMITE DE 2KB POR CHAVE NO ANDROID SECURESTORE
+ * Este serviço é exclusivo para: UUIDs de dispositivo e tokens JWT.
+ * NUNCA armazene cache pesado, mapas offline ou dados volumosos aqui.
+ * Para dados pesados, use AsyncStorage ou banco local (SQLite).
+ */
+
 const DEVICE_ID_KEY     = 'movia_secure_device_id';
 const ACCESS_TOKEN_KEY  = 'movia_access_token';
 const REFRESH_TOKEN_KEY = 'movia_refresh_token';

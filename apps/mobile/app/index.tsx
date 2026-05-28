@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useRef }                       from 'react';
-import { View, StyleSheet, Dimensions, PanResponder }               from 'react-native';
-import MapView, { PROVIDER_GOOGLE }                                  from 'react-native-maps';
-import { Sidebar }                                                   from '../src/components/Sidebar';
-import { SearchCard }                                                from '../src/components/SearchCard';
-import { IdentityService }                                           from '../src/security/identity.service';
-import { api }                                                       from '../src/config/api';
-import { CacheService }                                              from '../src/config/cache.service';
-import { LocationService }                                           from '../src/location/location.service';
+import React, { useEffect, useState, useRef }  from 'react';
+import { View, StyleSheet, Dimensions, PanResponder, AppState } from 'react-native';
+import MapView                                  from 'react-native-maps';
+import { Sidebar }                             from '../src/components/Sidebar';
+import { SearchCard }                          from '../src/components/SearchCard';
+import { IdentityService }                     from '../src/security/identity.service';
+import { api }                                 from '../src/config/api';
+import { CacheService }                        from '../src/config/cache.service';
+import { LocationService }                     from '../src/location/location.service';
+import { InertialService }                     from '../src/sensors/InertialService';
 
 interface Line {
   id:       string;
@@ -30,6 +31,7 @@ export default function HomeScreen() {
   const [language,       setLanguage]       = useState('es-CL');
   const [region,         setRegion]         = useState(SANTIAGO_DEFAULT);
   const mapRef = useRef<MapView>(null);
+  const inertialRef = useRef(new InertialService());
 
   const panResponder = useRef(
     PanResponder.create({
@@ -40,12 +42,23 @@ export default function HomeScreen() {
     }),
   ).current;
 
+  // Pausa sensor em background — evita zumbi de bateria
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        inertialRef.current.stop();
+      } else if (state === 'active') {
+        inertialRef.current.start();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   useEffect(() => {
     async function init() {
       const lang = await IdentityService.getPreferredLanguage();
       setLanguage(lang);
 
-      // Solicita permissão e centraliza no usuário
       const status = await LocationService.requestPermission();
       if (status === 'granted') {
         const loc = await LocationService.getCurrentLocation();
@@ -80,7 +93,6 @@ export default function HomeScreen() {
       <MapView
         ref={mapRef}
         style={styles.map}
-        provider={PROVIDER_GOOGLE}
         initialRegion={region}
         showsUserLocation
         showsMyLocationButton={false}

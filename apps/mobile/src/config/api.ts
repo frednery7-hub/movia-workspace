@@ -2,6 +2,9 @@ import axios               from 'axios';
 import { IdentityService } from '../security/identity.service';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3000';
+export const REGION   = process.env.EXPO_PUBLIC_REGION ?? 'CL';
+export const TIMEZONE = REGION === 'BR' ? 'America/Sao_Paulo' : 'America/Santiago';
+export const CURRENCY = REGION === 'BR' ? 'BRL' : 'CLP';
 
 if (process.env.NODE_ENV === 'production' && !API_URL.startsWith('https://')) {
   throw new Error('FATAL: EXPO_PUBLIC_API_URL deve usar HTTPS em producao.');

@@ -10,7 +10,9 @@ interface FareInfo {
 
 export function getCurrentFare(): FareInfo {
   const now   = new Date();
-  const time  = now.getHours() * 60 + now.getMinutes();
+  const fmt   = new Intl.DateTimeFormat("es-CL", { hour: "numeric", minute: "numeric", hour12: false, timeZone: "America/Santiago" }).format(now);
+  const [hh, mm] = fmt.split(":").map(Number);
+  const time  = hh * 60 + mm;
 
   if ((time >= 420 && time <= 539) || (time >= 1080 && time <= 1199)) {
     return { type: 'PUNTA', label: 'Punta', price: 895, hours: '07:00–08:59 / 18:00–19:59', color: '#F26522' };
