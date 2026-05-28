@@ -1,16 +1,18 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { router } from 'expo-router';
 
 export interface Destination {
   id:       string;
   name:     string;
   line:     string;
   distance: string;
+  fromId:   string;
 }
 
 const MOCK_RECENTS: Destination[] = [
-  { id: '1', name: 'Baquedano',     line: 'L1',    distance: '2.1 km' },
-  { id: '2', name: 'Tobalaba',      line: 'L1/L4', distance: '3.3 km' },
-  { id: '3', name: 'Los Dominicos', line: 'L1',    distance: '4.8 km' },
+  { id: 'st_baquedano',    name: 'Baquedano',     line: 'L1',    distance: '2.1 km', fromId: 'st_san_pablo'    },
+  { id: 'st_tobalaba',     name: 'Tobalaba',      line: 'L1/L4', distance: '3.3 km', fromId: 'st_san_pablo'    },
+  { id: 'st_los_dominicos',name: 'Los Dominicos', line: 'L1',    distance: '4.8 km', fromId: 'st_san_pablo'    },
 ];
 
 interface Props {
@@ -18,6 +20,21 @@ interface Props {
 }
 
 export function RecentDestinations({ onSelect }: Props) {
+  function handlePress(dest: Destination) {
+    if (onSelect) {
+      onSelect(dest);
+    } else {
+      router.push({
+        pathname: '/navigation',
+        params: {
+          destinationId:   dest.id,
+          fromId:          dest.fromId,
+          destinationName: dest.name,
+        },
+      });
+    }
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.label}>RECIENTES</Text>
@@ -25,7 +42,7 @@ export function RecentDestinations({ onSelect }: Props) {
         <TouchableOpacity
           key={dest.id}
           style={[styles.item, index < MOCK_RECENTS.length - 1 && styles.itemBorder]}
-          onPress={() => onSelect?.(dest)}
+          onPress={() => handlePress(dest)}
           activeOpacity={0.7}
         >
           <View style={styles.iconBox}>
@@ -48,12 +65,8 @@ const styles = StyleSheet.create({
   item:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   itemBorder: { borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
   iconBox: {
-    width:           28,
-    height:          28,
-    borderRadius:    14,
-    backgroundColor: '#FCE8E8',
-    alignItems:      'center',
-    justifyContent:  'center',
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#FCE8E8', alignItems: 'center', justifyContent: 'center',
   },
   iconText: { fontSize: 13 },
   info:     { flex: 1 },
