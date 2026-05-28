@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Slot, router } from 'expo-router';
-import { View, Text, StyleSheet } from 'react-native';
+import { Slot, router, ErrorBoundary as ExpoErrorBoundary } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { IdentityService } from '../src/security/identity.service';
@@ -50,13 +50,29 @@ api.interceptors.response.use(
   },
 );
 
+// ── ErrorBoundary para crashes de renderizacao ────────────────
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  return (
+    <View style={styles.errorContainer} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+      <Text style={styles.errorIcon}>⚠️</Text>
+      <Text style={styles.errorTitle} accessibilityRole="header">Algo salió mal</Text>
+      <Text style={styles.errorMessage}>{error.message}</Text>
+      <TouchableOpacity style={styles.retryBtn} onPress={retry} accessibilityRole="button" accessibilityLabel="Intentar nuevamente">
+        <Text style={styles.retryText}>Intentar nuevamente</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [needsConsent, setNeedsConsent] = useState(false);
 
+  // ── Redireciona para consentimento após layout montar ─────────
   useEffect(() => {
     if (isReady && needsConsent) {
+      router.replace('/consent');
     }
   }, [isReady, needsConsent]);
 
@@ -88,7 +104,7 @@ export default function RootLayout() {
         }
       } catch (error) {
         console.error('Falha na inicializacao segura:', error);
-        setBootError('Nao foi possivel conectar ao servidor. Verifique sua conexao.');
+        setBootError('No se pudo conectar al servidor. Verifica tu conexión.');
       } finally {
         setIsReady(true);
         await SplashScreen.hideAsync();
@@ -101,9 +117,9 @@ export default function RootLayout() {
 
   if (bootError) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorIcon}>warning</Text>
-        <Text style={styles.errorTitle}>Erro de conexao</Text>
+      <View style={styles.errorContainer} accessibilityRole="alert">
+        <Text style={styles.errorIcon}>⚠️</Text>
+        <Text style={styles.errorTitle} accessibilityRole="header">Error de conexión</Text>
         <Text style={styles.errorMessage}>{bootError}</Text>
       </View>
     );
@@ -120,5 +136,7 @@ const styles = StyleSheet.create({
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8f8f6', padding: 32 },
   errorIcon: { fontSize: 48, marginBottom: 16 },
   errorTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8 },
-  errorMessage: { fontSize: 14, color: '#666', textAlign: 'center' },
+  errorMessage: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 24 },
+  retryBtn: { backgroundColor: '#E31837', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
+  retryText: { color: '#fff', fontWeight: '500', fontSize: 15 },
 });

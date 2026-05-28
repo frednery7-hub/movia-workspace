@@ -6,6 +6,12 @@ import type { LineStatusMap } from '@movia/route-engine';
 import type { NearestEntranceResult } from '@movia/shared-types';
 import { maskId } from '../common/mask.util';
 
+export interface RouteStation {
+  id: string;
+  name: string;
+  lineId: string;
+}
+
 export interface EtaResponse {
   destination: string;
   etaSeconds: number;
@@ -13,6 +19,7 @@ export interface EtaResponse {
   confidence: number;
   routeDegraded: boolean;
   stationsCount: number;
+  path: RouteStation[];
 }
 
 @Injectable()
@@ -56,10 +63,7 @@ export class EtaService {
       displacementVectorMeters: 0,
       fallbackActivated: false,
       locationUsed: {} as never,
-      confidence: {
-        nearestStationConfidence: 1,
-        snappingConfidence: 1,
-      },
+      confidence: { nearestStationConfidence: 1, snappingConfidence: 1 },
     };
 
     const destination: NearestEntranceResult = {
@@ -69,10 +73,7 @@ export class EtaService {
       displacementVectorMeters: 0,
       fallbackActivated: false,
       locationUsed: {} as never,
-      confidence: {
-        nearestStationConfidence: 1,
-        snappingConfidence: 1,
-      },
+      confidence: { nearestStationConfidence: 1, snappingConfidence: 1 },
     };
 
     const routeEngine = new RouteEngine(graph);
@@ -86,6 +87,33 @@ export class EtaService {
 
     const result = this.etaEngine.compute({ route, lineStatuses });
 
+    // Extrai estações únicas em ordem dos segmentos TRACK
+    const stationIds: string[] = [];
+    const lineIds: string[] = [];
+
+    for (const segment of route.segments) {
+      if (segment.edge.type === 'TRACK') {
+        if (stationIds.length === 0) {
+          stationIds.push(segment.fromNode.stationId);
+          lineIds.push(segment.fromNode.lineId);
+        }
+        stationIds.push(segment.toNode.stationId);
+        lineIds.push(segment.toNode.lineId);
+      }
+    }
+
+    const stations = await this.prisma.station.findMany({
+      where: { id: { in: stationIds } },
+      select: { id: true, name: true },
+    });
+    const stationMap = Object.fromEntries(stations.map((s) => [s.id, s.name]));
+
+    const path: RouteStation[] = stationIds.map((id, index) => ({
+      id,
+      name: stationMap[id] ?? id,
+      lineId: lineIds[index] ?? '',
+    }));
+
     this.logger.log(
       `ETA calculado — user: ${maskId(userId)} rota: ${originStationId}→${destinationId} eta: ${result.etaSeconds}s`,
     );
@@ -96,8 +124,8 @@ export class EtaService {
       arrivalTime: result.arrivalTime,
       confidence: result.confidence,
       routeDegraded: result.routeDegraded,
-      stationsCount: route.segments.filter((s) => s.edge.type === 'TRACK')
-        .length,
+      stationsCount: path.length,
+      path,
     };
   }
 
