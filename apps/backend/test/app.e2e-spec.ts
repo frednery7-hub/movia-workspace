@@ -126,5 +126,70 @@ describe('Security Smoke Tests (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ lat: 'nao-e-numero' })
       .expect(400);
+
+  });
+
+  // ── Privacy endpoints ─────────────────────────────────────────────────────
+
+  it('GET /v1/privacy/export — 401 sem token', () => {
+    return request(app.getHttpServer())
+      .get('/v1/privacy/export')
+      .expect(401);
+  });
+
+  it('GET /v1/privacy/export — 200 com token', () => {
+    return request(app.getHttpServer())
+      .get('/v1/privacy/export')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+  });
+
+  it('PATCH /v1/privacy/language — 400 com idioma invalido', () => {
+    return request(app.getHttpServer())
+      .patch('/v1/privacy/language')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ language: 'invalid-lang' })
+      .expect(400);
+  });
+
+  it('PATCH /v1/privacy/language — 200 com idioma valido', () => {
+    return request(app.getHttpServer())
+      .patch('/v1/privacy/language')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ language: 'pt-BR' })
+      .expect(200);
+  });
+
+  it('POST /v1/privacy/block — 401 sem token', () => {
+    return request(app.getHttpServer())
+      .post('/v1/privacy/block')
+      .expect(401);
+  });
+
+  it('POST /v1/privacy/block — 201 bloqueia dispositivo', () => {
+    return request(app.getHttpServer())
+      .post('/v1/privacy/block')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201);
+  });
+
+  it('DELETE /v1/privacy/block — 200 desbloqueia dispositivo', () => {
+    return request(app.getHttpServer())
+      .delete('/v1/privacy/block')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+  });
+
+  it('DELETE /v1/privacy/data — 401 sem token', () => {
+    return request(app.getHttpServer())
+      .delete('/v1/privacy/data')
+      .expect(401);
+  });
+
+  it('DELETE /v1/privacy/data — 200 exclui dados', () => {
+    return request(app.getHttpServer())
+      .delete('/v1/privacy/data')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
   });
 });
