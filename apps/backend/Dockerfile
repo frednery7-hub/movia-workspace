@@ -1,5 +1,6 @@
 # ── Stage 1: Builder ─────────────────────────────────────────
 FROM node:20-alpine AS builder
+RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
@@ -23,6 +24,7 @@ RUN pnpm --filter backend build
 
 # ── Stage 2: Runtime ─────────────────────────────────────────
 FROM node:20-alpine AS runtime
+RUN apk add --no-cache openssl libc6-compat
 
 RUN addgroup -S movia && adduser -S movia -G movia
 
