@@ -20,11 +20,18 @@ enum LineStatus {
   SUSPENDED
 }
 
+enum NetworkStateSourceType {
+  OPERATOR
+  ADMIN
+  AI_ENGINE
+}
+
 model Line {
   id            String         @id
   name          String         @unique
   color         String
   trackSegments TrackSegment[]
+  networkState  NetworkState?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -151,14 +158,36 @@ model DeviceSession {
 }
 
 model NetworkState {
-  id           String     @id @default(cuid())
-  lineId       String     @unique
-  status       LineStatus @default(NORMAL)
-  delaySeconds Int        @default(0)
+  id           String                  @id @default(cuid())
+  lineId       String                  @unique
+  line         Line                    @relation(fields: [lineId], references: [id])
+  status       LineStatus              @default(NORMAL)
+  delaySeconds Int                     @default(0)
   message      String?
-  updatedAt    DateTime   @updatedAt
-  createdAt    DateTime   @default(now())
+  sourceId     String?
+  sourceType   NetworkStateSourceType?
+  updatedAt    DateTime                @updatedAt
+  createdAt    DateTime                @default(now())
 
   @@index([lineId])
   @@map("network_state")
+}
+
+model NetworkStateEvent {
+  id              String                 @id @default(cuid())
+  lineId          String
+  oldStatus       LineStatus?
+  newStatus       LineStatus
+  oldDelaySeconds Int?
+  newDelaySeconds Int
+  oldMessage      String?
+  newMessage      String?
+  sourceId        String?
+  sourceType      NetworkStateSourceType
+  reason          String?
+  createdAt       DateTime               @default(now())
+
+  @@index([lineId])
+  @@index([createdAt])
+  @@map("network_state_events")
 }

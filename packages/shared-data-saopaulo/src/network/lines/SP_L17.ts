@@ -1,0 +1,141 @@
+import type { LineDefinition } from "../types.ts";
+
+function p(avg: number) {
+  return [
+    {
+      serviceId: "weekday",
+      startTimeSeconds: 17400,
+      endTimeSeconds: 86400,
+      durationSeconds: avg,
+    },
+    {
+      serviceId: "saturday",
+      startTimeSeconds: 21600,
+      endTimeSeconds: 82800,
+      durationSeconds: Math.round(avg * 0.9),
+    },
+    {
+      serviceId: "sunday_holiday",
+      startTimeSeconds: 28800,
+      endTimeSeconds: 75600,
+      durationSeconds: Math.round(avg * 0.85),
+    },
+  ];
+}
+
+export const SP_L17: LineDefinition = {
+  line: { id: "SP_L17", name: "Linha 17 - Ouro", color: "#C8A84B" },
+  platforms: [
+    { id: "plt_morumbi_l17", stationId: "st_morumbi", lineId: "SP_L17" },
+    {
+      id: "plt_chucri_zaidan_l17",
+      stationId: "st_chucri_zaidan",
+      lineId: "SP_L17",
+    },
+    {
+      id: "plt_vila_cordeiro_l17",
+      stationId: "st_vila_cordeiro",
+      lineId: "SP_L17",
+    },
+    { id: "plt_campo_belo_l17", stationId: "st_campo_belo", lineId: "SP_L17" },
+    {
+      id: "plt_vereador_jose_diniz_l17",
+      stationId: "st_vereador_jose_diniz",
+      lineId: "SP_L17",
+    },
+    {
+      id: "plt_brooklin_paulista_l17",
+      stationId: "st_brooklin_paulista",
+      lineId: "SP_L17",
+    },
+    {
+      id: "plt_washington_luis_l17",
+      stationId: "st_washington_luis",
+      lineId: "SP_L17",
+    },
+    {
+      id: "plt_aeroporto_congonhas_l17",
+      stationId: "st_aeroporto_congonhas",
+      lineId: "SP_L17",
+    },
+  ],
+  segments: [
+    {
+      id: "seg_morumbi_chucri_l17",
+      fromPlatformId: "plt_morumbi_l17",
+      toPlatformId: "plt_chucri_zaidan_l17",
+      lineId: "SP_L17",
+      direction: "INBOUND",
+      sequence: 1,
+      distanceMeters: 1100,
+      averageDurationSeconds: 85,
+      timeProfiles: p(85),
+    },
+    {
+      id: "seg_chucri_vilacordeiro_l17",
+      fromPlatformId: "plt_chucri_zaidan_l17",
+      toPlatformId: "plt_vila_cordeiro_l17",
+      lineId: "SP_L17",
+      direction: "INBOUND",
+      sequence: 2,
+      distanceMeters: 900,
+      averageDurationSeconds: 80,
+      timeProfiles: p(80),
+    },
+    {
+      id: "seg_vilacordeiro_campobelo_l17",
+      fromPlatformId: "plt_vila_cordeiro_l17",
+      toPlatformId: "plt_campo_belo_l17",
+      lineId: "SP_L17",
+      direction: "INBOUND",
+      sequence: 3,
+      distanceMeters: 850,
+      averageDurationSeconds: 75,
+      timeProfiles: p(75),
+    },
+    {
+      id: "seg_campobelo_vereador_l17",
+      fromPlatformId: "plt_campo_belo_l17",
+      toPlatformId: "plt_vereador_jose_diniz_l17",
+      lineId: "SP_L17",
+      direction: "INBOUND",
+      sequence: 4,
+      distanceMeters: 1000,
+      averageDurationSeconds: 80,
+      timeProfiles: p(80),
+    },
+    {
+      id: "seg_vereador_brooklin_l17",
+      fromPlatformId: "plt_vereador_jose_diniz_l17",
+      toPlatformId: "plt_brooklin_paulista_l17",
+      lineId: "SP_L17",
+      direction: "INBOUND",
+      sequence: 5,
+      distanceMeters: 950,
+      averageDurationSeconds: 80,
+      timeProfiles: p(80),
+    },
+    {
+      id: "seg_brooklin_washington_l17",
+      fromPlatformId: "plt_brooklin_paulista_l17",
+      toPlatformId: "plt_washington_luis_l17",
+      lineId: "SP_L17",
+      direction: "INBOUND",
+      sequence: 6,
+      distanceMeters: 1000,
+      averageDurationSeconds: 80,
+      timeProfiles: p(80),
+    },
+    {
+      id: "seg_washington_aeroporto_l17",
+      fromPlatformId: "plt_washington_luis_l17",
+      toPlatformId: "plt_aeroporto_congonhas_l17",
+      lineId: "SP_L17",
+      direction: "INBOUND",
+      sequence: 7,
+      distanceMeters: 1200,
+      averageDurationSeconds: 90,
+      timeProfiles: p(90),
+    },
+  ],
+};

@@ -1,92 +1,163 @@
-import React, { useEffect, useState, useRef }  from 'react';
-import { View, StyleSheet, Dimensions, PanResponder, AppState } from 'react-native';
-import MapView                                  from 'react-native-maps';
-import { Sidebar }                             from '../src/components/Sidebar';
-import { SearchCard }                          from '../src/components/SearchCard';
-import { IdentityService }                     from '../src/security/identity.service';
-import { api }                                 from '../src/config/api';
-import { CacheService }                        from '../src/config/cache.service';
-import { LocationService }                     from '../src/location/location.service';
-import { InertialService }                     from '../src/sensors/InertialService';
-
-interface Line {
-  id:       string;
-  name:     string;
-  color:    string;
-  stations?: { id: string; name: string; latitude: number; longitude: number }[];
-}
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View, StyleSheet, Dimensions, PanResponder, AppState,
+} from 'react-native';
+import MapView from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MoviaSidebar, LineItem } from '../src/components/movia/MoviaSidebar';
+import { SearchBar } from '../src/components/movia/SearchBar';
+import { MapOverlay } from '../src/components/movia/MapOverlay';
+import { StationSearchModal } from '../src/components/movia/StationSearchModal';
+import { NavigationProgress, Station } from '../src/components/movia/NavigationProgress';
+import { useLines } from '../src/hooks/useLines';
+import { useNetworkState } from '../src/hooks/useNetworkState';
+import { useEta } from '../src/hooks/useEta';
+import { useStations, findNearestStation, StationResult } from '../src/hooks/useStations';
+import { IdentityService } from '../src/security/identity.service';
+import { LocationService } from '../src/location/location.service';
+import { InertialService } from '../src/sensors/InertialService';
 
 const { width, height } = Dimensions.get('window');
 
 const SANTIAGO_DEFAULT = {
-  latitude:      -33.4372,
-  longitude:     -70.6344,
-  latitudeDelta:  0.05,
-  longitudeDelta: 0.05,
+  latitude: -33.4372, longitude: -70.6344,
+  latitudeDelta: 0.05, longitudeDelta: 0.05,
 };
 
+type AppScreen = 'map' | 'searching' | 'navigating';
+type Language = 'ES' | 'PT' | 'EN';
+
+function toLineNumber(id: string) {
+  return id.replace(/^L/i, '') as '1' | '2' | '3' | '4' | '4A' | '5' | '6';
+}
+
+function toSidebarStatus(s?: string): 'normal' | 'delay' | 'alert' | 'suspended' {
+  switch (s) {
+    case 'DELAYED':   return 'delay';
+    case 'FAULTY':    return 'alert';
+    case 'SUSPENDED': return 'suspended';
+    default:          return 'normal';
+  }
+}
+
+function formatMinutes(seconds: number): string {
+  const m = Math.round(seconds / 60);
+  return m < 1 ? '< 1 min' : `${m} min`;
+}
+
+function formatArrival(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 export default function HomeScreen() {
-  const [lines,          setLines]          = useState<Line[]>([]);
-  const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [language,       setLanguage]       = useState('es-CL');
-  const [region,         setRegion]         = useState(SANTIAGO_DEFAULT);
+  const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const inertialRef = useRef(new InertialService());
 
+  const [screen, setScreen]           = useState<AppScreen>('map');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [language, setLanguage]       = useState<Language>('ES');
+  const [region, setRegion]           = useState(SANTIAGO_DEFAULT);
+  const [origin, setOrigin]           = useState<StationResult | null>(null);
+  const [destination, setDestination] = useState<StationResult | null>(null);
+  const [userLat, setUserLat]         = useState<number | null>(null);
+  const [userLon, setUserLon]         = useState<number | null>(null);
+
+  const { data: linesData,    isLoading: linesLoading }  = useLines();
+  const { data: networkState, isStale: statusStale }     = useNetworkState();
+  const { data: stationsData }                           = useStations();
+  const { data: etaData, isLoading: etaLoading }         = useEta(
+    origin?.id, destination?.id,
+  );
+
+  // Monta LineItem[] mesclando linhas + networkState
+  const lines: LineItem[] = (linesData ?? []).map(l => ({
+    number: toLineNumber(l.id),
+    name:   l.name,
+    status: toSidebarStatus(networkState?.find(s => s.lineId === l.id)?.status),
+  }));
+
+  // Converte path do ETA em Station[] para NavigationProgress
+  const stations: Station[] = (etaData?.path ?? []).map((p, i) => ({
+    name:   p.name,
+    status: i === 0 ? 'current' : 'future',
+  }));
+
+  // Swipe da esquerda abre sidebar
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) => g.dx > 20 && Math.abs(g.dy) < 30,
-      onPanResponderRelease: (_, g) => {
-        if (g.dx > 60) setSidebarVisible(true);
-      },
+      onPanResponderRelease: (_, g) => { if (g.dx > 60) setSidebarOpen(true); },
     }),
   ).current;
 
-  // Pausa sensor em background — evita zumbi de bateria
+  // Sensores param em background
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'background' || state === 'inactive') {
-        inertialRef.current.stop();
-      } else if (state === 'active') {
-        inertialRef.current.start();
-      }
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'background' || state === 'inactive') inertialRef.current.stop();
+      else if (state === 'active') inertialRef.current.start();
     });
-    return () => subscription.remove();
+    return () => sub.remove();
   }, []);
 
+  // Boot: idioma + GPS
   useEffect(() => {
     async function init() {
       const lang = await IdentityService.getPreferredLanguage();
-      setLanguage(lang);
+      setLanguage(lang.startsWith('pt') ? 'PT' : lang.startsWith('en') ? 'EN' : 'ES');
 
       const status = await LocationService.requestPermission();
       if (status === 'granted') {
         const loc = await LocationService.getCurrentLocation();
         if (loc.latitude && loc.longitude) {
-          const userRegion = {
-            latitude:      loc.latitude,
-            longitude:     loc.longitude,
-            latitudeDelta:  0.03,
-            longitudeDelta: 0.03,
-          };
-          setRegion(userRegion);
-          mapRef.current?.animateToRegion(userRegion, 800);
+          setUserLat(loc.latitude);
+          setUserLon(loc.longitude);
+          const r = { latitude: loc.latitude, longitude: loc.longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 };
+          setRegion(r);
+          mapRef.current?.animateToRegion(r, 800);
         }
-      }
-
-      const cached = await CacheService.get<Line[]>('lines');
-      if (cached) { setLines(cached); return; }
-
-      try {
-        const res = await api.get<Line[]>('/lines');
-        setLines(res.data);
-        await CacheService.set('lines', res.data, 10 * 60 * 1000);
-      } catch {
-        // usa cache expirado se disponível
       }
     }
     init();
   }, []);
+
+  // Auto-detecta estação de origem via GPS quando estações carregam
+  useEffect(() => {
+    if (!stationsData || !userLat || !userLon || origin) return;
+    const nearest = findNearestStation(stationsData, userLat, userLon);
+    if (nearest) setOrigin(nearest);
+  }, [stationsData, userLat, userLon]);
+
+  // Quando ETA chega, vai para navegação
+  useEffect(() => {
+    if (etaData && screen === 'searching') setScreen('navigating');
+  }, [etaData]);
+
+  function handleDestinationSelect(station: StationResult) {
+    setDestination(station);
+    setScreen('navigating');
+  }
+
+  function handleCloseNavigation() {
+    setDestination(null);
+    setScreen('map');
+  }
+
+  // Tela de navegação ativa
+  if (screen === 'navigating' && destination) {
+    return (
+      <NavigationProgress
+        origin={origin?.name ?? 'Origem'}
+        destination={destination.name}
+        estimatedTime={etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : etaLoading ? '...' : '--'}
+        arrivalTime={etaData ? formatArrival(etaData.arrivalTime) : '--:--'}
+        stations={stations}
+        currentLine={'1'}
+        onClose={handleCloseNavigation}
+      />
+    );
+  }
 
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
@@ -99,13 +170,26 @@ export default function HomeScreen() {
         followsUserLocation
       />
 
-      <SearchCard />
+      <MapOverlay />
 
-      <Sidebar
-        visible={sidebarVisible}
-        onClose={() => setSidebarVisible(false)}
-        language={language}
+      <View style={[styles.searchWrapper, { top: insets.top + 12 }]}>
+        <SearchBar onMenuClick={() => setSidebarOpen(true)} />
+      </View>
+
+      <MoviaSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        lines={lines}
+        isLoading={linesLoading}
+        currentLanguage={language}
         onLanguageChange={setLanguage}
+      />
+
+      <StationSearchModal
+        visible={screen === 'searching'}
+        onClose={() => setScreen('map')}
+        onSelect={handleDestinationSelect}
+        title="Para onde?"
       />
     </View>
   );
@@ -113,5 +197,6 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  map:       { width, height },
+  map: { width, height },
+  searchWrapper: { position: 'absolute', left: 16, right: 16 },
 });

@@ -6,60 +6,64 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GraphService } from '../graph/graph.service';
+import { AiEngineService } from '../ai-engine/ai-engine.service';
 import { EtaEngine, RouteEngine } from '@movia/route-engine';
 import type { LineStatusMap } from '@movia/route-engine';
 import type { NearestEntranceResult } from '@movia/shared-types';
 import { maskId } from '../common/mask.util';
+import {
+  EnrichedEtaResponse,
+  EtaRouteStatus,
+  EtaTiming,
+  EtaPrediction,
+} from './dto/enriched-eta-response.dto';
+import { LineStatus } from '@prisma/client';
+import { AiPrediction } from '../ai-engine/dto/prediction.dto';
+import { MetricsService } from '../observability/metrics/metrics.service';
 
-export interface RouteStation {
-  id: string;
-  name: string;
-  lineId: string;
-}
-
-export interface EtaResponse {
-  destination: string;
-  etaSeconds: number;
-  arrivalTime: Date;
-  confidence: number;
-  routeDegraded: boolean;
-  stationsCount: number;
-  path: RouteStation[];
-}
+const AI_MODEL_VERSION = 'EWMA_V1';
 
 @Injectable()
 export class EtaService implements OnModuleInit {
   private readonly logger = new Logger(EtaService.name);
   private readonly etaEngine = new EtaEngine();
-
-  // Singleton do motor + cache de estações em RAM
   private routeEngine!: RouteEngine;
   private stationsCache = new Map<string, string>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly graphService: GraphService,
+    private readonly aiEngine: AiEngineService,
+    private readonly metrics: MetricsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     this.logger.log('Inicializando motor de rotas e cache de estacoes...');
+    await this.reloadEngine();
+    this.logger.log(`Cache carregado com ${this.stationsCache.size} estacoes.`);
+  }
 
+  async reloadEngine(): Promise<void> {
     const graph = this.graphService.getGraph();
     this.routeEngine = new RouteEngine(graph);
-
     const allStations = await this.prisma.station.findMany({
       select: { id: true, name: true },
     });
-
+    this.stationsCache.clear();
     allStations.forEach((s) => this.stationsCache.set(s.id, s.name));
-    this.logger.log(`Cache carregado com ${this.stationsCache.size} estacoes.`);
+    this.logger.log(
+      `RouteEngine reinicializado — ${graph.nodes.size} nos, ${this.stationsCache.size} estacoes em cache.`,
+    );
   }
 
   async computeEta(
     userId: string,
     originStationId: string,
     destinationId: string,
-  ): Promise<EtaResponse> {
+  ): Promise<EnrichedEtaResponse> {
+    const startMs = Date.now();
+    this.metrics.etaRequestsTotal.inc();
+
     const lineStatuses = await this.getLineStatuses();
 
     if (!this.stationsCache.has(originStationId)) {
@@ -82,7 +86,6 @@ export class EtaService implements OnModuleInit {
       locationUsed: {} as never,
       confidence: { nearestStationConfidence: 1, snappingConfidence: 1 },
     };
-
     const destination: NearestEntranceResult = {
       stationId: destinationId,
       entranceId: null,
@@ -94,8 +97,8 @@ export class EtaService implements OnModuleInit {
     };
 
     const route = this.routeEngine.route({ origin, destination });
-
     if (!route) {
+      this.metrics.etaNoRouteTotal.inc();
       throw new NotFoundException(
         `Sem rota disponivel de ${originStationId} para ${destinationId}`,
       );
@@ -105,7 +108,6 @@ export class EtaService implements OnModuleInit {
 
     const stationIds: string[] = [];
     const lineIds: string[] = [];
-
     for (const segment of route.segments) {
       if (segment.edge.type === 'TRACK') {
         if (stationIds.length === 0) {
@@ -117,29 +119,138 @@ export class EtaService implements OnModuleInit {
       }
     }
 
-    const path: RouteStation[] = stationIds.map((id, index) => ({
+    const linesOnRoute = [...new Set(lineIds)];
+    const path = stationIds.map((id, index) => ({
       id,
       name: this.stationsCache.get(id) ?? id,
       lineId: lineIds[index] ?? '',
     }));
 
+    const currentDelaySeconds = this.computeCurrentDelay(
+      linesOnRoute,
+      lineStatuses,
+    );
+    const prediction = this.buildPrediction(linesOnRoute);
+    const predictedDelaySeconds =
+      prediction.available && prediction.predictedStatus !== LineStatus.NORMAL
+        ? Math.round(prediction.confidence * 180)
+        : 0;
+
+    const baseDurationSeconds = result.etaSeconds;
+    const appliedDelaySeconds = Math.max(
+      currentDelaySeconds,
+      predictedDelaySeconds,
+    );
+    const totalEstimatedSeconds = baseDurationSeconds + appliedDelaySeconds;
+
+    const timing: EtaTiming = {
+      baseDurationSeconds,
+      currentDelaySeconds,
+      predictedDelaySeconds,
+      appliedDelaySeconds,
+      totalEstimatedSeconds,
+    };
+
+    const now = Date.now();
+    const arrivalTime = new Date(
+      now + totalEstimatedSeconds * 1000,
+    ).toISOString();
+    const arrivalTimeOptimistic = new Date(
+      now + baseDurationSeconds * 1000,
+    ).toISOString();
+    const status = this.computeRouteStatus(
+      lineStatuses,
+      linesOnRoute,
+      result.routeDegraded,
+    );
+
+    this.metrics.etaDurationMs.observe(Date.now() - startMs);
     this.logger.log(
-      `ETA calculado — user: ${maskId(userId)} rota: ${originStationId}→${destinationId} eta: ${result.etaSeconds}s`,
+      `ETA_COMPUTED — user:${maskId(userId)} rota:${originStationId}\u2192${destinationId} base:${baseDurationSeconds}s delay:${appliedDelaySeconds}s total:${totalEstimatedSeconds}s`,
     );
 
     return {
       destination: destinationId,
-      etaSeconds: result.etaSeconds,
-      arrivalTime: result.arrivalTime,
-      confidence: result.confidence,
-      routeDegraded: result.routeDegraded,
-      stationsCount: path.length,
       path,
+      stationsCount: path.length,
+      linesOnRoute,
+      timing,
+      arrivalTime,
+      arrivalTimeOptimistic,
+      prediction,
+      status,
+      routeDegraded: result.routeDegraded,
     };
   }
 
+  private buildPrediction(linesOnRoute: string[]): EtaPrediction {
+    const predictions = linesOnRoute
+      .map((lineId) => this.aiEngine.getPrediction(lineId))
+      .filter((p): p is AiPrediction => p !== null);
+
+    if (predictions.length === 0) {
+      this.metrics.etaPredictionMissTotal.inc();
+      return {
+        available: false,
+        model: AI_MODEL_VERSION,
+        confidence: 0,
+        predictedStatus: LineStatus.NORMAL,
+        linesAnalyzed: linesOnRoute,
+      };
+    }
+
+    this.metrics.etaPredictionAvailableTotal.inc();
+    const worst = predictions.reduce((prev, curr) =>
+      curr.predictedDelaySeconds > prev.predictedDelaySeconds ? curr : prev,
+    );
+    return {
+      available: true,
+      model: AI_MODEL_VERSION,
+      confidence: worst.confidence,
+      predictedStatus: worst.predictedStatus,
+      linesAnalyzed: linesOnRoute,
+    };
+  }
+
+  private computeCurrentDelay(
+    linesOnRoute: string[],
+    lineStatuses: LineStatusMap,
+  ): number {
+    let maxDelay = 0;
+    for (const lineId of linesOnRoute) {
+      const status = lineStatuses[lineId] as LineStatus;
+      if (status === LineStatus.DELAYED) maxDelay = Math.max(maxDelay, 120);
+      if (status === LineStatus.FAULTY) maxDelay = Math.max(maxDelay, 300);
+    }
+    return maxDelay;
+  }
+
+  private computeRouteStatus(
+    lineStatuses: LineStatusMap,
+    linesOnRoute: string[],
+    routeDegraded: boolean,
+  ): EtaRouteStatus {
+    if (routeDegraded) return 'NO_ROUTE';
+    const statuses = linesOnRoute.map((id) => lineStatuses[id] as LineStatus);
+    if (statuses.some((s) => s === LineStatus.SUSPENDED)) return 'DEGRADED';
+    if (statuses.some((s) => s === LineStatus.FAULTY)) return 'DEGRADED';
+    if (statuses.some((s) => s === LineStatus.DELAYED)) return 'DELAYED';
+    return 'NORMAL';
+  }
+
   private async getLineStatuses(): Promise<LineStatusMap> {
-    const lines = await this.prisma.line.findMany({ select: { id: true } });
-    return Object.fromEntries(lines.map((l) => [l.id, 'NORMAL' as const]));
+    const states = await this.prisma.networkState.findMany({
+      select: { lineId: true, status: true },
+    });
+    if (states.length === 0) {
+      this.logger.warn(
+        'NETWORK_STATE_EMPTY_FALLBACK — NetworkState vazio. Operando com status NORMAL para todas as linhas.',
+      );
+      const lines = await this.prisma.line.findMany({ select: { id: true } });
+      return Object.fromEntries(lines.map((l) => [l.id, 'NORMAL' as const]));
+    }
+    return Object.fromEntries(
+      states.map((s) => [s.lineId, s.status]),
+    ) as LineStatusMap;
   }
 }

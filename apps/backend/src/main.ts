@@ -2,9 +2,8 @@ import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
-import { GlobalExceptionFilter } from './common/http-exception.filter';
-import { LoggingInterceptor } from './common/logging.interceptor';
 import helmet from 'helmet';
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 
 async function bootstrap() {
   if (!process.env.JWT_SECRET) {
@@ -12,7 +11,10 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+
   const isProd = process.env.NODE_ENV === 'production';
 
   app.use(
@@ -25,11 +27,8 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix('v1', {
-    exclude: ['health', 'health/ready', 'health/live'],
+    exclude: ['health', 'health/ready', 'health/live', 'metrics'],
   });
-
-  app.useGlobalFilters(new GlobalExceptionFilter());
-  app.useGlobalInterceptors(new LoggingInterceptor());
 
   app.useGlobalPipes(
     new ValidationPipe({

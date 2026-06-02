@@ -1,0 +1,183 @@
+import React, { useEffect, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { LineChip } from './LineChip';
+import { Colors, LineColors } from '../../theme/colors';
+
+export interface Station {
+  name: string;
+  status: 'passed' | 'current' | 'future';
+  transfer?: { line: '1' | '2' | '3' | '4' | '4A' | '5' | '6'; name: string };
+}
+
+interface NavigationProgressProps {
+  origin: string;
+  destination: string;
+  estimatedTime: string;
+  arrivalTime: string;
+  stations: Station[];
+  currentLine: '1' | '2' | '3' | '4' | '4A' | '5' | '6';
+  onClose: () => void;
+}
+
+export function NavigationProgress({
+  origin, destination, estimatedTime, arrivalTime,
+  stations, currentLine, onClose,
+}: NavigationProgressProps) {
+  const lineColor = LineColors[currentLine] ?? Colors.accentPrimary;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.08, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <View style={styles.container}>
+      <LinearGradient colors={['#1a1a2e', '#232340']} style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.origin}>{origin}</Text>
+          <Text style={styles.arrow}> → </Text>
+          <Text style={styles.destination}>{destination}</Text>
+        </View>
+        <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Feather name="x" size={24} color="rgba(255,255,255,0.8)" />
+        </TouchableOpacity>
+      </LinearGradient>
+
+      <View style={styles.summaryCard}>
+        <Text style={styles.eta}>{estimatedTime}</Text>
+        <Text style={styles.arrival}>Chega às {arrivalTime}</Text>
+        <Text style={styles.stationCount}>{stations.length} estações</Text>
+      </View>
+
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.progressList}>
+          {stations.map((station, index) => {
+            const isCurrent = station.status === 'current';
+            const isPassed = station.status === 'passed';
+            const isFuture = station.status === 'future';
+            const isLast = index === stations.length - 1;
+
+            return (
+              <View key={index} style={styles.stationRow}>
+                <View style={styles.trackColumn}>
+                  <View style={[
+                    styles.dot,
+                    isCurrent && styles.dotCurrent,
+                    isPassed && styles.dotPassed,
+                    isFuture && styles.dotFuture,
+                    isCurrent && { borderColor: Colors.accentPrimary },
+                  ]} />
+                  {!isLast && (
+                    <View style={[
+                      styles.track,
+                      (isPassed || isCurrent) && { backgroundColor: lineColor },
+                      isFuture && styles.trackDashed,
+                    ]} />
+                  )}
+                </View>
+
+                <Animated.View
+                  style={[
+                    styles.stationInfo,
+                    isCurrent && styles.stationInfoCurrent,
+                    isCurrent && { transform: [{ scale: pulseAnim }] },
+                  ]}
+                >
+                  <Text style={[
+                    styles.stationName,
+                    isCurrent && styles.stationNameCurrent,
+                    isPassed && styles.stationNamePassed,
+                  ]}>
+                    {station.name}
+                  </Text>
+                  {isCurrent && (
+                    <Text style={styles.youAreHere}>Você está aqui</Text>
+                  )}
+                  {station.transfer && (
+                    <View style={[
+                      styles.transferChip,
+                      { borderColor: LineColors[station.transfer.line], backgroundColor: LineColors[station.transfer.line] + '20' },
+                    ]}>
+                      <Text style={styles.transferArrow}>→</Text>
+                      <LineChip line={station.transfer.line} variant="compact" />
+                      <Text style={styles.transferName}>{station.transfer.name}</Text>
+                    </View>
+                  )}
+                </Animated.View>
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#fff' },
+  header: {
+    height: 76, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingHorizontal: 20,
+  },
+  headerContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  origin: { fontSize: 13, color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
+  arrow: { fontSize: 16, color: 'rgba(255,255,255,0.9)' },
+  destination: { fontSize: 15, color: '#fff', fontWeight: '700' },
+  summaryCard: {
+    margin: 20, padding: 20, borderRadius: 18, backgroundColor: '#fff',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06, shadowRadius: 16, elevation: 3,
+    borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)',
+  },
+  eta: { fontSize: 32, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -0.8 },
+  arrival: { fontSize: 15, color: Colors.textSecondary, marginTop: 6, fontWeight: '500' },
+  stationCount: { fontSize: 13, color: Colors.textTertiary, marginTop: 4, fontWeight: '500' },
+  scroll: { flex: 1 },
+  progressList: { paddingHorizontal: 20, paddingBottom: 32 },
+  stationRow: { flexDirection: 'row', gap: 16, minHeight: 52 },
+  trackColumn: { width: 18, alignItems: 'center' },
+  dot: {
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: Colors.grayText, marginTop: 4,
+  },
+  dotCurrent: {
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#fff', borderWidth: 3,
+    marginTop: 0, marginLeft: -3,
+    shadowColor: Colors.accentPrimary, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3, shadowRadius: 6, elevation: 3,
+  },
+  dotPassed: { backgroundColor: Colors.grayText, opacity: 0.5 },
+  dotFuture: {
+    backgroundColor: '#fff', borderWidth: 2,
+    borderColor: Colors.grayBorder,
+  },
+  track: {
+    flex: 1, width: 3, marginTop: 2,
+    backgroundColor: Colors.grayBorder,
+  },
+  trackDashed: { backgroundColor: 'transparent', borderLeftWidth: 3, borderLeftColor: 'rgba(0,0,0,0.12)', borderStyle: 'dashed' },
+  stationInfo: { flex: 1, paddingBottom: 20 },
+  stationInfoCurrent: {
+    backgroundColor: '#ffebee', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, marginLeft: -4,
+  },
+  stationName: { fontSize: 14, fontWeight: '500', color: Colors.textPrimary },
+  stationNameCurrent: { fontSize: 16, fontWeight: '700', color: Colors.accentPrimary },
+  stationNamePassed: { color: Colors.grayText, opacity: 0.5, fontWeight: '400' },
+  youAreHere: { fontSize: 11, color: Colors.accentPrimary, marginTop: 4, fontWeight: '600' },
+  transferChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 8, paddingHorizontal: 10, paddingVertical: 7,
+    borderRadius: 10, borderWidth: 1.5, alignSelf: 'flex-start',
+  },
+  transferArrow: { fontSize: 13, fontWeight: '600' },
+  transferName: { fontSize: 12, fontWeight: '600' },
+});

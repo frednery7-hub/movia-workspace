@@ -95,4 +95,4 @@ jobs:
 
       # ── Step 10: Docker Build Check ───────────────────────────
       - name: Docker Build Check
-        run: docker build -f apps/backend/Dockerfile -t movia-backend:ci . || echo "Dockerfile ausente — skip"
+        run: docker build -f apps/backend/Dockerfile -t movia-backend:ci .

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import * as Joi from 'joi';
 import { LinesModule } from './lines/lines.module';
 import { HealthModule } from './health/health.module';
@@ -14,6 +14,13 @@ import { EtaModule } from './eta/eta.module';
 import { RolesGuard } from './common/roles.guard';
 import { PrivacyModule } from './privacy/privacy.module';
 import { CleanupService } from './common/cleanup.service';
+import { NetworkStateModule } from './network-state/network-state.module';
+import { IngestionModule } from './ingestion/ingestion.module';
+import { AiEngineModule } from './ai-engine/ai-engine.module';
+import { StationsModule } from './stations/stations.module';
+import { ObservabilityModule } from './observability/observability.module';
+import { LoggingInterceptor } from './common/logging.interceptor';
+import { GlobalExceptionFilter } from './common/http-exception.filter';
 
 @Module({
   imports: [
@@ -27,6 +34,7 @@ import { CleanupService } from './common/cleanup.service';
         DATABASE_URL: Joi.string().required(),
         JWT_SECRET: Joi.string().min(32).required(),
         ALLOWED_ORIGINS: Joi.string().default(''),
+        SENTRY_DSN: Joi.string().optional().allow(''),
       }),
     }),
     ThrottlerModule.forRoot([{ ttl: 900000, limit: 100 }]),
@@ -38,11 +46,18 @@ import { CleanupService } from './common/cleanup.service';
     GraphModule,
     EtaModule,
     PrivacyModule,
+    NetworkStateModule,
+    IngestionModule,
+    AiEngineModule,
+    StationsModule,
+    ObservabilityModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_FILTER, useClass: GlobalExceptionFilter },
+    { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
     CleanupService,
   ],
 })

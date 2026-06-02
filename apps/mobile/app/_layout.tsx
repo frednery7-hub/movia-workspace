@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Slot, router, ErrorBoundary as ExpoErrorBoundary } from 'expo-router';
+import { Slot, router } from 'expo-router';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { IdentityService } from '../src/security/identity.service';
 import { ConsentService } from '../src/privacy/consent.service';
+import { QueryProvider } from '../src/providers/QueryProvider';
 import { api } from '../src/config/api';
 
 SplashScreen.preventAutoHideAsync();
@@ -16,7 +17,11 @@ interface SessionResponse {
   refresh_token: string;
 }
 
-async function fetchSessionWithRetry(deviceId: string, language: string, attempt = 1): Promise<SessionResponse> {
+async function fetchSessionWithRetry(
+  deviceId: string,
+  language: string,
+  attempt = 1,
+): Promise<SessionResponse> {
   try {
     const response = await api.post<SessionResponse>('/auth/session', { deviceId, language });
     return response.data;
@@ -36,7 +41,9 @@ api.interceptors.response.use(
       try {
         const refreshToken = await IdentityService.getRefreshToken();
         if (refreshToken) {
-          const res = await api.post<SessionResponse>('/auth/refresh', { refresh_token: refreshToken });
+          const res = await api.post<SessionResponse>('/auth/refresh', {
+            refresh_token: refreshToken,
+          });
           await IdentityService.saveAccessToken(res.data.access_token);
           await IdentityService.saveRefreshToken(res.data.refresh_token);
           error.config.headers.Authorization = 'Bearer ' + res.data.access_token;
@@ -50,14 +57,13 @@ api.interceptors.response.use(
   },
 );
 
-// ── ErrorBoundary para crashes de renderizacao ────────────────
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   return (
-    <View style={styles.errorContainer} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+    <View style={styles.errorContainer} accessibilityRole="alert">
       <Text style={styles.errorIcon}>⚠️</Text>
-      <Text style={styles.errorTitle} accessibilityRole="header">Algo salió mal</Text>
+      <Text style={styles.errorTitle}>Algo salió mal</Text>
       <Text style={styles.errorMessage}>{error.message}</Text>
-      <TouchableOpacity style={styles.retryBtn} onPress={retry} accessibilityRole="button" accessibilityLabel="Intentar nuevamente">
+      <TouchableOpacity style={styles.retryBtn} onPress={retry}>
         <Text style={styles.retryText}>Intentar nuevamente</Text>
       </TouchableOpacity>
     </View>
@@ -69,11 +75,8 @@ export default function RootLayout() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [needsConsent, setNeedsConsent] = useState(false);
 
-  // ── Redireciona para consentimento após layout montar ─────────
   useEffect(() => {
-    if (isReady && needsConsent) {
-      router.replace('/consent');
-    }
+    if (isReady && needsConsent) router.replace('/consent');
   }, [isReady, needsConsent]);
 
   useEffect(() => {
@@ -99,9 +102,7 @@ export default function RootLayout() {
         }
 
         const hasConsent = await ConsentService.hasValidConsent();
-        if (!hasConsent) {
-          setNeedsConsent(true);
-        }
+        if (!hasConsent) setNeedsConsent(true);
       } catch (error) {
         console.error('Falha na inicializacao segura:', error);
         setBootError('No se pudo conectar al servidor. Verifica tu conexión.');
@@ -117,18 +118,20 @@ export default function RootLayout() {
 
   if (bootError) {
     return (
-      <View style={styles.errorContainer} accessibilityRole="alert">
+      <View style={styles.errorContainer}>
         <Text style={styles.errorIcon}>⚠️</Text>
-        <Text style={styles.errorTitle} accessibilityRole="header">Error de conexión</Text>
+        <Text style={styles.errorTitle}>Error de conexión</Text>
         <Text style={styles.errorMessage}>{bootError}</Text>
       </View>
     );
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <Slot />
-    </GestureHandlerRootView>
+    <QueryProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <Slot />
+      </GestureHandlerRootView>
+    </QueryProvider>
   );
 }
 

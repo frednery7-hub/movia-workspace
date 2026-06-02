@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { validateGraphData } from './graph-integrity.validator';
 import type {
   WeightedGraph,
   GraphNode,
@@ -8,11 +9,8 @@ import type {
   TransferEdge,
 } from '@movia/shared-types';
 
-/**
- * GraphService — constroi e cacheia o WeightedGraph em memoria no boot.
- * Fonte de dados: PostgreSQL via Prisma.
- * Atualizado sob demanda via invalidateCache().
- */
+const TRANSFER_PENALTY_SECONDS = 180;
+
 @Injectable()
 export class GraphService implements OnModuleInit {
   private readonly logger = new Logger(GraphService.name);
@@ -36,11 +34,15 @@ export class GraphService implements OnModuleInit {
   private async buildGraph(): Promise<void> {
     this.logger.log('Construindo WeightedGraph a partir do banco...');
 
-    const [platforms, segments, transfers] = await Promise.all([
+    const [stations, platforms, segments, transfers] = await Promise.all([
+      this.prisma.station.findMany(),
       this.prisma.platform.findMany({ include: { station: true } }),
       this.prisma.trackSegment.findMany({ include: { timeProfiles: true } }),
       this.prisma.internalTransfer.findMany(),
     ]);
+
+    // ── Validacao de integridade — aborta o build se falhar ──────
+    validateGraphData({ stations, platforms, segments, transfers });
 
     const nodes = new Map<string, GraphNode>();
     const edges = new Map<string, GraphEdge[]>();
@@ -88,6 +90,8 @@ export class GraphService implements OnModuleInit {
 
     // ── Arestas TRANSFER ──────────────────────────────────────────
     for (const transfer of transfers) {
+      const transferCost = transfer.walkingSeconds + TRANSFER_PENALTY_SECONDS;
+
       const edgeFwd: TransferEdge = {
         id: transfer.id,
         type: 'TRANSFER',
@@ -95,7 +99,7 @@ export class GraphService implements OnModuleInit {
         toNodeId: transfer.toPlatformId,
         walkingSeconds: transfer.walkingSeconds,
         platformChange: transfer.platformChange,
-        cost: transfer.walkingSeconds,
+        cost: transferCost,
         accessible: transfer.accessibilityFriendly,
       };
       const edgeBwd: TransferEdge = {
@@ -116,7 +120,7 @@ export class GraphService implements OnModuleInit {
 
     this.graph = { nodes, edges, version: new Date().toISOString() };
     this.logger.log(
-      `Graph construido: ${nodes.size} nos, ${[...edges.values()].reduce((a, b) => a + b.length, 0)} arestas`,
+      `GRAPH_BUILD_OK — ${nodes.size} nos, ${[...edges.values()].reduce((a, b) => a + b.length, 0)} arestas`,
     );
   }
 }

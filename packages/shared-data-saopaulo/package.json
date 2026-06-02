@@ -1,0 +1,17 @@
+{
+  "name": "@movia/shared-data-saopaulo",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@movia/shared-types": "workspace:*",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@movia/shared-types": "*"
+  }
+}

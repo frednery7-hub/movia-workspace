@@ -1,5 +1,5 @@
 # Movia — Plano de Resposta a Incidentes de Segurança
-## Conformidade: Ley 21.719 (Chile) | LGPD (Brasil)
+## Conformidade: Ley 21.719 (Chile) | LGPD (Brasil) | Ley 25.326 (Argentina)
 
 ---
 
@@ -35,14 +35,23 @@
 - [ ] Documentar linha do tempo com timestamps
 
 ### Fase 4 — Notificação (24–72h)
+
 #### Ley 21.719 (Chile)
 - [ ] Notificar Agencia de Protección de Datos Personales
 - [ ] Se dados sensíveis expostos: notificar titulares afetados
-- [ ] Prazo: conforme regulamentação da Agência (previsto 24–72h)
+- [ ] Prazo: 24–72h (conforme regulamentação da Agência)
+- [ ] Site: https://www.agenciadedatos.cl
 
 #### LGPD (Brasil — se aplicável)
 - [ ] Notificar ANPD em até 2 dias úteis
 - [ ] Notificar titulares se risco relevante
+- [ ] Site: https://www.gov.br/anpd
+
+#### Ley 25.326 (Argentina — se aplicável)
+- [ ] Notificar AAIP — Agencia de Acceso a la Información Pública
+- [ ] Prazo: 72h por precaução (adotar reforma PEN 2023)
+- [ ] Canal: https://www.argentina.gob.ar/aaip/datospersonales
+- [ ] Se dados sensíveis expostos: notificar titulares afetados
 
 ### Fase 5 — Recuperação (24–72h)
 - [ ] Aplicar correção no código
@@ -90,13 +99,18 @@ ORDER BY created_at DESC;
 | DPO / Encarregado | Notificação regulatória e comunicação com titulares |
 | Jurídico | Avaliação de obrigações legais e prazo de notificação |
 
-**Agencia de Protección de Datos Personales (Chile):**
+**Chile — Agencia de Protección de Datos Personales:**
 - Site: https://www.agenciadedatos.cl
 - Vigência da obrigação: 01/12/2026
 
-**ANPD (Brasil):**
+**Brasil — ANPD:**
 - Site: https://www.gov.br/anpd
 - Prazo: 2 dias úteis após ciência do incidente
+
+**Argentina — AAIP:**
+- Site: https://www.argentina.gob.ar/aaip
+- Canal de notificação: https://www.argentina.gob.ar/aaip/datospersonales
+- Prazo: 72h por precaução (adotar reforma PEN 2023)
 
 ---
 
