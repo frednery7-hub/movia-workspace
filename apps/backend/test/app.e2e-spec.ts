@@ -126,15 +126,12 @@ describe('Security Smoke Tests (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ lat: 'nao-e-numero' })
       .expect(400);
-
   });
 
   // ── Privacy endpoints ─────────────────────────────────────────────────────
 
   it('GET /v1/privacy/export — 401 sem token', () => {
-    return request(app.getHttpServer())
-      .get('/v1/privacy/export')
-      .expect(401);
+    return request(app.getHttpServer()).get('/v1/privacy/export').expect(401);
   });
 
   it('GET /v1/privacy/export — 200 com token', () => {
@@ -161,9 +158,7 @@ describe('Security Smoke Tests (e2e)', () => {
   });
 
   it('POST /v1/privacy/block — 401 sem token', () => {
-    return request(app.getHttpServer())
-      .post('/v1/privacy/block')
-      .expect(401);
+    return request(app.getHttpServer()).post('/v1/privacy/block').expect(401);
   });
 
   it('POST /v1/privacy/block — 201 bloqueia dispositivo', () => {
@@ -181,9 +176,7 @@ describe('Security Smoke Tests (e2e)', () => {
   });
 
   it('DELETE /v1/privacy/data — 401 sem token', () => {
-    return request(app.getHttpServer())
-      .delete('/v1/privacy/data')
-      .expect(401);
+    return request(app.getHttpServer()).delete('/v1/privacy/data').expect(401);
   });
 
   it('DELETE /v1/privacy/data — 200 exclui dados', () => {
