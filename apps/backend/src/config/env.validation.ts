@@ -8,7 +8,7 @@ export const envValidationSchema = Joi.object({
   DATABASE_URL: Joi.string().required(),
   REDIS_HOST: Joi.string().required(),
   REDIS_PORT: Joi.number().required(),
-  JWT_SECRET: Joi.string().min(10).required(),
+  JWT_SECRET: Joi.string().min(32).required(),
   MAPBOX_PUBLIC_TOKEN: Joi.string().allow('').optional(),
   SENTRY_DSN: Joi.string().allow('').optional(),
 });

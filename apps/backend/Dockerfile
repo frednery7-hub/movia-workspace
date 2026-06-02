@@ -16,6 +16,8 @@ RUN pnpm install --frozen-lockfile
 
 COPY apps/backend ./apps/backend
 COPY packages ./packages
+RUN cd apps/backend && npx prisma generate && \
+    cp -r /app/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma /app/.prisma-generated
 
 RUN pnpm --filter backend build
 
@@ -35,10 +37,14 @@ COPY packages/shared-data/package.json ./packages/shared-data/
 COPY packages/route-engine/package.json ./packages/route-engine/
 COPY packages/geo-engine/package.json ./packages/geo-engine/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
+COPY --from=builder /app/.prisma-generated ./.prisma-generated
 COPY apps/backend/prisma ./apps/backend/prisma
+RUN DEST=$(find /app/node_modules/.pnpm -path "*/prisma+client*/node_modules" -type d | head -1) && \
+    mkdir -p "$DEST/.prisma" && \
+    cp -r /app/.prisma-generated/* "$DEST/.prisma/" 2>/dev/null || true
 
 RUN chown -R movia:movia /app
 USER movia

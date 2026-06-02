@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -30,7 +31,7 @@ export class NetworkStateController {
     @Request() req: JwtRequest,
   ) {
     if (!LINE_ID_REGEX.test(lineId)) {
-      throw new Error('lineId invalido.');
+      throw new BadRequestException('lineId invalido.');
     }
 
     const sourceType = this.resolveSourceType(req.user.role);
