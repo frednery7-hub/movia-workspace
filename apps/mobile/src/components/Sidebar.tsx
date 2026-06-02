@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Animated, Dimensions, TouchableWithoutFeedback,
@@ -141,7 +142,7 @@ export function Sidebar({ visible, onClose, language, onLanguageChange }: Props)
 
           <View style={styles.divider} />
 
-          <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7} onPress={() => { onClose(); router.push('/settings'); }}>
             <Text style={styles.settingsText}>⚙️  Configuración</Text>
           </TouchableOpacity>
 

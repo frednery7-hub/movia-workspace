@@ -35,6 +35,11 @@ import { GlobalExceptionFilter } from './common/http-exception.filter';
         JWT_SECRET: Joi.string().min(32).required(),
         ALLOWED_ORIGINS: Joi.string().default(''),
         SENTRY_DSN: Joi.string().optional().allow(''),
+        METRICS_TOKEN: Joi.when('NODE_ENV', {
+          is: 'production',
+          then: Joi.string().min(16).required(),
+          otherwise: Joi.string().optional().allow(''),
+        }),
       }),
     }),
     ThrottlerModule.forRoot([{ ttl: 900000, limit: 100 }]),
