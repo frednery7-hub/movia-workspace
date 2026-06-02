@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import type { JwtPayload } from './jwt.strategy';
@@ -28,6 +33,16 @@ export class AuthService {
     role: Role = 'anonymous_device',
     ipAddress?: string,
   ): Promise<SessionTokens> {
+    const blockedSession = await this.prisma.deviceSession.findFirst({
+      where: { deviceId, blocked: true, revoked: false },
+    });
+    if (blockedSession) {
+      throw new HttpException(
+        'Dispositivo bloqueado. Solicite desbloqueio em /v1/privacy/block.',
+        HttpStatus.LOCKED,
+      );
+    }
+
     const payload: JwtPayload = { sub: deviceId, deviceId, language, role };
     const access_token = this.jwtService.sign(payload);
     const refresh_token = crypto.randomBytes(64).toString('hex');
@@ -56,6 +71,12 @@ export class AuthService {
 
     if (!session || session.revoked || session.expiresAt < new Date()) {
       throw new UnauthorizedException('Refresh token invalido ou expirado.');
+    }
+    if (session.blocked) {
+      throw new HttpException(
+        'Dispositivo bloqueado. Solicite desbloqueio em /v1/privacy/block.',
+        HttpStatus.LOCKED,
+      );
     }
 
     await this.prisma.deviceSession.update({

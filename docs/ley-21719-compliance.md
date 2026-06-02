@@ -131,8 +131,8 @@
 
 ### Antes de 01/12/2026 (obrigatório)
 - [x] Implementar direito de Bloqueio (`blocked` flag + endpoints POST/DELETE /privacy/block)
-- [x] Implementar direito de Retificação (PATCH /privacy/language)
-- [x] Adicionar logs de accountability em PrivacyService
+- [x] Implementar direito de Retificação (PATCH /privacy/language) ✅
+- [x] Adicionar logs de accountability em PrivacyService ✅
 - [x] Criar `docs/incident-response.md` com runbook de notificação
 - [ ] Implementar direito de Oposição (após mapear escopo de analytics)
 - [ ] Formalizar contratos com Sentry e Mapbox (SCCs)

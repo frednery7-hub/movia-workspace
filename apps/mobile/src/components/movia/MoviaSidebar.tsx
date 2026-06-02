@@ -4,6 +4,7 @@ import {
   Animated, Dimensions, StyleSheet, TouchableWithoutFeedback,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChip } from './LineChip';
 import { StatusBadge } from './StatusBadge';
@@ -170,7 +171,7 @@ export function MoviaSidebar({
             ))}
           </View>
 
-          <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7} onPress={() => { onClose(); router.push('/settings'); }}>
             <Feather name="settings" size={20} color="#5A5A5A" />
             <Text style={styles.settingsText}>Configurações</Text>
           </TouchableOpacity>

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,6 +13,7 @@ const mockPrisma = {
   deviceSession: {
     create: jest.fn(),
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     update: jest.fn(),
     updateMany: jest.fn(),
   },
@@ -22,10 +24,7 @@ const mockJwt = {
 };
 
 interface DeviceSessionCreateArg {
-  data: {
-    language: string;
-    refreshToken: string;
-  };
+  data: { language: string; refreshToken: string };
 }
 
 function getDeviceSessionCreateArg(): DeviceSessionCreateArg {
@@ -55,6 +54,7 @@ describe('AuthService', () => {
 
   describe('generateToken', () => {
     it('gera access_token e refresh_token', async () => {
+      mockPrisma.deviceSession.findFirst.mockResolvedValue(null);
       mockPrisma.deviceSession.create.mockResolvedValue({});
       const result = await service.generateToken(
         '550e8400-e29b-41d4-a716-446655440000',
@@ -68,6 +68,7 @@ describe('AuthService', () => {
     });
 
     it('usa es-CL como idioma padrao', async () => {
+      mockPrisma.deviceSession.findFirst.mockResolvedValue(null);
       mockPrisma.deviceSession.create.mockResolvedValue({});
       await service.generateToken('550e8400-e29b-41d4-a716-446655440000');
       const callArg = getDeviceSessionCreateArg();
@@ -75,12 +76,30 @@ describe('AuthService', () => {
     });
 
     it('salva hash do refresh token no banco', async () => {
+      mockPrisma.deviceSession.findFirst.mockResolvedValue(null);
       mockPrisma.deviceSession.create.mockResolvedValue({});
       const result = await service.generateToken(
         '550e8400-e29b-41d4-a716-446655440000',
       );
       const callArg = getDeviceSessionCreateArg();
       expect(callArg.data.refreshToken).toBe(hashToken(result.refresh_token));
+    });
+
+    it('lanca 423 Locked para dispositivo bloqueado', async () => {
+      mockPrisma.deviceSession.findFirst.mockResolvedValue({
+        id: '1',
+        blocked: true,
+        revoked: false,
+      });
+      await expect(
+        service.generateToken('550e8400-e29b-41d4-a716-446655440000'),
+      ).rejects.toThrow(HttpException);
+
+      try {
+        await service.generateToken('550e8400-e29b-41d4-a716-446655440000');
+      } catch (e) {
+        expect((e as HttpException).getStatus()).toBe(HttpStatus.LOCKED);
+      }
     });
   });
 
@@ -96,6 +115,7 @@ describe('AuthService', () => {
       mockPrisma.deviceSession.findUnique.mockResolvedValue({
         id: '1',
         revoked: true,
+        blocked: false,
         expiresAt: new Date(Date.now() + 10000),
       });
       await expect(service.refreshSession('revoked-token')).rejects.toThrow(
@@ -107,10 +127,25 @@ describe('AuthService', () => {
       mockPrisma.deviceSession.findUnique.mockResolvedValue({
         id: '1',
         revoked: false,
+        blocked: false,
         expiresAt: new Date(Date.now() - 10000),
       });
       await expect(service.refreshSession('expired-token')).rejects.toThrow(
         'Refresh token invalido ou expirado.',
+      );
+    });
+
+    it('lanca 423 Locked para sessao bloqueada', async () => {
+      mockPrisma.deviceSession.findUnique.mockResolvedValue({
+        id: '1',
+        revoked: false,
+        blocked: true,
+        expiresAt: new Date(Date.now() + 10000),
+        deviceId: 'device-1',
+        language: 'es-CL',
+      });
+      await expect(service.refreshSession('blocked-token')).rejects.toThrow(
+        HttpException,
       );
     });
   });
