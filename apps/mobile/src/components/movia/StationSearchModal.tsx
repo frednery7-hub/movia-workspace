@@ -24,7 +24,7 @@ export function StationSearchModal({
   const { data: searchResults = [], isFetching: loadingSearch } = useStationSearch(query);
   const isLoading = loadingAll || loadingSearch;
   const filtered = useMemo(() => {
-    if (!query.trim()) return allStations.slice(0, 40);
+    if (!query.trim()) return allStations;
     if (query.length >= 2 && searchResults.length > 0) return searchResults;
     const q = query.toLowerCase();
     return allStations.filter(

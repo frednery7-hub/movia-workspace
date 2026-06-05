@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useLocale } from '../../context/LocaleContext';
 
 interface SearchBarProps {
   onMenuClick: () => void;
@@ -8,6 +9,7 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ onMenuClick, onSearchClick }: SearchBarProps) {
+  const { t } = useLocale();
   return (
     <View style={styles.bar}>
       <TouchableOpacity
@@ -17,7 +19,7 @@ export function SearchBar({ onMenuClick, onSearchClick }: SearchBarProps) {
         <Feather name="menu" size={20} color="#6B7280" />
       </TouchableOpacity>
       <TouchableOpacity style={styles.searchArea} onPress={onSearchClick} activeOpacity={0.7}>
-        <Text style={styles.placeholder}>¿Para dónde?</Text>
+        <Text style={styles.placeholder}>{t('where_to')}</Text>
         <Feather name="search" size={18} color="#6B7280" />
       </TouchableOpacity>
     </View>

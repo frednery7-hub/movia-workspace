@@ -6,7 +6,15 @@
     "newArchEnabled": true,
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Movia usa sua localização para encontrar a estação mais próxima.",
+          "locationWhenInUsePermission": "Movia usa sua localização para encontrar a estação mais próxima.",
+          "isIosBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "android": {
       "usesCleartextTraffic": false,
@@ -14,10 +22,17 @@
         "backgroundColor": "#1a1a2e",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "package": "com.anonymous.movia"
+      "package": "com.anonymous.movia",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Movia usa sua localização para encontrar a estação mais próxima."
+      }
     },
     "version": "1.0.0"
   }

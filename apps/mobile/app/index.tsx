@@ -1,4 +1,7 @@
+import { CacheService } from '../src/config/cache.service';
 import { useLocalSearchParams } from 'expo-router';
+import { LocaleProvider } from '../src/context/LocaleContext';
+import type { SupportedLocale } from '../src/context/LocaleContext';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, StyleSheet, Dimensions, PanResponder, AppState,
@@ -59,6 +62,10 @@ export default function HomeScreen() {
   const [screen, setScreen]           = useState<AppScreen>('map');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [language, setLanguage]       = useState<Language>('ES');
+  const localeMap: Record<Language, SupportedLocale> = {
+    ES: 'es-CL', PT: 'pt-BR', EN: 'en-US',
+  };
+  const currentLocale = localeMap[language];
   const [region, setRegion]           = useState(SANTIAGO_DEFAULT);
   const [origin, setOrigin]           = useState<StationResult | null>(null);
   const [destination, setDestination] = useState<StationResult | null>(null);
@@ -157,6 +164,15 @@ export default function HomeScreen() {
 
   function handleDestinationSelect(station: StationResult) {
     setDestination(station);
+    // Salva no histórico
+    if (origin) {
+      CacheService.get<StationResult[]>('route_history').then((hist: StationResult[] | null) => {
+        const history: StationResult[] = hist ?? [];
+        const entry = { ...station, timestamp: Date.now() };
+        const updated = [entry, ...history.filter((h: StationResult) => h.id !== station.id)].slice(0, 10);
+        CacheService.set('route_history', updated, 30 * 24 * 60 * 60 * 1000);
+      });
+    }
     if (!origin) {
       // sem origem GPS — usa estação mais próxima do centro de Santiago como fallback
       setOrigin({ id: 'st_universidad_de_chile', name: 'Universidad de Chile', shortCode: 'UCH', latitude: -33.4415, longitude: -70.6503 });
@@ -171,6 +187,7 @@ export default function HomeScreen() {
 
 
   return (
+    <LocaleProvider locale={currentLocale}>
     <View style={styles.container} {...panResponder.panHandlers}>
       <MapView
         ref={mapRef}
@@ -229,7 +246,7 @@ export default function HomeScreen() {
           estimatedTime={etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : etaLoading ? '...' : '--'}
           arrivalTime={etaData ? formatArrival(etaData.arrivalTime) : '--:--'}
           stations={stations}
-          currentLine={'1'}
+          currentLine={(etaData?.linesOnRoute?.[0]?.replace('L','') ?? '1') as '1'|'2'|'3'|'4'|'4A'|'5'|'6'}
           onClose={handleCloseNavigation}
         />
       )}
@@ -246,6 +263,7 @@ export default function HomeScreen() {
         title="Para onde?"
       />
     </View>
+    </LocaleProvider>
   );
 }
 
