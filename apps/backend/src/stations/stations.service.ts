@@ -18,7 +18,7 @@ export class StationsService {
         longitude: true,
       },
       orderBy: { name: 'asc' },
-      take: 50,
+      take: query ? 50 : undefined,
     });
   }
 }

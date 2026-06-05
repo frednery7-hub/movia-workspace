@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useStations, StationResult } from '../../hooks/useStations';
+import { useStations, useStationSearch, StationResult } from '../../hooks/useStations';
 import { Colors } from '../../theme/colors';
 
 interface StationSearchModalProps {

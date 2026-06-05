@@ -13,6 +13,23 @@ export interface StationResult {
   longitude: number;
 }
 
+async function fetchAllStations(): Promise<StationResult[]> {
+  try {
+    const { data } = await api.get<StationResult[]>('/stations');
+    await CacheService.set(CACHE_KEY, data, CACHE_TTL);
+    return data;
+  } catch {
+    const cached = await CacheService.get<StationResult[]>(CACHE_KEY);
+    if (cached) return cached;
+    throw new Error('Sem conexão e sem cache de estações.');
+  }
+}
+
+async function searchStations(q: string): Promise<StationResult[]> {
+  const { data } = await api.get<StationResult[]>(`/stations?q=${encodeURIComponent(q)}`);
+  return data;
+}
+
 async function fetchStations(): Promise<StationResult[]> {
   try {
     const { data } = await api.get<StationResult[]>('/stations');
@@ -50,10 +67,19 @@ export function findNearestStation(
   });
 }
 
+export function useStationSearch(query: string) {
+  return useQuery({
+    queryKey: ['stations', 'search', query],
+    queryFn: () => searchStations(query),
+    enabled: query.length >= 2,
+    staleTime: 60_000,
+  });
+}
+
 export function useStations() {
   return useQuery({
     queryKey: ['stations'],
-    queryFn: fetchStations,
+    queryFn: fetchAllStations,
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 48 * 60 * 60 * 1000,
   });

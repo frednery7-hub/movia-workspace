@@ -39,6 +39,10 @@ export function NavigationProgress({
 
   return (
     <View style={styles.container}>
+      {/* Handle de arrasto */}
+      <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
+        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.12)' }} />
+      </View>
       <LinearGradient colors={['#1a1a2e', '#232340']} style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.origin}>{origin}</Text>
@@ -121,7 +125,21 @@ export function NavigationProgress({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: '55%',
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 10,
+  },
   header: {
     height: 76, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', paddingHorizontal: 20,

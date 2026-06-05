@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View, StyleSheet, Dimensions, PanResponder, AppState,
 } from 'react-native';
-import MapView from 'react-native-maps';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MoviaSidebar, LineItem } from '../src/components/movia/MoviaSidebar';
 import { SearchBar } from '../src/components/movia/SearchBar';
@@ -84,6 +84,13 @@ export default function HomeScreen() {
     name:   p.name,
     status: i === 0 ? 'current' : 'future',
   }));
+
+  // Coordenadas da rota para Polyline (Opção A — cruza path com stationsData)
+  const stationById = new Map((stationsData ?? []).map(s => [s.id, s]));
+  const routeCoordinates = (etaData?.path ?? [])
+    .map(p => stationById.get(p.id))
+    .filter((s): s is NonNullable<typeof s> => !!s)
+    .map(s => ({ latitude: s.latitude, longitude: s.longitude }));
 
   // Swipe da esquerda abre sidebar
   const panResponder = useRef(
@@ -188,6 +195,31 @@ export default function HomeScreen() {
         followsUserLocation
       />
 
+      {/* Rota no mapa */}
+      {routeCoordinates.length > 1 && (
+        <Polyline
+          coordinates={routeCoordinates}
+          strokeColor="#1A73E8"
+          strokeWidth={4}
+          lineDashPattern={[0]}
+        />
+      )}
+      {/* Marker origem */}
+      {origin && (
+        <Marker
+          coordinate={{ latitude: origin.latitude, longitude: origin.longitude }}
+          title={origin.name}
+          pinColor="#1A73E8"
+        />
+      )}
+      {/* Marker destino */}
+      {destination && (
+        <Marker
+          coordinate={{ latitude: destination.latitude, longitude: destination.longitude }}
+          title={destination.name}
+          pinColor="#E31837"
+        />
+      )}
       <MapOverlay />
 
       <View style={[styles.searchWrapper, { top: insets.top + 12 }]}>
@@ -203,6 +235,18 @@ export default function HomeScreen() {
         onLanguageChange={(lang) => { setLanguage(lang); IdentityService.setPreferredLanguage(lang); }}
       />
 
+      {/* NavigationProgress como overlay — mapa continua vivo */}
+      {screen === 'navigating' && destination && (
+        <NavigationProgress
+          origin={origin?.name ?? 'Origen'}
+          destination={destination.name}
+          estimatedTime={etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : etaLoading ? '...' : '--'}
+          arrivalTime={etaData ? formatArrival(etaData.arrivalTime) : '--:--'}
+          stations={stations}
+          currentLine={'1'}
+          onClose={handleCloseNavigation}
+        />
+      )}
       <StationSearchModal
         visible={selectingOrigin}
         onClose={() => setSelectingOrigin(false)}
