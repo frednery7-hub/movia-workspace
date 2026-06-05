@@ -169,20 +169,6 @@ export default function HomeScreen() {
     setScreen('map');
   }
 
-  // Tela de navegação ativa
-  if (screen === 'navigating' && destination) {
-    return (
-      <NavigationProgress
-        origin={origin?.name ?? 'Origem'}
-        destination={destination.name}
-        estimatedTime={etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : etaLoading ? '...' : '--'}
-        arrivalTime={etaData ? formatArrival(etaData.arrivalTime) : '--:--'}
-        stations={stations}
-        currentLine={'1'}
-        onClose={handleCloseNavigation}
-      />
-    );
-  }
 
   return (
     <View style={styles.container} {...panResponder.panHandlers}>

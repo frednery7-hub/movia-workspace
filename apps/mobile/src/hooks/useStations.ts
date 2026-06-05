@@ -30,17 +30,6 @@ async function searchStations(q: string): Promise<StationResult[]> {
   return data;
 }
 
-async function fetchStations(): Promise<StationResult[]> {
-  try {
-    const { data } = await api.get<StationResult[]>('/stations');
-    await CacheService.set(CACHE_KEY, data, CACHE_TTL);
-    return data;
-  } catch {
-    const cached = await CacheService.get<StationResult[]>(CACHE_KEY);
-    if (cached) return cached;
-    throw new Error('Sem conexão e sem cache de estações.');
-  }
-}
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;

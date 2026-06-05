@@ -20,15 +20,17 @@ export function StationSearchModal({
 }: StationSearchModalProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
-  const { data: stations = [], isLoading } = useStations();
-
+  const { data: allStations = [], isLoading: loadingAll } = useStations();
+  const { data: searchResults = [], isFetching: loadingSearch } = useStationSearch(query);
+  const isLoading = loadingAll || loadingSearch;
   const filtered = useMemo(() => {
-    if (!query.trim()) return stations.slice(0, 40);
+    if (!query.trim()) return allStations.slice(0, 40);
+    if (query.length >= 2 && searchResults.length > 0) return searchResults;
     const q = query.toLowerCase();
-    return stations.filter(
+    return allStations.filter(
       s => s.name.toLowerCase().includes(q) || s.shortCode.toLowerCase().includes(q),
     );
-  }, [query, stations]);
+  }, [query, allStations, searchResults]);
 
   function handleSelect(station: StationResult) {
     setQuery('');
