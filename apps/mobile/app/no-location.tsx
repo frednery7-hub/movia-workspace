@@ -4,7 +4,7 @@ import { ConsentService }                            from '../src/privacy/consen
 
 export default function NoLocationScreen() {
   async function handleContinue() {
-    router.replace('/');
+    router.replace({ pathname: '/', params: { selectOrigin: '1' } });
   }
 
   async function handleReviewConsent() {

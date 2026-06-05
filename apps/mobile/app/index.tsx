@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, StyleSheet, Dimensions, PanResponder, AppState,
@@ -122,6 +123,19 @@ export default function HomeScreen() {
     init();
   }, []);
 
+  // Detecta modo "origem manual" vindo de no-location
+  const { selectOrigin } = useLocalSearchParams<{ selectOrigin?: string }>();
+  const [selectingOrigin, setSelectingOrigin] = React.useState(false);
+
+  useEffect(() => {
+    if (selectOrigin === '1') setSelectingOrigin(true);
+  }, [selectOrigin]);
+
+  function handleOriginSelect(station: StationResult) {
+    setOrigin(station);
+    setSelectingOrigin(false);
+  }
+
   // Auto-detecta estação de origem via GPS quando estações carregam
   useEffect(() => {
     if (!stationsData || !userLat || !userLon || origin) return;
@@ -136,6 +150,10 @@ export default function HomeScreen() {
 
   function handleDestinationSelect(station: StationResult) {
     setDestination(station);
+    if (!origin) {
+      // sem origem GPS — usa estação mais próxima do centro de Santiago como fallback
+      setOrigin({ id: 'st_universidad_de_chile', name: 'Universidad de Chile', shortCode: 'UCH', latitude: -33.4415, longitude: -70.6503 });
+    }
     setScreen('navigating');
   }
 
@@ -173,7 +191,7 @@ export default function HomeScreen() {
       <MapOverlay />
 
       <View style={[styles.searchWrapper, { top: insets.top + 12 }]}>
-        <SearchBar onMenuClick={() => setSidebarOpen(true)} />
+        <SearchBar onMenuClick={() => setSidebarOpen(true)} onSearchClick={() => setScreen('searching')} />
       </View>
 
       <MoviaSidebar
@@ -182,9 +200,15 @@ export default function HomeScreen() {
         lines={lines}
         isLoading={linesLoading}
         currentLanguage={language}
-        onLanguageChange={setLanguage}
+        onLanguageChange={(lang) => { setLanguage(lang); IdentityService.setPreferredLanguage(lang); }}
       />
 
+      <StationSearchModal
+        visible={selectingOrigin}
+        onClose={() => setSelectingOrigin(false)}
+        onSelect={handleOriginSelect}
+        title="¿Desde dónde viajes?"
+      />
       <StationSearchModal
         visible={screen === 'searching'}
         onClose={() => setScreen('map')}

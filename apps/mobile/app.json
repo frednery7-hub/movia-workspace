@@ -11,11 +11,14 @@
     "android": {
       "usesCleartextTraffic": false,
       "adaptiveIcon": {
-        "backgroundColor": "#1a1a2e"
-      }
+        "backgroundColor": "#1a1a2e",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "package": "com.anonymous.movia"
     },
     "ios": {
       "supportsTablet": true
-    }
+    },
+    "version": "1.0.0"
   }
 }

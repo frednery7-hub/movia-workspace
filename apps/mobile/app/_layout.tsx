@@ -34,10 +34,22 @@ async function fetchSessionWithRetry(
   }
 }
 
-api.interceptors.response.use(
+// ID guardado para evitar acumulação em Fast Refresh
+let _refreshInterceptorId: number | null = null;
+if (_refreshInterceptorId !== null) {
+  api.interceptors.response.eject(_refreshInterceptorId);
+}
+_refreshInterceptorId = api.interceptors.response.use(
   res => res,
   async error => {
-    if (error.response?.status === 401) {
+    const config = error.config as typeof error.config & { _retry?: boolean };
+    // Evita loop infinito e não retenta o próprio /auth/refresh
+    if (
+      error.response?.status === 401 &&
+      !config._retry &&
+      !config.url?.includes('/auth/refresh')
+    ) {
+      config._retry = true;
       try {
         const refreshToken = await IdentityService.getRefreshToken();
         if (refreshToken) {
@@ -46,8 +58,9 @@ api.interceptors.response.use(
           });
           await IdentityService.saveAccessToken(res.data.access_token);
           await IdentityService.saveRefreshToken(res.data.refresh_token);
-          error.config.headers.Authorization = 'Bearer ' + res.data.access_token;
-          return api.request(error.config);
+          config.headers = config.headers ?? {};
+          config.headers.Authorization = 'Bearer ' + res.data.access_token;
+          return api.request(config);
         }
       } catch {
         await IdentityService.destroySession();

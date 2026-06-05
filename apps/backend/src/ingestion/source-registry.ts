@@ -28,16 +28,6 @@ export const SOURCE_REGISTRY: IngestionSource[] = [
     cityId: 'santiago',
   },
   {
-    id: 'metro_saopaulo_gtfs_rt',
-    name: 'Metro São Paulo — GTFS-RT',
-    type: 'GTFS_RT',
-    enabled: false,
-    url: '',
-    pollIntervalSeconds: 60,
-    timeoutSeconds: 10,
-    cityId: 'sao-paulo',
-  },
-  {
     id: 'subte_buenosaires_gtfs_rt',
     name: 'Subte Buenos Aires — GTFS-RT',
     type: 'GTFS_RT',

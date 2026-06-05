@@ -6,19 +6,14 @@ type FarePeriod = 'punta' | 'valle' | 'bajo';
 
 interface FareBannerProps { period: FarePeriod; timeRange: string; }
 
-const fareLabel: Record<FarePeriod, string> = {
-  punta: 'Punta', valle: 'Valle', bajo: 'Bajo',
-};
-const fareIcon: Record<FarePeriod, string> = {
-  punta: '\u{1F7E0}', valle: '\u{1F7E2}', bajo: '\u{1F535}',
-};
+const fareLabel: Record<FarePeriod, string> = { punta: 'Punta', valle: 'Valle', bajo: 'Bajo' };
 
 export function FareBanner({ period, timeRange }: FareBannerProps) {
   const color = FareColors[period];
   return (
-    <View style={[styles.banner, { backgroundColor: color + '28', borderLeftColor: color }]}>
-      <Text style={styles.icon}>{fareIcon[period]}</Text>
-      <Text style={[styles.label, { color }]}>{fareLabel[period]}</Text>
+    <View style={[styles.banner, { backgroundColor: color + '0D', borderLeftColor: color }]}>
+      <View style={[styles.dot, { backgroundColor: color }]} />
+      <Text style={[styles.label, { color: '#111827' }]}>{fareLabel[period]}</Text>
       <Text style={styles.time}>{timeRange}</Text>
     </View>
   );
@@ -26,11 +21,11 @@ export function FareBanner({ period, timeRange }: FareBannerProps) {
 
 const styles = StyleSheet.create({
   banner: {
-    height: 52, flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, borderLeftWidth: 4,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.04)',
+    height: 40, flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, borderLeftWidth: 3,
+    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
-  icon: { fontSize: 11, marginRight: 8 },
-  label: { fontSize: 14, fontWeight: '700', marginRight: 8, letterSpacing: -0.1 },
-  time: { fontSize: 12, color: '#6B6B6B', fontWeight: '500' },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
+  label: { fontSize: 13, fontWeight: '600', marginRight: 8, letterSpacing: -0.1 },
+  time: { fontSize: 12, color: '#6B7280' },
 });
