@@ -44,7 +44,6 @@ export default function NavigationScreen() {
   const [error,        setError]        = useState<string | null>(null);
 
   const delayStartRef    = useRef<number | null>(null);
-  const segmentTimerRef  = useRef<number>(0);
 
   // Busca ETA do backend
   async function fetchEta() {

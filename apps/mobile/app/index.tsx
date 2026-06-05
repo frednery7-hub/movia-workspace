@@ -66,7 +66,7 @@ export default function HomeScreen() {
   const [userLon, setUserLon]         = useState<number | null>(null);
 
   const { data: linesData,    isLoading: linesLoading }  = useLines();
-  const { data: networkState, isStale: statusStale }     = useNetworkState();
+  const { data: networkState }                           = useNetworkState();
   const { data: stationsData }                           = useStations();
   const { data: etaData, isLoading: etaLoading }         = useEta(
     origin?.id, destination?.id,
@@ -106,7 +106,7 @@ export default function HomeScreen() {
   useEffect(() => {
     async function init() {
       const lang = await IdentityService.getPreferredLanguage();
-      setLanguage(lang.startsWith('pt') ? 'PT' : lang.startsWith('en') ? 'EN' : 'ES');
+      setLanguage(lang.toLowerCase().startsWith('pt') ? 'PT' : lang.toLowerCase().startsWith('en') ? 'EN' : 'ES');
 
       const status = await LocationService.requestPermission();
       if (status === 'granted') {

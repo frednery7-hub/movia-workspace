@@ -35,11 +35,11 @@ async function fetchSessionWithRetry(
 }
 
 // ID guardado para evitar acumulação em Fast Refresh
-let _refreshInterceptorId: number | null = null;
-if (_refreshInterceptorId !== null) {
-  api.interceptors.response.eject(_refreshInterceptorId);
+const _g = globalThis as typeof globalThis & { __moviRefreshId?: number };
+if (_g.__moviRefreshId !== undefined) {
+  api.interceptors.response.eject(_g.__moviRefreshId);
 }
-_refreshInterceptorId = api.interceptors.response.use(
+_g.__moviRefreshId = api.interceptors.response.use(
   res => res,
   async error => {
     const config = error.config as typeof error.config & { _retry?: boolean };
