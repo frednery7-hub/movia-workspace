@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity,
   Modal, StyleSheet, ActivityIndicator,
@@ -6,6 +6,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStations, useStationSearch, StationResult } from '../../hooks/useStations';
+import { CacheService } from '../../config/cache.service';
 import { Colors } from '../../theme/colors';
 
 interface StationSearchModalProps {
@@ -20,6 +21,15 @@ export function StationSearchModal({
 }: StationSearchModalProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  const [recentStations, setRecentStations] = useState<StationResult[]>([]);
+
+  useEffect(() => {
+    if (visible) {
+      CacheService.get<StationResult[]>('route_history').then(hist => {
+        if (hist) setRecentStations(hist.slice(0, 5));
+      });
+    }
+  }, [visible]);
   const { data: allStations = [], isLoading: loadingAll } = useStations();
   const { data: searchResults = [], isFetching: loadingSearch } = useStationSearch(query);
   const isLoading = loadingAll || loadingSearch;
@@ -71,6 +81,22 @@ export function StationSearchModal({
             <Text style={styles.loadingText}>Carregando estações...</Text>
           </View>
         ) : (
+          <>
+            {!query.trim() && recentStations.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Recientes</Text></View>
+                {recentStations.map(s => (
+                  <TouchableOpacity key={s.id} style={styles.stationItem} onPress={() => handleSelect(s)} activeOpacity={0.7}>
+                    <Feather name="clock" size={16} color={Colors.textTertiary} />
+                    <View style={styles.stationInfo}>
+                      <Text style={styles.stationName}>{s.name}</Text>
+                      <Text style={styles.stationCode}>{s.shortCode}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Todas las estaciones</Text></View>
+              </>
+            )}
           <FlatList
             data={filtered}
             keyExtractor={item => item.id}
@@ -98,6 +124,7 @@ export function StationSearchModal({
               </View>
             }
           />
+          </>
         )}
       </View>
     </Modal>
@@ -130,6 +157,8 @@ const styles = StyleSheet.create({
   },
   stationInfo: { flex: 1 },
   stationName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
+  sectionHeader: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: Colors.graySurface },
+  sectionTitle: { fontSize: 11, fontWeight: '700', color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
   stationCode: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
   separator: { height: 1, backgroundColor: Colors.grayBorder, marginLeft: 64 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },

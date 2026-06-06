@@ -164,15 +164,13 @@ export default function HomeScreen() {
 
   function handleDestinationSelect(station: StationResult) {
     setDestination(station);
-    // Salva no histórico
-    if (origin) {
+    // Salva no histórico sempre
       CacheService.get<StationResult[]>('route_history').then((hist: StationResult[] | null) => {
         const history: StationResult[] = hist ?? [];
         const entry = { ...station, timestamp: Date.now() };
         const updated = [entry, ...history.filter((h: StationResult) => h.id !== station.id)].slice(0, 10);
         CacheService.set('route_history', updated, 30 * 24 * 60 * 60 * 1000);
       });
-    }
     if (!origin) {
       // sem origem GPS — usa estação mais próxima do centro de Santiago como fallback
       setOrigin({ id: 'st_universidad_de_chile', name: 'Universidad de Chile', shortCode: 'UCH', latitude: -33.4415, longitude: -70.6503 });

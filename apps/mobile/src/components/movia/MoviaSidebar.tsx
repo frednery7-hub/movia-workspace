@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, ScrollView, Modal,
   Animated, Dimensions, StyleSheet, TouchableWithoutFeedback,
 } from 'react-native';
+import { useLocale } from '../../context/LocaleContext';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -67,6 +68,7 @@ export function MoviaSidebar({
   onLanguageChange,
 }: MoviaSidebarProps) {
   const tariff = useTariffStatus();
+  const { t } = useLocale();
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -126,7 +128,7 @@ export function MoviaSidebar({
         <FareBanner period={tariff.period} timeRange={tariff.timeRange} />
 
         <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionTitle}>Linhas</Text>
+          <Text style={styles.sectionTitle}>${t('sidebar.lines')}</Text>
           {isLoading
             ? [1,2,3,4,5,6,7].map(i => <LineSkeleton key={i} />)
             : lines.length === 0
