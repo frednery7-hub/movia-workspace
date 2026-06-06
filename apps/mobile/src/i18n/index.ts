@@ -15,6 +15,7 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'navigation.emergency': '¿Sigues en la estación?',
     'lines':                'Líneas',
     'settings':             'Configuración',
+    'alerts':               'Ocurrencias',
     'connecting':           'Conectando a Movia...',
   },
   'pt-BR': {
@@ -31,6 +32,7 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'navigation.emergency': 'Ainda está na estação?',
     'lines':                'Linhas',
     'settings':             'Configurações',
+    'alerts':               'Ocorrências',
     'connecting':           'Conectando ao Movia...',
   },
   'en-US': {
@@ -47,6 +49,7 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'navigation.emergency': 'Still at the station?',
     'lines':                'Lines',
     'settings':             'Settings',
+    'alerts':               'Alerts',
     'connecting':           'Connecting to Movia...',
   },
 };

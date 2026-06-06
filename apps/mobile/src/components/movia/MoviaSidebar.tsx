@@ -128,7 +128,7 @@ export function MoviaSidebar({
         <FareBanner period={tariff.period} timeRange={tariff.timeRange} />
 
         <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionTitle}>${t('sidebar.lines')}</Text>
+          <Text style={styles.sectionTitle}>{t('lines')}</Text>
           {isLoading
             ? [1,2,3,4,5,6,7].map(i => <LineSkeleton key={i} />)
             : lines.length === 0
@@ -142,7 +142,7 @@ export function MoviaSidebar({
                 ))
           }
 
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Ocorrências</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>{t('alerts')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
             {['Todas', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6'].map((f, i) => (
               <TouchableOpacity key={f} style={[styles.filterChip, i === 0 && styles.filterChipActive]}>
@@ -175,7 +175,7 @@ export function MoviaSidebar({
 
           <TouchableOpacity style={styles.settingsRow} activeOpacity={0.7} onPress={() => { onClose(); router.push('/settings'); }}>
             <Feather name="settings" size={20} color="#5A5A5A" />
-            <Text style={styles.settingsText}>Configurações</Text>
+            <Text style={styles.settingsText}>{t('settings')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </Animated.View>
