@@ -17,6 +17,7 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'settings':             'Configuración',
     'alerts':               'Ocurrencias',
     'connecting':           'Conectando a Movia...',
+    'eta.arrives': 'Llega a las',
   },
   'pt-BR': {
     'eta.minutes':          'min',
@@ -34,6 +35,7 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'settings':             'Configurações',
     'alerts':               'Ocorrências',
     'connecting':           'Conectando ao Movia...',
+    'eta.arrives': 'Chega às',
   },
   'en-US': {
     'eta.minutes':          'min',
@@ -51,7 +53,8 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'settings':             'Settings',
     'alerts':               'Alerts',
     'connecting':           'Connecting to Movia...',
-  },
+    'eta.arrives': 'Arrives at',
+  }
 };
 
 export function t(key: string, locale: SupportedLocale = 'es-CL'): string {

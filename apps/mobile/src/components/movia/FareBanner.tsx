@@ -1,15 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useLocale } from '../../context/LocaleContext';
 import { FareColors } from '../../theme/colors';
 
 type FarePeriod = 'punta' | 'valle' | 'bajo';
 
 interface FareBannerProps { period: FarePeriod; timeRange: string; }
 
-const fareLabel: Record<FarePeriod, string> = { punta: 'Punta', valle: 'Valle', bajo: 'Bajo' };
 
 export function FareBanner({ period, timeRange }: FareBannerProps) {
+  const { t } = useLocale();
   const color = FareColors[period];
+  const fareLabel: Record<FarePeriod, string> = { punta: t('fare.punta'), valle: t('fare.valle'), bajo: t('fare.bajo') };
   return (
     <View style={[styles.banner, { backgroundColor: color + '0D', borderLeftColor: color }]}>
       <View style={[styles.dot, { backgroundColor: color }]} />

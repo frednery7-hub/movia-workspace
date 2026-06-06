@@ -6,6 +6,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStations, useStationSearch, StationResult } from '../../hooks/useStations';
+import { useLocale } from '../../context/LocaleContext';
 import { CacheService } from '../../config/cache.service';
 import { Colors } from '../../theme/colors';
 
@@ -13,14 +14,16 @@ interface StationSearchModalProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (station: StationResult) => void;
-  title?: string;
+  titleKey?: string;
 }
 
 export function StationSearchModal({
-  visible, onClose, onSelect, title = 'Para onde?',
+  visible, onClose, onSelect, titleKey,
 }: StationSearchModalProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  const { t } = useLocale();
+  const modalTitle = t(titleKey ?? 'where_to');
   const [recentStations, setRecentStations] = useState<StationResult[]>([]);
 
   useEffect(() => {
@@ -54,14 +57,14 @@ export function StationSearchModal({
           <TouchableOpacity onPress={onClose} style={styles.backBtn}>
             <Feather name="arrow-left" size={22} color={Colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title}>{modalTitle}</Text>
         </View>
 
         <View style={styles.inputWrapper}>
           <Feather name="search" size={18} color={Colors.textTertiary} />
           <TextInput
             style={styles.input}
-            placeholder="Buscar estação..."
+            placeholder={t("search.placeholder")}
             placeholderTextColor={Colors.textTertiary}
             value={query}
             onChangeText={setQuery}
@@ -78,13 +81,13 @@ export function StationSearchModal({
         {isLoading ? (
           <View style={styles.loading}>
             <ActivityIndicator color={Colors.accentPrimary} />
-            <Text style={styles.loadingText}>Carregando estações...</Text>
+            <Text style={styles.loadingText}>{t("search.loading")}</Text>
           </View>
         ) : (
           <>
             {!query.trim() && recentStations.length > 0 && (
               <>
-                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Recientes</Text></View>
+                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.recent")}</Text></View>
                 {recentStations.map(s => (
                   <TouchableOpacity key={s.id} style={styles.stationItem} onPress={() => handleSelect(s)} activeOpacity={0.7}>
                     <Feather name="clock" size={16} color={Colors.textTertiary} />
@@ -94,7 +97,7 @@ export function StationSearchModal({
                     </View>
                   </TouchableOpacity>
                 ))}
-                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Todas las estaciones</Text></View>
+                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.all_stations")}</Text></View>
               </>
             )}
           <FlatList
@@ -120,7 +123,7 @@ export function StationSearchModal({
             )}
             ListEmptyComponent={
               <View style={styles.empty}>
-                <Text style={styles.emptyText}>Nenhuma estação encontrada</Text>
+                <Text style={styles.emptyText}>{t("search.empty")}</Text>
               </View>
             }
           />

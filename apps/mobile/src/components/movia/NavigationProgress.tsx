@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { useLocale } from '../../context/LocaleContext';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChip } from './LineChip';
@@ -25,6 +26,7 @@ export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
   stations, currentLine, onClose,
 }: NavigationProgressProps) {
+  const { t } = useLocale();
   const lineColor = LineColors[currentLine] ?? Colors.accentPrimary;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -56,8 +58,8 @@ export function NavigationProgress({
 
       <View style={styles.summaryCard}>
         <Text style={styles.eta}>{estimatedTime}</Text>
-        <Text style={styles.arrival}>Chega às {arrivalTime}</Text>
-        <Text style={styles.stationCount}>{stations.length} estações</Text>
+        <Text style={styles.arrival}>{t('eta.arrives')} {arrivalTime}</Text>
+        <Text style={styles.stationCount}>{stations.length} {t('eta.stations')}</Text>
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -102,7 +104,7 @@ export function NavigationProgress({
                     {station.name}
                   </Text>
                   {isCurrent && (
-                    <Text style={styles.youAreHere}>Você está aqui</Text>
+                    <Text style={styles.youAreHere}>{t('navigation.you_are_here')}</Text>
                   )}
                   {station.transfer && (
                     <View style={[

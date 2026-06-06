@@ -252,13 +252,13 @@ export default function HomeScreen() {
         visible={selectingOrigin}
         onClose={() => setSelectingOrigin(false)}
         onSelect={handleOriginSelect}
-        title="¿Desde dónde viajes?"
+        titleKey="search.origin_title"
       />
       <StationSearchModal
         visible={screen === 'searching'}
         onClose={() => setScreen('map')}
         onSelect={handleDestinationSelect}
-        title="Para onde?"
+        
       />
     </View>
     </LocaleProvider>
