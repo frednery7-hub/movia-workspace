@@ -1,7 +1,6 @@
 import { CacheService } from '../src/config/cache.service';
 import { useLocalSearchParams } from 'expo-router';
-import { LocaleProvider } from '../src/context/LocaleContext';
-import type { SupportedLocale } from '../src/context/LocaleContext';
+import { useLanguage } from './_layout';
 import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -35,7 +34,6 @@ const HAS_GOOGLE_MAPS_KEY = Boolean(
 );
 
 type AppScreen = 'map' | 'searching' | 'navigating';
-type Language = 'ES' | 'PT' | 'EN';
 
 function toLineNumber(id: string) {
   return id.replace(/^L/i, '') as '1' | '2' | '3' | '4' | '4A' | '5' | '6';
@@ -67,11 +65,7 @@ export default function HomeScreen() {
 
   const [screen, setScreen]           = useState<AppScreen>('map');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [language, setLanguage]       = useState<Language>('ES');
-  const localeMap: Record<Language, SupportedLocale> = {
-    ES: 'es-CL', PT: 'pt-BR', EN: 'en-US',
-  };
-  const currentLocale = localeMap[language];
+  const { language, setLanguage } = useLanguage();
   const [region, setRegion]           = useState(SANTIAGO_DEFAULT);
   const [origin, setOrigin]           = useState<StationResult | null>(null);
   const [destination, setDestination] = useState<StationResult | null>(null);
@@ -238,7 +232,6 @@ export default function HomeScreen() {
 
 
   return (
-    <LocaleProvider locale={currentLocale}>
     <View style={styles.container} {...panResponder.panHandlers}>
       {HAS_GOOGLE_MAPS_KEY ? (
         <MapView
@@ -329,7 +322,6 @@ export default function HomeScreen() {
         
       />
     </View>
-    </LocaleProvider>
   );
 }
 

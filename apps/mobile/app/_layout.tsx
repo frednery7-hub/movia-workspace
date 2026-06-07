@@ -1,14 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, createContext, useContext } from 'react';
 import { Slot, router } from 'expo-router';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { IdentityService } from '../src/security/identity.service';
+import { LocaleProvider } from '../src/context/LocaleContext';
+import type { SupportedLocale } from '../src/context/LocaleContext';
 import { ConsentService } from '../src/privacy/consent.service';
 import { QueryProvider } from '../src/providers/QueryProvider';
 import { api } from '../src/config/api';
 
 SplashScreen.preventAutoHideAsync();
+
+type Language = 'ES' | 'PT' | 'EN';
+const localeMap: Record<Language, SupportedLocale> = {
+  ES: 'es-CL', PT: 'pt-BR', EN: 'en-US',
+};
+
+interface LanguageContextValue {
+  language: Language;
+  setLanguage: (l: Language) => void;
+}
+export const LanguageContext = createContext<LanguageContextValue>({
+  language: 'ES',
+  setLanguage: () => {},
+});
+export function useLanguage() { return useContext(LanguageContext); }
+
+
 
 const MAX_RETRIES = 3;
 
@@ -85,6 +104,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
+  const [language, setLanguageState] = useState<Language>('ES');
   const [bootError, setBootError] = useState<string | null>(null);
   const [needsConsent, setNeedsConsent] = useState(false);
 
@@ -114,6 +134,11 @@ export default function RootLayout() {
           }
         }
 
+        const savedLang = await IdentityService.getPreferredLanguage();
+        if (savedLang?.toLowerCase().startsWith('pt')) setLanguageState('PT');
+        else if (savedLang?.toLowerCase().startsWith('en')) setLanguageState('EN');
+        else setLanguageState('ES');
+
         const hasConsent = await ConsentService.hasValidConsent();
         if (!hasConsent) setNeedsConsent(true);
       } catch (error) {
@@ -139,12 +164,23 @@ export default function RootLayout() {
     );
   }
 
+
+  function setLanguage(l: Language) {
+    setLanguageState(l);
+    const map: Record<Language, string> = { ES: 'es-CL', PT: 'pt-BR', EN: 'en-US' };
+    IdentityService.setPreferredLanguage(map[l]);
+  }
+
   return (
-    <QueryProvider>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <Slot />
-      </GestureHandlerRootView>
-    </QueryProvider>
+    <LanguageContext.Provider value={{ language, setLanguage }}>
+      <LocaleProvider locale={localeMap[language]}>
+        <QueryProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <Slot />
+          </GestureHandlerRootView>
+        </QueryProvider>
+      </LocaleProvider>
+    </LanguageContext.Provider>
   );
 }
 
