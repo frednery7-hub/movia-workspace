@@ -33,7 +33,7 @@ export function NavigationProgress({
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.08, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.02, duration: 1000, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
       ])
     ).start();
@@ -89,22 +89,29 @@ export function NavigationProgress({
                   )}
                 </View>
 
-                <Animated.View
-                  style={[
-                    styles.stationInfo,
-                    isCurrent && styles.stationInfoCurrent,
-                    isCurrent && { transform: [{ scale: pulseAnim }] },
-                  ]}
-                >
-                  <Text style={[
-                    styles.stationName,
-                    isCurrent && styles.stationNameCurrent,
-                    isPassed && styles.stationNamePassed,
-                  ]}>
-                    {station.name}
-                  </Text>
-                  {isCurrent && (
-                    <Text style={styles.youAreHere}>{t('navigation.you_are_here')}</Text>
+                <Animated.View style={[styles.stationInfo, isCurrent && { transform: [{ scale: pulseAnim }] }]}>
+                  {isCurrent ? (
+                    <LinearGradient
+                      colors={['#fff5f7', '#ffe5eb']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[styles.currentStationCard, { borderLeftColor: lineColor }]}
+                    >
+                      <View style={styles.currentTitleRow}>
+                        <View style={[styles.currentIcon, { backgroundColor: lineColor }]}>
+                          <Feather name="navigation" size={14} color="#fff" />
+                        </View>
+                        <Text style={styles.stationNameCurrent}>{station.name}</Text>
+                      </View>
+                      <View style={styles.currentBadge}>
+                        <View style={[styles.currentBadgeDot, { backgroundColor: lineColor }]} />
+                        <Text style={styles.youAreHere}>{t('navigation.you_are_here')}</Text>
+                      </View>
+                    </LinearGradient>
+                  ) : (
+                    <Text style={[styles.stationName, isPassed && styles.stationNamePassed]}>
+                      {station.name}
+                    </Text>
                   )}
                   {station.transfer && (
                     <View style={[
@@ -185,14 +192,47 @@ const styles = StyleSheet.create({
   },
   trackDashed: { backgroundColor: 'transparent', borderLeftWidth: 3, borderLeftColor: 'rgba(0,0,0,0.12)', borderStyle: 'dashed' },
   stationInfo: { flex: 1, paddingBottom: 20 },
-  stationInfoCurrent: {
-    backgroundColor: '#ffebee', borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10, marginLeft: -4,
-  },
   stationName: { fontSize: 14, fontWeight: '500', color: Colors.textPrimary },
-  stationNameCurrent: { fontSize: 16, fontWeight: '700', color: Colors.accentPrimary },
+  currentStationCard: {
+    borderLeftWidth: 4,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginLeft: -4,
+    shadowColor: '#E31837',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  currentTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  currentIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stationNameCurrent: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.accentPrimary,
+  },
   stationNamePassed: { color: Colors.grayText, opacity: 0.5, fontWeight: '400' },
-  youAreHere: { fontSize: 11, color: Colors.accentPrimary, marginTop: 4, fontWeight: '600' },
+  currentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 7,
+    marginTop: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+  },
+  currentBadgeDot: { width: 7, height: 7, borderRadius: 4 },
+  youAreHere: { fontSize: 12, color: Colors.textPrimary, fontWeight: '700' },
   transferChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     marginTop: 8, paddingHorizontal: 10, paddingVertical: 7,

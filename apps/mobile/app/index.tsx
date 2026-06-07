@@ -2,9 +2,10 @@ import { CacheService } from '../src/config/cache.service';
 import { useLocalSearchParams } from 'expo-router';
 import { LocaleProvider } from '../src/context/LocaleContext';
 import type { SupportedLocale } from '../src/context/LocaleContext';
+import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, StyleSheet, Dimensions, PanResponder, AppState,
+  ActivityIndicator, View, StyleSheet, Dimensions, PanResponder, AppState, TouchableOpacity,
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +28,11 @@ const SANTIAGO_DEFAULT = {
   latitude: -33.4372, longitude: -70.6344,
   latitudeDelta: 0.05, longitudeDelta: 0.05,
 };
+
+const HAS_GOOGLE_MAPS_KEY = Boolean(
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY ||
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+);
 
 type AppScreen = 'map' | 'searching' | 'navigating';
 type Language = 'ES' | 'PT' | 'EN';
@@ -71,6 +77,7 @@ export default function HomeScreen() {
   const [destination, setDestination] = useState<StationResult | null>(null);
   const [userLat, setUserLat]         = useState<number | null>(null);
   const [userLon, setUserLon]         = useState<number | null>(null);
+  const [locating, setLocating]       = useState(false);
 
   const { data: linesData,    isLoading: linesLoading }  = useLines();
   const { data: networkState }                           = useNetworkState();
@@ -150,6 +157,52 @@ export default function HomeScreen() {
     setSelectingOrigin(false);
   }
 
+  async function handleLocateUser() {
+    if (locating) return;
+
+    setLocating(true);
+    try {
+      let status = await LocationService.getPermissionStatus();
+      if (status !== 'granted') {
+        status = await LocationService.requestPermission();
+      }
+
+      if (status !== 'granted') {
+        setSelectingOrigin(true);
+        return;
+      }
+
+      const loc = await LocationService.getCurrentLocation();
+      if (!loc.latitude || !loc.longitude) {
+        setSelectingOrigin(true);
+        return;
+      }
+
+      setUserLat(loc.latitude);
+      setUserLon(loc.longitude);
+
+      const nextRegion = {
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
+      };
+
+      setRegion(nextRegion);
+      mapRef.current?.animateToRegion(nextRegion, 700);
+
+      const nearest = stationsData
+        ? findNearestStation(stationsData, loc.latitude, loc.longitude)
+        : null;
+
+      if (nearest) {
+        setOrigin(nearest);
+      }
+    } finally {
+      setLocating(false);
+    }
+  }
+
   // Auto-detecta estação de origem via GPS quando estações carregam
   useEffect(() => {
     if (!stationsData || !userLat || !userLon || origin) return;
@@ -187,45 +240,60 @@ export default function HomeScreen() {
   return (
     <LocaleProvider locale={currentLocale}>
     <View style={styles.container} {...panResponder.panHandlers}>
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        initialRegion={region}
-        showsUserLocation
-        showsMyLocationButton={false}
-        followsUserLocation
-      />
-
-      {/* Rota no mapa */}
-      {routeCoordinates.length > 1 && (
-        <Polyline
-          coordinates={routeCoordinates}
-          strokeColor="#1A73E8"
-          strokeWidth={4}
-          lineDashPattern={[0]}
-        />
-      )}
-      {/* Marker origem */}
-      {origin && (
-        <Marker
-          coordinate={{ latitude: origin.latitude, longitude: origin.longitude }}
-          title={origin.name}
-          pinColor="#1A73E8"
-        />
-      )}
-      {/* Marker destino */}
-      {destination && (
-        <Marker
-          coordinate={{ latitude: destination.latitude, longitude: destination.longitude }}
-          title={destination.name}
-          pinColor="#E31837"
-        />
+      {HAS_GOOGLE_MAPS_KEY ? (
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={region}
+          showsUserLocation
+          showsMyLocationButton={false}
+          followsUserLocation
+        >
+          {routeCoordinates.length > 1 && (
+            <Polyline
+              coordinates={routeCoordinates}
+              strokeColor="#1A73E8"
+              strokeWidth={4}
+              lineDashPattern={[0]}
+            />
+          )}
+          {origin && (
+            <Marker
+              coordinate={{ latitude: origin.latitude, longitude: origin.longitude }}
+              title={origin.name}
+              pinColor="#1A73E8"
+            />
+          )}
+          {destination && (
+            <Marker
+              coordinate={{ latitude: destination.latitude, longitude: destination.longitude }}
+              title={destination.name}
+              pinColor="#E31837"
+            />
+          )}
+        </MapView>
+      ) : (
+        <View style={[styles.map, styles.mapFallback]} />
       )}
       <MapOverlay />
 
       <View style={[styles.searchWrapper, { top: insets.top + 12 }]}>
         <SearchBar onMenuClick={() => setSidebarOpen(true)} onSearchClick={() => setScreen('searching')} />
       </View>
+
+      <TouchableOpacity
+        accessibilityLabel="Centralizar no usuario"
+        activeOpacity={0.82}
+        disabled={locating}
+        onPress={handleLocateUser}
+        style={[styles.locationButton, { top: insets.top + 84 }, locating && styles.locationButtonDisabled]}
+      >
+        {locating ? (
+          <ActivityIndicator color="#1A73E8" />
+        ) : (
+          <Feather name="navigation" size={22} color="#1A73E8" />
+        )}
+      </TouchableOpacity>
 
       <MoviaSidebar
         isOpen={sidebarOpen}
@@ -268,5 +336,22 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { width, height },
+  mapFallback: { backgroundColor: '#EEF2F3' },
   searchWrapper: { position: 'absolute', left: 16, right: 16 },
+  locationButton: {
+    position: 'absolute',
+    right: 18,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  locationButtonDisabled: { opacity: 0.7 },
 });

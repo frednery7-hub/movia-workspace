@@ -20,7 +20,7 @@
       "usesCleartextTraffic": false,
       "adaptiveIcon": {
         "backgroundColor": "#1a1a2e",
-        "foregroundImage": "./assets/adaptive-icon.png"
+        "foregroundImage": "./assets/icon.png"
       },
       "package": "com.anonymous.movia",
       "permissions": [

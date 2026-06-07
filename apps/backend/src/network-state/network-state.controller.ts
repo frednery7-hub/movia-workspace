@@ -20,10 +20,10 @@ interface JwtRequest {
 const LINE_ID_REGEX = /^L[0-9A-Z]+$/;
 
 @Controller('network-state')
-@Roles('operator', 'admin')
 export class NetworkStateController {
   constructor(private readonly networkStateService: NetworkStateService) {}
 
+  @Roles('operator', 'admin')
   @Put(':lineId')
   async update(
     @Param('lineId') lineId: string,
@@ -57,6 +57,7 @@ export class NetworkStateController {
     return this.networkStateService.getAll();
   }
 
+  @Roles('operator', 'admin')
   @Get(':lineId/history')
   async getHistory(
     @Param('lineId') lineId: string,

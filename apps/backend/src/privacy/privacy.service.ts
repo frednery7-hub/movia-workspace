@@ -90,6 +90,31 @@ export class PrivacyService {
     };
   }
 
+  recordConsent(
+    deviceId: string,
+    consent: { version: string; locationUse: boolean; analytics?: boolean },
+  ): { recorded: boolean; version: string } {
+    this.logger.log(
+      `PRIVACY_AUDIT consent_recorded device:${maskId(deviceId)} version:${consent.version} location:${consent.locationUse} analytics:${Boolean(consent.analytics)}`,
+    );
+
+    return {
+      recorded: true,
+      version: consent.version,
+    };
+  }
+
+  revokeConsent(deviceId: string): { revoked: boolean; message: string } {
+    this.logger.warn(
+      `PRIVACY_AUDIT consent_revoked device:${maskId(deviceId)}`,
+    );
+
+    return {
+      revoked: true,
+      message: 'Consentimento de privacidade revogado localmente.',
+    };
+  }
+
   async unblockDevice(
     deviceId: string,
   ): Promise<{ blocked: boolean; message: string }> {

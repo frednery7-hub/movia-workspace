@@ -8,12 +8,24 @@ import {
   Request,
 } from '@nestjs/common';
 import { PrivacyService } from './privacy.service';
-import { IsString, IsIn } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 
 class UpdateLanguageDto {
   @IsString()
   @IsIn(['es-CL', 'pt-BR', 'en-US'])
   language!: string;
+}
+
+class ConsentDto {
+  @IsString()
+  version!: string;
+
+  @IsBoolean()
+  locationUse!: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  analytics?: boolean;
 }
 
 interface JwtRequest {
@@ -37,6 +49,16 @@ export class PrivacyController {
   @Post('block')
   async blockDevice(@Request() req: JwtRequest) {
     return this.privacyService.blockDevice(req.user.deviceId);
+  }
+
+  @Post('consent')
+  recordConsent(@Request() req: JwtRequest, @Body() dto: ConsentDto) {
+    return this.privacyService.recordConsent(req.user.deviceId, dto);
+  }
+
+  @Delete('consent')
+  revokeConsent(@Request() req: JwtRequest) {
+    return this.privacyService.revokeConsent(req.user.deviceId);
   }
 
   @Delete('block')
