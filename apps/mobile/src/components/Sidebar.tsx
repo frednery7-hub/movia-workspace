@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { useRef, useEffect }  from 'react';
 import { FareWidget }         from './FareWidget';
-import { IdentityService }    from '../security/identity.service';
 
 const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.78;
@@ -45,8 +44,7 @@ export function Sidebar({ visible, onClose, language, onLanguageChange }: Props)
     }).start();
   }, [visible]);
 
-  async function handleLanguageChange(lang: string) {
-    await IdentityService.setPreferredLanguage(lang);
+  function handleLanguageChange(lang: string) {
     onLanguageChange(lang);
   }
 

@@ -294,7 +294,7 @@ export default function HomeScreen() {
         lines={lines}
         isLoading={linesLoading}
         currentLanguage={language}
-        onLanguageChange={(lang) => { setLanguage(lang); IdentityService.setPreferredLanguage(lang); }}
+        onLanguageChange={setLanguage}
       />
 
       {/* NavigationProgress como overlay — mapa continua vivo */}

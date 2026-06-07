@@ -1,3 +1,4 @@
+import { useLanguage } from './_layout';
 import { useState }                                                    from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { router }                                                       from 'expo-router';
@@ -6,6 +7,7 @@ import { ConsentService }                                               from '..
 import { api }                                                          from '../src/config/api';
 
 export default function SettingsScreen() {
+  const { language, setLanguage } = useLanguage();
   const [loading, setLoading] = useState<string | null>(null);
 
   async function handleLogout() {
@@ -128,6 +130,35 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={styles.version}>Movia v1.0.0 — LGPD compliant</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>IDIOMA</Text>
+            <TouchableOpacity style={styles.item} onPress={() => setLanguage('ES')} activeOpacity={0.7}>
+              <Text style={styles.itemIcon}>🇨🇱</Text>
+              <View style={styles.itemText}>
+                <Text style={styles.itemTitle}>Español</Text>
+                <Text style={styles.itemDesc}>{language === 'ES' ? 'Idioma actual' : 'Cambiar a español'}</Text>
+              </View>
+              <Text style={styles.itemArrow}>{language === 'ES' ? '✓' : '›'}</Text>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.item} onPress={() => setLanguage('PT')} activeOpacity={0.7}>
+              <Text style={styles.itemIcon}>🇧🇷</Text>
+              <View style={styles.itemText}>
+                <Text style={styles.itemTitle}>Português</Text>
+                <Text style={styles.itemDesc}>{language === 'PT' ? 'Idioma atual' : 'Mudar para português'}</Text>
+              </View>
+              <Text style={styles.itemArrow}>{language === 'PT' ? '✓' : '›'}</Text>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.item} onPress={() => setLanguage('EN')} activeOpacity={0.7}>
+              <Text style={styles.itemIcon}>🇺🇸</Text>
+              <View style={styles.itemText}>
+                <Text style={styles.itemTitle}>English</Text>
+                <Text style={styles.itemDesc}>{language === 'EN' ? 'Current language' : 'Switch to English'}</Text>
+              </View>
+              <Text style={styles.itemArrow}>{language === 'EN' ? '✓' : '›'}</Text>
+            </TouchableOpacity>
+          </View>
     </ScrollView>
   );
 }
