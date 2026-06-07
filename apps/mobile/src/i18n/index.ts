@@ -29,6 +29,10 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'fare.valle':           'Valle',
     'fare.bajo':            'Bajo',
     'status.normal':    'Operación normal',
+    'status.delay':     'Retraso',
+    'status.alert':     'Alerta',
+    'status.suspended': 'Suspendido',
+    'filter.all':       'Todas',
   },
   'pt-BR': {
     'eta.minutes':          'min',
@@ -58,6 +62,10 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'fare.valle':           'Vale',
     'fare.bajo':            'Baixo',
     'status.normal':    'Operação normal',
+    'status.delay':     'Atraso',
+    'status.alert':     'Alerta',
+    'status.suspended': 'Suspenso',
+    'filter.all':       'Todas',
   },
   'en-US': {
     'eta.minutes':          'min',
@@ -86,6 +94,11 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'fare.punta':           'Peak',
     'fare.valle':           'Standard',
     'fare.bajo':            'Off-peak',
+    'status.normal':    'Normal operation',
+    'status.delay':     'Delay',
+    'status.alert':     'Alert',
+    'status.suspended': 'Suspended',
+    'filter.all':       'All',
   }
 };
 
