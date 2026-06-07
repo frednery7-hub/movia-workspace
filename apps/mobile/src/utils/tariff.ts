@@ -1,8 +1,9 @@
-export type FarePeriod = 'punta' | 'valle' | 'bajo';
+export type FarePeriod = "punta" | "valle" | "bajo";
 
 export interface TariffStatus {
   period: FarePeriod;
   timeRange: string;
+  timeRangeKey?: string;
   minutesUntilChange: number;
 }
 
@@ -30,28 +31,62 @@ export function calculateCurrentTariff(date: Date): TariffStatus {
 
   if (isWeekend) {
     const minutesUntilMidnight = 24 * 60 - total;
-    return { period: 'valle', timeRange: 'Fin de semana', minutesUntilChange: minutesUntilMidnight };
+    return {
+      period: "valle",
+      timeRange: "",
+      timeRangeKey: "fare.weekend",
+      minutesUntilChange: minutesUntilMidnight,
+    };
   }
 
   if (total >= 6 * 60 && total < 7 * 60) {
-    return { period: 'bajo',  timeRange: '06:00 – 06:59', minutesUntilChange: 7 * 60 - total };
+    return {
+      period: "bajo",
+      timeRange: "06:00 – 06:59",
+      minutesUntilChange: 7 * 60 - total,
+    };
   }
   if (total >= 7 * 60 && total < 9 * 60) {
-    return { period: 'punta', timeRange: '07:00 – 08:59', minutesUntilChange: 9 * 60 - total };
+    return {
+      period: "punta",
+      timeRange: "07:00 – 08:59",
+      minutesUntilChange: 9 * 60 - total,
+    };
   }
   if (total >= 9 * 60 && total < 18 * 60) {
-    return { period: 'valle', timeRange: '09:00 – 17:59', minutesUntilChange: 18 * 60 - total };
+    return {
+      period: "valle",
+      timeRange: "09:00 – 17:59",
+      minutesUntilChange: 18 * 60 - total,
+    };
   }
   if (total >= 18 * 60 && total < 20 * 60) {
-    return { period: 'punta', timeRange: '18:00 – 19:59', minutesUntilChange: 20 * 60 - total };
+    return {
+      period: "punta",
+      timeRange: "18:00 – 19:59",
+      minutesUntilChange: 20 * 60 - total,
+    };
   }
   if (total >= 20 * 60 && total < 20 * 60 + 45) {
-    return { period: 'valle', timeRange: '20:00 – 20:44', minutesUntilChange: 20 * 60 + 45 - total };
+    return {
+      period: "valle",
+      timeRange: "20:00 – 20:44",
+      minutesUntilChange: 20 * 60 + 45 - total,
+    };
   }
   if (total >= 20 * 60 + 45 && total < 23 * 60) {
-    return { period: 'bajo',  timeRange: '20:45 – 23:00', minutesUntilChange: 23 * 60 - total };
+    return {
+      period: "bajo",
+      timeRange: "20:45 – 23:00",
+      minutesUntilChange: 23 * 60 - total,
+    };
   }
 
   // Fora do horário de operação
-  return { period: 'bajo', timeRange: 'Fora de operação', minutesUntilChange: 0 };
+  return {
+    period: "bajo",
+    timeRange: "",
+    timeRangeKey: "fare.out_of_operation",
+    minutesUntilChange: 0,
+  };
 }
