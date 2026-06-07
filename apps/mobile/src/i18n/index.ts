@@ -28,6 +28,7 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'fare.punta':           'Punta',
     'fare.valle':           'Valle',
     'fare.bajo':            'Bajo',
+    'status.normal':    'Operación normal',
   },
   'pt-BR': {
     'eta.minutes':          'min',
@@ -56,6 +57,7 @@ export const translations: Record<SupportedLocale, Record<string, string>> = {
     'fare.punta':           'Pico',
     'fare.valle':           'Vale',
     'fare.bajo':            'Baixo',
+    'status.normal':    'Operação normal',
   },
   'en-US': {
     'eta.minutes':          'min',

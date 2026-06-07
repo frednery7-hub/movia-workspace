@@ -144,7 +144,7 @@ export function MoviaSidebar({
 
           <Text style={[styles.sectionTitle, { marginTop: 24 }]}>{t('alerts')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
-            {['Todas', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6'].map((f, i) => (
+            {[t('filter.all'), 'L1', 'L2', 'L3', 'L4', 'L5', 'L6'].map((f, i) => (
               <TouchableOpacity key={f} style={[styles.filterChip, i === 0 && styles.filterChipActive]}>
                 <Text style={[styles.filterText, i === 0 && styles.filterTextActive]}>{f}</Text>
               </TouchableOpacity>
