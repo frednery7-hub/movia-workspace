@@ -12,11 +12,20 @@ import { router } from "expo-router";
 import { IdentityService } from "../src/security/identity.service";
 import { ConsentService } from "../src/privacy/consent.service";
 import { api } from "../src/config/api";
-import { useLocale } from "../src/context/LocaleContext";
+import { t as translate, SupportedLocale } from "../src/i18n";
+
+type Language = "ES" | "PT" | "EN";
+
+const localeMap: Record<Language, SupportedLocale> = {
+  ES: "es-CL",
+  PT: "pt-BR",
+  EN: "en-US",
+};
 
 export default function SettingsScreen() {
   const { language, setLanguage } = useLanguage();
-  const { t } = useLocale();
+  const locale = localeMap[language];
+  const t = (key: string) => translate(key, locale);
   const [loading, setLoading] = useState<string | null>(null);
 
   async function handleLogout() {
