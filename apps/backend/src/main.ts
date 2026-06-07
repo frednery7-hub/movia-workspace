@@ -38,7 +38,9 @@ async function bootstrap() {
     }),
   );
 
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
+  const corsOriginConfig =
+    process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || '';
+  const allowedOrigins = corsOriginConfig
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);

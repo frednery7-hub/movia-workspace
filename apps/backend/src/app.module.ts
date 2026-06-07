@@ -28,12 +28,19 @@ import { GlobalExceptionFilter } from './common/http-exception.filter';
       isGlobal: true,
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
-          .valid('development', 'production', 'test')
+          .valid('development', 'staging', 'production', 'test')
           .default('development'),
         PORT: Joi.number().default(3000),
         DATABASE_URL: Joi.string().required(),
+        REDIS_URL: Joi.string().optional().allow(''),
         JWT_SECRET: Joi.string().min(32).required(),
         ALLOWED_ORIGINS: Joi.string().default(''),
+        CORS_ORIGIN: Joi.string().optional().allow(''),
+        PRIVACY_REGION: Joi.string().default('CL'),
+        PRIVACY_RESPONSE_SLA_DAYS: Joi.number()
+          .integer()
+          .positive()
+          .default(30),
         SENTRY_DSN: Joi.string().optional().allow(''),
         METRICS_TOKEN: Joi.when('NODE_ENV', {
           is: 'production',

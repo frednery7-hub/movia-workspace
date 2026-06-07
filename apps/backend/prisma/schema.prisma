@@ -84,7 +84,7 @@ model TrackSegment {
   distanceMeters         Float
   averageDurationSeconds Int
   fromPlatform           Platform             @relation("SegmentFrom", fields: [fromPlatformId], references: [id], onDelete: Cascade)
-  toPlatform             Platform             @relation("SegmentTo",   fields: [toPlatformId],   references: [id], onDelete: Cascade)
+  toPlatform             Platform             @relation("SegmentTo", fields: [toPlatformId], references: [id], onDelete: Cascade)
   line                   Line                 @relation(fields: [lineId], references: [id])
   timeProfiles           SegmentTimeProfile[]
   createdAt              DateTime             @default(now())
@@ -120,7 +120,7 @@ model InternalTransfer {
   accessibilityFriendly Boolean  @default(true)
   platformChange        Boolean  @default(false)
   fromPlatform          Platform @relation("TransferFrom", fields: [fromPlatformId], references: [id], onDelete: Cascade)
-  toPlatform            Platform @relation("TransferTo",   fields: [toPlatformId],   references: [id], onDelete: Cascade)
+  toPlatform            Platform @relation("TransferTo", fields: [toPlatformId], references: [id], onDelete: Cascade)
   createdAt             DateTime @default(now())
 
   @@unique([fromPlatformId, toPlatformId])

@@ -20,7 +20,8 @@ COPY packages ./packages
 RUN cd apps/backend && npx prisma generate && \
     cp -r /app/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma /app/.prisma-generated
 
-RUN pnpm --filter backend build
+RUN NEST_CLI="$(find /app/node_modules/.pnpm -path '*/node_modules/@nestjs/cli/bin/nest.js' -type f | head -1)" && \
+    cd apps/backend && node "$NEST_CLI" build
 
 # ── Stage 2: Runtime ─────────────────────────────────────────
 FROM node:20-alpine AS runtime

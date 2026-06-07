@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   CallHandler,
   Inject,
+  HttpException,
 } from '@nestjs/common';
 import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import type { Logger } from 'winston';
@@ -53,17 +54,25 @@ export class LoggingInterceptor implements NestInterceptor {
         },
         error: (err: Error) => {
           const ms = Date.now() - startMs;
-
-          this.logger.error('http_request_error', {
+          const statusCode =
+            err instanceof HttpException ? err.getStatus() : 500;
+          const logPayload = {
             correlationId,
             method,
             url,
             durationMs: ms,
             error: err.message,
-          });
+            statusCode,
+          };
+
+          if (statusCode >= 500) {
+            this.logger.error('http_request_error', logPayload);
+          } else {
+            this.logger.warn('http_request_error', logPayload);
+          }
 
           this.metrics.httpRequestDuration
-            .labels(method, route, '500')
+            .labels(method, route, String(statusCode))
             .observe(ms);
         },
       }),
