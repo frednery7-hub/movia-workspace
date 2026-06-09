@@ -59,7 +59,7 @@ module.exports = ({ config }) =>
       usesCleartextTraffic: allowCleartext,
       adaptiveIcon: {
         ...config.android?.adaptiveIcon,
-        foregroundImage: "./assets/icon.png",
+        foregroundImage: "./assets/adaptive-icon.png",
       },
       config: {
         ...config.android?.config,
