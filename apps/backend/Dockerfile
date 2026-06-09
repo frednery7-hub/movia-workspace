@@ -1,5 +1,6 @@
 FROM node:20-alpine
 RUN apk add --no-cache openssl libc6-compat
+RUN addgroup -S movia && adduser -S movia -G movia
 WORKDIR /app
 RUN npm install -g pnpm@9
 
@@ -23,4 +24,6 @@ RUN NEST_CLI="$(find /app/node_modules/.pnpm -path '*/node_modules/@nestjs/cli/b
 
 EXPOSE 3000
 ENV NODE_ENV=production
+RUN chown -R movia:movia /app
+USER movia
 CMD ["node", "apps/backend/dist/main.js"]

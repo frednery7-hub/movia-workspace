@@ -11,6 +11,7 @@ import {
 import { NetworkStateService } from './network-state.service';
 import { UpdateNetworkStateDto } from './dto/update-network-state.dto';
 import { Roles } from '../common/roles.decorator';
+import { Public } from '../auth/public.decorator';
 import { NetworkStateSourceType } from '@prisma/client';
 
 interface JwtRequest {
@@ -47,11 +48,13 @@ export class NetworkStateController {
     });
   }
 
+  @Public()
   @Get(':lineId')
   async getByLine(@Param('lineId') lineId: string) {
     return this.networkStateService.getByLineId(lineId);
   }
 
+  @Public()
   @Get()
   async getAll() {
     return this.networkStateService.getAll();

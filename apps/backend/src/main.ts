@@ -53,7 +53,12 @@ async function bootstrap() {
   }
 
   app.enableCors({
-    origin: isProd ? allowedOrigins : 'http://localhost:8081',
+    origin:
+      allowedOrigins.length > 0
+        ? allowedOrigins.includes('*')
+          ? true
+          : allowedOrigins
+        : 'http://localhost:8081',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
