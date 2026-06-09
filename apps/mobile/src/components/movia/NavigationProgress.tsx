@@ -115,12 +115,22 @@ export function NavigationProgress({
                   )}
                   {station.transfer && (
                     <View style={[
-                      styles.transferChip,
-                      { borderColor: LineColors[station.transfer.line], backgroundColor: LineColors[station.transfer.line] + '20' },
+                      styles.transferCard,
+                      {
+                        borderColor: LineColors[station.transfer.line],
+                        backgroundColor: LineColors[station.transfer.line] + '18',
+                      },
                     ]}>
-                      <Text style={styles.transferArrow}>→</Text>
-                      <LineChip line={station.transfer.line} variant="compact" />
-                      <Text style={styles.transferName}>{station.transfer.name}</Text>
+                      <View style={[styles.transferIcon, { backgroundColor: LineColors[station.transfer.line] }]}>
+                        <Feather name="repeat" size={14} color="#fff" />
+                      </View>
+                      <View style={styles.transferTextGroup}>
+                        <Text style={styles.transferTitle}>{t('navigation.transfer_here')}</Text>
+                        <View style={styles.transferLineRow}>
+                          <Text style={styles.transferName}>{t('navigation.take_line')}</Text>
+                          <LineChip line={station.transfer.line} variant="compact" />
+                        </View>
+                      </View>
                     </View>
                   )}
                 </Animated.View>
@@ -233,11 +243,26 @@ const styles = StyleSheet.create({
   },
   currentBadgeDot: { width: 7, height: 7, borderRadius: 4 },
   youAreHere: { fontSize: 12, color: Colors.textPrimary, fontWeight: '700' },
-  transferChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: 8, paddingHorizontal: 10, paddingVertical: 7,
-    borderRadius: 10, borderWidth: 1.5, alignSelf: 'flex-start',
+  transferCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignSelf: 'stretch',
   },
-  transferArrow: { fontSize: 13, fontWeight: '600' },
-  transferName: { fontSize: 12, fontWeight: '600' },
+  transferIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transferTextGroup: { flex: 1 },
+  transferTitle: { fontSize: 13, fontWeight: '800', color: Colors.textPrimary },
+  transferLineRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 3 },
+  transferName: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
 });

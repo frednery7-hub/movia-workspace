@@ -20,6 +20,8 @@ import { useStations, findNearestStation, StationResult } from '../src/hooks/use
 import { IdentityService } from '../src/security/identity.service';
 import { LocationService } from '../src/location/location.service';
 import { InertialService } from '../src/sensors/InertialService';
+import { TripNotificationService } from '../src/notifications/tripNotifications.service';
+import { t as translate, SupportedLocale } from '../src/i18n';
 
 const { width, height } = Dimensions.get('window');
 
@@ -34,9 +36,19 @@ const HAS_GOOGLE_MAPS_KEY = Boolean(
 );
 
 type AppScreen = 'map' | 'searching' | 'navigating';
+type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 
-function toLineNumber(id: string) {
-  return id.replace(/^L/i, '') as '1' | '2' | '3' | '4' | '4A' | '5' | '6';
+const VALID_LINE_NUMBERS: LineNumber[] = ['1', '2', '3', '4', '4A', '5', '6'];
+
+function toLineNumber(id?: string): LineNumber {
+  const lineNumber = id?.replace(/^L/i, '') as LineNumber | undefined;
+  return lineNumber && VALID_LINE_NUMBERS.includes(lineNumber) ? lineNumber : '1';
+}
+
+function toLocale(language: string): SupportedLocale {
+  if (language === 'PT') return 'pt-BR';
+  if (language === 'EN') return 'en-US';
+  return 'es-CL';
 }
 
 function toSidebarStatus(s?: string): 'normal' | 'delay' | 'alert' | 'suspended' {
@@ -72,6 +84,8 @@ export default function HomeScreen() {
   const [userLat, setUserLat]         = useState<number | null>(null);
   const [userLon, setUserLon]         = useState<number | null>(null);
   const [locating, setLocating]       = useState(false);
+  const [activeStationId, setActiveStationId] = useState<string | null>(null);
+  const notifiedRouteRef = useRef<string | null>(null);
 
   const { data: linesData,    isLoading: linesLoading }  = useLines();
   const { data: networkState }                           = useNetworkState();
@@ -87,18 +101,31 @@ export default function HomeScreen() {
     status: toSidebarStatus(networkState?.find(s => s.lineId === l.id)?.status),
   }));
 
+  const etaPath = etaData?.path ?? [];
+  const activeStationIndex = activeStationId
+    ? etaPath.findIndex(p => p.id === activeStationId)
+    : -1;
+  const currentPathIndex = activeStationIndex >= 0 ? activeStationIndex : 0;
+
   // Converte path do ETA em Station[] para NavigationProgress
-  const stations: Station[] = (etaData?.path ?? []).map((p, i) => ({
+  const stations: Station[] = etaPath.map((p, i) => ({
     name:   p.name,
-    status: i === 0 ? 'current' : 'future',
+    status: i < currentPathIndex ? 'passed' : i === currentPathIndex ? 'current' : 'future',
+    transfer: etaPath[i + 1]?.lineId && etaPath[i + 1].lineId !== p.lineId
+      ? { line: toLineNumber(etaPath[i + 1].lineId), name: etaPath[i + 1].name }
+      : undefined,
   }));
 
   // Coordenadas da rota para Polyline (Opção A — cruza path com stationsData)
   const stationById = new Map((stationsData ?? []).map(s => [s.id, s]));
-  const routeCoordinates = (etaData?.path ?? [])
+  const routeCoordinates = etaPath
     .map(p => stationById.get(p.id))
     .filter((s): s is NonNullable<typeof s> => !!s)
     .map(s => ({ latitude: s.latitude, longitude: s.longitude }));
+
+  const routeKey = origin && destination && etaData
+    ? `${origin.id}:${destination.id}:${etaData.arrivalTime}`
+    : null;
 
   // Swipe da esquerda abre sidebar
   const panResponder = useRef(
@@ -118,6 +145,66 @@ export default function HomeScreen() {
   }, []);
 
   // Boot: idioma + GPS
+  useEffect(() => {
+    TripNotificationService.configure();
+  }, []);
+
+  useEffect(() => {
+    if (routeKey) notifiedRouteRef.current = null;
+    setActiveStationId(null);
+  }, [routeKey]);
+
+  useEffect(() => {
+    if (screen !== 'navigating' || !etaData || !stationsData || !destination || !routeKey) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const routeEta = etaData;
+    const routeDestination = destination;
+    const routeStations = routeEta.path
+      .map(p => stationById.get(p.id))
+      .filter((s): s is StationResult => !!s);
+
+    async function syncActiveStation() {
+      const loc = await LocationService.getCurrentLocation();
+      if (cancelled || !loc.latitude || !loc.longitude || routeStations.length === 0) {
+        return;
+      }
+
+      setUserLat(loc.latitude);
+      setUserLon(loc.longitude);
+
+      const nearest = findNearestStation(routeStations, loc.latitude, loc.longitude);
+      if (!nearest) return;
+
+      setActiveStationId(nearest.id);
+
+      const nearestPathIndex = routeEta.path.findIndex(p => p.id === nearest.id);
+      const penultimateIndex = routeEta.path.length - 2;
+
+      if (
+        nearestPathIndex === penultimateIndex &&
+        notifiedRouteRef.current !== routeKey
+      ) {
+        notifiedRouteRef.current = routeKey;
+        const locale = toLocale(language);
+        await TripNotificationService.notifyNextStation(
+          translate('notification.next_station.title', locale),
+          `${translate('notification.next_station.body', locale)} ${routeDestination.name}.`,
+        );
+      }
+    }
+
+    syncActiveStation();
+    const timer = setInterval(syncActiveStation, 20_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [screen, etaData, stationsData, destination, routeKey, language]);
+
   useEffect(() => {
     async function init() {
       const lang = await IdentityService.getPreferredLanguage();
@@ -211,6 +298,7 @@ export default function HomeScreen() {
 
   function handleDestinationSelect(station: StationResult) {
     setDestination(station);
+    setActiveStationId(null);
     // Salva no histórico sempre
       CacheService.get<StationResult[]>('route_history').then((hist: StationResult[] | null) => {
         const history: StationResult[] = hist ?? [];
@@ -227,6 +315,7 @@ export default function HomeScreen() {
 
   function handleCloseNavigation() {
     setDestination(null);
+    setActiveStationId(null);
     setScreen('map');
   }
 
@@ -305,7 +394,7 @@ export default function HomeScreen() {
           estimatedTime={etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : etaLoading ? '...' : '--'}
           arrivalTime={etaData ? formatArrival(etaData.arrivalTime) : '--:--'}
           stations={stations}
-          currentLine={(etaData?.linesOnRoute?.[0]?.replace('L','') ?? '1') as '1'|'2'|'3'|'4'|'4A'|'5'|'6'}
+          currentLine={toLineNumber(etaPath[currentPathIndex]?.lineId ?? etaData?.linesOnRoute?.[0])}
           onClose={handleCloseNavigation}
         />
       )}
