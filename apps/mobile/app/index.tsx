@@ -235,7 +235,11 @@ export default function HomeScreen() {
 
   function handleOriginSelect(station: StationResult) {
     setOrigin(station);
+    setActiveStationId(null);
     setSelectingOrigin(false);
+    if (destination) {
+      setScreen('navigating');
+    }
   }
 
   async function handleLocateUser() {
@@ -306,10 +310,20 @@ export default function HomeScreen() {
         const updated = [entry, ...history.filter((h: StationResult) => h.id !== station.id)].slice(0, 10);
         CacheService.set('route_history', updated, 30 * 24 * 60 * 60 * 1000);
       });
-    if (!origin) {
-      // sem origem GPS — usa estação mais próxima do centro de Santiago como fallback
-      setOrigin({ id: 'st_universidad_de_chile', name: 'Universidad de Chile', shortCode: 'UCH', latitude: -33.4415, longitude: -70.6503 });
+    if (origin) {
+      setScreen('navigating');
+    } else {
+      setScreen('map');
+      setSelectingOrigin(true);
     }
+  }
+
+  function handleSwapRoute() {
+    if (!origin || !destination) return;
+    setOrigin(destination);
+    setDestination(origin);
+    setActiveStationId(null);
+    notifiedRouteRef.current = null;
     setScreen('navigating');
   }
 
@@ -360,7 +374,15 @@ export default function HomeScreen() {
       <MapOverlay />
 
       <View style={[styles.searchWrapper, { top: insets.top + 12 }]}>
-        <SearchBar onMenuClick={() => setSidebarOpen(true)} onSearchClick={() => setScreen('searching')} />
+        <SearchBar
+          onMenuClick={() => setSidebarOpen(true)}
+          onOriginClick={() => setSelectingOrigin(true)}
+          onDestinationClick={() => setScreen('searching')}
+          onSwapRoute={handleSwapRoute}
+          originName={origin?.name}
+          destinationName={destination?.name}
+          canSwap={!!origin && !!destination}
+        />
       </View>
 
       <TouchableOpacity
@@ -368,7 +390,7 @@ export default function HomeScreen() {
         activeOpacity={0.82}
         disabled={locating}
         onPress={handleLocateUser}
-        style={[styles.locationButton, { top: insets.top + 84 }, locating && styles.locationButtonDisabled]}
+        style={[styles.locationButton, { top: insets.top + 116 }, locating && styles.locationButtonDisabled]}
       >
         {locating ? (
           <ActivityIndicator color="#1A73E8" />
