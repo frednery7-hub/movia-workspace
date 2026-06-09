@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../config/api';
 import { CacheService } from '../config/cache.service';
 
-const CACHE_KEY = 'stations_v1';
+const CACHE_KEY = 'stations_v2';
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 export interface StationResult {
@@ -11,6 +11,7 @@ export interface StationResult {
   shortCode: string;
   latitude: number;
   longitude: number;
+  lines?: string[];
 }
 
 async function fetchAllStations(): Promise<StationResult[]> {

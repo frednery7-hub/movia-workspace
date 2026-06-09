@@ -9,6 +9,20 @@ import { useStations, useStationSearch, StationResult } from '../../hooks/useSta
 import { useLocale } from '../../context/LocaleContext';
 import { CacheService } from '../../config/cache.service';
 import { Colors } from '../../theme/colors';
+import { LineColors } from '../../theme/colors';
+
+type StationLine = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
+
+const VALID_LINES: StationLine[] = ['1', '2', '3', '4', '4A', '5', '6'];
+
+function toStationLine(lineId: string): StationLine | null {
+  const line = lineId.replace(/^L/i, '') as StationLine;
+  return VALID_LINES.includes(line) ? line : null;
+}
+
+function getStationLines(station: StationResult): StationLine[] {
+  return [...new Set((station.lines ?? []).map(toStationLine).filter((line): line is StationLine => !!line))];
+}
 
 interface StationSearchModalProps {
   visible: boolean;
@@ -50,6 +64,25 @@ export function StationSearchModal({
     onSelect(station);
   }
 
+  function renderLineChips(station: StationResult) {
+    const stationLines = getStationLines(station);
+    if (stationLines.length === 0) return null;
+
+    return (
+      <View style={styles.lineChips}>
+        {stationLines.map(line => (
+          <View key={line} style={[styles.lineChip, { backgroundColor: LineColors[line] }]}>
+            <Text style={styles.lineChipText}>L{line}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  function withFreshStationData(station: StationResult) {
+    return allStations.find(s => s.id === station.id) ?? station;
+  }
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -88,15 +121,21 @@ export function StationSearchModal({
             {!query.trim() && recentStations.length > 0 && (
               <>
                 <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.recent")}</Text></View>
-                {recentStations.map(s => (
-                  <TouchableOpacity key={s.id} style={styles.stationItem} onPress={() => handleSelect(s)} activeOpacity={0.7}>
-                    <Feather name="clock" size={16} color={Colors.textTertiary} />
-                    <View style={styles.stationInfo}>
-                      <Text style={styles.stationName}>{s.name}</Text>
-                      <Text style={styles.stationCode}>{s.shortCode}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                {recentStations.map(station => {
+                  const freshStation = withFreshStationData(station);
+                  return (
+                    <TouchableOpacity key={freshStation.id} style={styles.stationItem} onPress={() => handleSelect(freshStation)} activeOpacity={0.7}>
+                      <Feather name="clock" size={16} color={Colors.textTertiary} />
+                      <View style={styles.stationInfo}>
+                        <Text style={styles.stationName}>{freshStation.name}</Text>
+                        <View style={styles.stationMeta}>
+                          <Text style={styles.stationCode}>{freshStation.shortCode}</Text>
+                          {renderLineChips(freshStation)}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
                 <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.all_stations")}</Text></View>
               </>
             )}
@@ -116,7 +155,10 @@ export function StationSearchModal({
                 </View>
                 <View style={styles.stationInfo}>
                   <Text style={styles.stationName}>{item.name}</Text>
-                  <Text style={styles.stationCode}>{item.shortCode}</Text>
+                  <View style={styles.stationMeta}>
+                    <Text style={styles.stationCode}>{item.shortCode}</Text>
+                    {renderLineChips(item)}
+                  </View>
                 </View>
                 <Feather name="chevron-right" size={16} color={Colors.grayBorder} />
               </TouchableOpacity>
@@ -160,9 +202,26 @@ const styles = StyleSheet.create({
   },
   stationInfo: { flex: 1 },
   stationName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
+  stationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
   sectionHeader: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: Colors.graySurface },
   sectionTitle: { fontSize: 11, fontWeight: '700', color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
-  stationCode: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
+  stationCode: { fontSize: 12, color: Colors.textTertiary },
+  lineChips: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  lineChip: {
+    minWidth: 24,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lineChipText: { fontSize: 10, fontWeight: '800', color: Colors.white },
   separator: { height: 1, backgroundColor: Colors.grayBorder, marginLeft: 64 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { fontSize: 14, color: Colors.textTertiary },

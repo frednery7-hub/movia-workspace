@@ -6,7 +6,7 @@ export class StationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query?: string) {
-    return this.prisma.station.findMany({
+    const stations = await this.prisma.station.findMany({
       where: query
         ? { name: { contains: query, mode: 'insensitive' } }
         : undefined,
@@ -16,9 +16,18 @@ export class StationsService {
         shortCode: true,
         latitude: true,
         longitude: true,
+        platforms: {
+          select: { lineId: true },
+          orderBy: { lineId: 'asc' },
+        },
       },
       orderBy: { name: 'asc' },
       take: query ? 50 : undefined,
     });
+
+    return stations.map(({ platforms, ...station }) => ({
+      ...station,
+      lines: [...new Set(platforms.map((platform) => platform.lineId))],
+    }));
   }
 }
