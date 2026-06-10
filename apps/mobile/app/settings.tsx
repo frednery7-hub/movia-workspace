@@ -1,5 +1,6 @@
 import { useLanguage } from "./_layout";
-import { useState } from "react";
+import { Feather } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  TextInput,
 } from "react-native";
 import { router } from "expo-router";
 import { IdentityService } from "../src/security/identity.service";
@@ -27,6 +29,18 @@ export default function SettingsScreen() {
   const locale = localeMap[language];
   const t = (key: string) => translate(key, locale);
   const [loading, setLoading] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState("");
+
+  useEffect(() => {
+    IdentityService.getProfileName().then(name => {
+      if (name) setProfileName(name);
+    });
+  }, []);
+
+  async function handleNameChange(name: string) {
+    setProfileName(name);
+    await IdentityService.setProfileName(name);
+  }
 
   async function handleLogout() {
     Alert.alert(t("settings.logout"), t("settings.alert.confirm"), [
@@ -112,9 +126,56 @@ export default function SettingsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>‹</Text>
+          <Feather name="chevron-left" size={25} color="#1a1a2e" />
         </TouchableOpacity>
         <Text style={styles.title}>{t("settings.title")}</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>{t("settings.profile")}</Text>
+        <View style={styles.item}>
+          <Feather name="user" size={19} color="#5A5A5A" />
+          <View style={styles.itemText}>
+            <Text style={styles.itemTitle}>{t("settings.name")}</Text>
+            <TextInput
+              value={profileName}
+              onChangeText={handleNameChange}
+              placeholder={t("settings.name_placeholder")}
+              placeholderTextColor="#9CA3AF"
+              style={styles.nameInput}
+              returnKeyType="done"
+            />
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>{t("settings.language")}</Text>
+        {[
+          { code: "ES" as const, label: "Español", switchKey: "settings.switch_to_spanish" },
+          { code: "PT" as const, label: "Português", switchKey: "settings.switch_to_portuguese" },
+          { code: "EN" as const, label: "English", switchKey: "settings.switch_to_english" },
+        ].map(item => (
+          <View key={item.code}>
+            <TouchableOpacity
+              style={styles.item}
+              onPress={() => setLanguage(item.code)}
+              activeOpacity={0.7}
+            >
+              <Feather name="globe" size={19} color="#5A5A5A" />
+              <View style={styles.itemText}>
+                <Text style={styles.itemTitle}>{item.label}</Text>
+                <Text style={styles.itemDesc}>
+                  {language === item.code
+                    ? t("settings.current_language")
+                    : t(item.switchKey)}
+                </Text>
+              </View>
+              <Text style={styles.itemArrow}>{language === item.code ? "✓" : "›"}</Text>
+            </TouchableOpacity>
+            {item.code !== "EN" && <View style={styles.divider} />}
+          </View>
+        ))}
       </View>
 
       <View style={styles.section}>
@@ -125,7 +186,7 @@ export default function SettingsScreen() {
           activeOpacity={0.7}
           disabled={loading === "export"}
         >
-          <Text style={styles.itemIcon}>📦</Text>
+          <Feather name="download" size={19} color="#5A5A5A" />
           <View style={styles.itemText}>
             <Text style={styles.itemTitle}>{t("settings.export")}</Text>
             <Text style={styles.itemDesc}>{t("settings.export_desc")}</Text>
@@ -139,7 +200,7 @@ export default function SettingsScreen() {
           activeOpacity={0.7}
           disabled={loading === "consent"}
         >
-          <Text style={styles.itemIcon}>🔒</Text>
+          <Feather name="shield" size={19} color="#5A5A5A" />
           <View style={styles.itemText}>
             <Text style={styles.itemTitle}>{t("settings.revoke")}</Text>
             <Text style={styles.itemDesc}>{t("settings.revoke_desc")}</Text>
@@ -153,7 +214,7 @@ export default function SettingsScreen() {
           activeOpacity={0.7}
           disabled={loading === "delete"}
         >
-          <Text style={styles.itemIcon}>🗑️</Text>
+          <Feather name="trash-2" size={19} color="#E31837" />
           <View style={styles.itemText}>
             <Text style={[styles.itemTitle, { color: "#E31837" }]}>
               {t("settings.delete")}
@@ -172,7 +233,7 @@ export default function SettingsScreen() {
           activeOpacity={0.7}
           disabled={loading === "logout"}
         >
-          <Text style={styles.itemIcon}>🚪</Text>
+          <Feather name="log-out" size={19} color="#E31837" />
           <View style={styles.itemText}>
             <Text style={[styles.itemTitle, { color: "#E31837" }]}>
               {t("settings.logout")}
@@ -183,59 +244,15 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.version}>Movia v1.0.0 — LGPD compliant</Text>
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t("settings.language")}</Text>
-        <TouchableOpacity
-          style={styles.item}
-          onPress={() => setLanguage("ES")}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.itemIcon}>🇨🇱</Text>
+        <Text style={styles.sectionLabel}>{t("settings.about")}</Text>
+        <View style={styles.item}>
+          <Feather name="info" size={19} color="#5A5A5A" />
           <View style={styles.itemText}>
-            <Text style={styles.itemTitle}>Español</Text>
-            <Text style={styles.itemDesc}>
-              {language === "ES"
-                ? t("settings.current_language")
-                : t("settings.switch_to_spanish")}
-            </Text>
+            <Text style={styles.itemTitle}>Movia</Text>
+            <Text style={styles.itemDesc}>{t("settings.version")}</Text>
           </View>
-          <Text style={styles.itemArrow}>{language === "ES" ? "✓" : "›"}</Text>
-        </TouchableOpacity>
-        <View style={styles.divider} />
-        <TouchableOpacity
-          style={styles.item}
-          onPress={() => setLanguage("PT")}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.itemIcon}>🇧🇷</Text>
-          <View style={styles.itemText}>
-            <Text style={styles.itemTitle}>Português</Text>
-            <Text style={styles.itemDesc}>
-              {language === "PT"
-                ? t("settings.current_language")
-                : t("settings.switch_to_portuguese")}
-            </Text>
-          </View>
-          <Text style={styles.itemArrow}>{language === "PT" ? "✓" : "›"}</Text>
-        </TouchableOpacity>
-        <View style={styles.divider} />
-        <TouchableOpacity
-          style={styles.item}
-          onPress={() => setLanguage("EN")}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.itemIcon}>🇺🇸</Text>
-          <View style={styles.itemText}>
-            <Text style={styles.itemTitle}>English</Text>
-            <Text style={styles.itemDesc}>
-              {language === "EN"
-                ? t("settings.current_language")
-                : t("settings.switch_to_english")}
-            </Text>
-          </View>
-          <Text style={styles.itemArrow}>{language === "EN" ? "✓" : "›"}</Text>
-        </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );
@@ -252,7 +269,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   backBtn: { padding: 4 },
-  backText: { fontSize: 28, color: "#1a1a2e", lineHeight: 28 },
   title: { fontSize: 20, fontWeight: "500", color: "#1a1a2e" },
   section: { marginBottom: 20 },
   sectionLabel: {
@@ -271,10 +287,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 12,
   },
-  itemIcon: { fontSize: 20 },
   itemText: { flex: 1 },
   itemTitle: { fontSize: 14, fontWeight: "500", color: "#1a1a2e" },
   itemDesc: { fontSize: 12, color: "#999", marginTop: 2 },
+  nameInput: {
+    marginTop: 3,
+    padding: 0,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1a1a2e",
+  },
   itemArrow: { fontSize: 18, color: "#ccc" },
   divider: { height: 0.5, backgroundColor: "#f0f0f0", marginLeft: 54 },
   version: { textAlign: "center", fontSize: 11, color: "#ccc", marginTop: 20 },

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { useLocale } from '../../context/LocaleContext';
 import { Feather } from '@expo/vector-icons';
@@ -29,6 +29,12 @@ export function NavigationProgress({
   const { t } = useLocale();
   const lineColor = LineColors[currentLine] ?? Colors.accentPrimary;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [sheetState, setSheetState] = useState<'compact' | 'normal' | 'expanded'>('normal');
+  const currentIndex = stations.findIndex(station => station.status === 'current');
+  const currentStation = stations[currentIndex] ?? stations[0];
+  const nextStation = stations[currentIndex + 1];
+  const isCompact = sheetState === 'compact';
+  const isExpanded = sheetState === 'expanded';
 
   useEffect(() => {
     Animated.loop(
@@ -39,12 +45,25 @@ export function NavigationProgress({
     ).start();
   }, []);
 
+  function toggleSheet() {
+    setSheetState(prev => prev === 'compact' ? 'normal' : prev === 'normal' ? 'expanded' : 'compact');
+  }
+
   return (
-    <View style={styles.container}>
+    <View style={[
+      styles.container,
+      isCompact && styles.containerCompact,
+      isExpanded && styles.containerExpanded,
+    ]}>
       {/* Handle de arrasto */}
-      <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
+      <TouchableOpacity
+        onPress={toggleSheet}
+        activeOpacity={0.8}
+        style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}
+        accessibilityLabel={isExpanded ? t('navigation.collapse') : t('navigation.expand')}
+      >
         <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.12)' }} />
-      </View>
+      </TouchableOpacity>
       <LinearGradient colors={['#1a1a2e', '#232340']} style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.origin}>{origin}</Text>
@@ -56,13 +75,45 @@ export function NavigationProgress({
         </TouchableOpacity>
       </LinearGradient>
 
-      <View style={styles.summaryCard}>
-        <Text style={styles.eta}>{estimatedTime}</Text>
-        <Text style={styles.arrival}>{t('eta.arrives')} {arrivalTime}</Text>
-        <Text style={styles.stationCount}>{stations.length} {t('eta.stations')}</Text>
-      </View>
+      {isCompact ? (
+        <TouchableOpacity style={styles.compactSummary} onPress={toggleSheet} activeOpacity={0.86}>
+          <Text style={styles.compactEta}>{estimatedTime}</Text>
+          <Text style={styles.compactNext} numberOfLines={1}>
+            {nextStation ? `${t('navigation.next')}: ${nextStation.name}` : `${t('eta.arrives')} ${arrivalTime}`}
+          </Text>
+          <Feather name="chevron-up" size={18} color={Colors.textTertiary} />
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.summaryCard}>
+          <View>
+            <Text style={styles.eta}>{estimatedTime}</Text>
+            <Text style={styles.arrival}>{t('eta.arrives')} {arrivalTime} · {stations.length} {t('eta.stations')}</Text>
+            <Text style={styles.updated}>{t('navigation.updated_now')}</Text>
+          </View>
+          <TouchableOpacity onPress={toggleSheet} style={styles.expandButton} activeOpacity={0.8}>
+            <Feather name={isExpanded ? 'minimize-2' : 'maximize-2'} size={18} color={Colors.actionBlue} />
+          </TouchableOpacity>
+        </View>
+      )}
 
+      {!isCompact && !isExpanded && (
+        <View style={styles.nextPanel}>
+          <View style={styles.nextColumn}>
+            <Text style={styles.nextLabel}>{t('navigation.you_are_here')}</Text>
+            <Text style={styles.nextStationName} numberOfLines={1}>{currentStation?.name ?? origin}</Text>
+          </View>
+          <View style={styles.nextColumn}>
+            <Text style={styles.nextLabel}>{t('navigation.next')}</Text>
+            <Text style={styles.nextStationName} numberOfLines={1}>{nextStation?.name ?? destination}</Text>
+          </View>
+        </View>
+      )}
+
+      {!isCompact && (
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        {isExpanded && (
+          <Text style={styles.fullTimelineTitle}>{t('navigation.full_timeline')}</Text>
+        )}
         <View style={styles.progressList}>
           {stations.map((station, index) => {
             const isCurrent = station.status === 'current';
@@ -139,6 +190,7 @@ export function NavigationProgress({
           })}
         </View>
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -159,8 +211,14 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 10,
   },
+  containerCompact: {
+    maxHeight: 154,
+  },
+  containerExpanded: {
+    maxHeight: '88%',
+  },
   header: {
-    height: 76, flexDirection: 'row', alignItems: 'center',
+    height: 62, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', paddingHorizontal: 20,
   },
   headerContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
@@ -168,24 +226,69 @@ const styles = StyleSheet.create({
   arrow: { fontSize: 16, color: 'rgba(255,255,255,0.9)' },
   destination: { fontSize: 15, color: '#fff', fontWeight: '700' },
   summaryCard: {
-    margin: 20, padding: 20, borderRadius: 18, backgroundColor: '#fff',
+    marginHorizontal: 20, marginTop: 14, marginBottom: 10,
+    paddingHorizontal: 16, paddingVertical: 14, borderRadius: 16, backgroundColor: '#fff',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.06, shadowRadius: 16, elevation: 3,
     borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)',
   },
   eta: { fontSize: 32, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -0.8 },
-  arrival: { fontSize: 15, color: Colors.textSecondary, marginTop: 6, fontWeight: '500' },
-  stationCount: { fontSize: 13, color: Colors.textTertiary, marginTop: 4, fontWeight: '500' },
+  arrival: { fontSize: 14, color: Colors.textSecondary, marginTop: 6, fontWeight: '500' },
+  updated: { fontSize: 12, color: Colors.textTertiary, marginTop: 4, fontWeight: '600' },
+  expandButton: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#EEF6FF',
+  },
+  compactSummary: {
+    height: 54,
+    marginHorizontal: 18,
+    marginTop: 6,
+    marginBottom: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.grayBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  compactEta: { fontSize: 17, fontWeight: '800', color: Colors.textPrimary },
+  compactNext: { flex: 1, fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  nextPanel: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: Colors.graySurface,
+    flexDirection: 'row',
+    gap: 14,
+  },
+  nextColumn: { flex: 1 },
+  nextLabel: { fontSize: 11, fontWeight: '800', color: Colors.textTertiary, textTransform: 'uppercase' },
+  nextStationName: { marginTop: 4, fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
   scroll: { flex: 1 },
+  fullTimelineTitle: {
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 12,
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.textTertiary,
+    textTransform: 'uppercase',
+  },
   progressList: { paddingHorizontal: 20, paddingBottom: 32 },
-  stationRow: { flexDirection: 'row', gap: 16, minHeight: 52 },
-  trackColumn: { width: 18, alignItems: 'center' },
+  stationRow: { flexDirection: 'row', gap: 14, minHeight: 44 },
+  trackColumn: { width: 16, alignItems: 'center' },
   dot: {
-    width: 10, height: 10, borderRadius: 5,
+    width: 8, height: 8, borderRadius: 4,
     backgroundColor: Colors.grayText, marginTop: 4,
   },
   dotCurrent: {
-    width: 16, height: 16, borderRadius: 8,
+    width: 14, height: 14, borderRadius: 7,
     backgroundColor: '#fff', borderWidth: 3,
     marginTop: 0, marginLeft: -3,
     shadowColor: Colors.accentPrimary, shadowOffset: { width: 0, height: 2 },
@@ -197,11 +300,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.grayBorder,
   },
   track: {
-    flex: 1, width: 3, marginTop: 2,
+    flex: 1, width: 2, marginTop: 2,
     backgroundColor: Colors.grayBorder,
   },
-  trackDashed: { backgroundColor: 'transparent', borderLeftWidth: 3, borderLeftColor: 'rgba(0,0,0,0.12)', borderStyle: 'dashed' },
-  stationInfo: { flex: 1, paddingBottom: 20 },
+  trackDashed: { backgroundColor: 'transparent', borderLeftWidth: 2, borderLeftColor: 'rgba(0,0,0,0.12)', borderStyle: 'dashed' },
+  stationInfo: { flex: 1, paddingBottom: 16 },
   stationName: { fontSize: 14, fontWeight: '500', color: Colors.textPrimary },
   currentStationCard: {
     borderLeftWidth: 4,

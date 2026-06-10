@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useStations, useStationSearch, StationResult } from '../../hooks/useStations';
+import { NearbyStation, useStations, useStationSearch, StationResult } from '../../hooks/useStations';
 import { useLocale } from '../../context/LocaleContext';
 import { CacheService } from '../../config/cache.service';
 import { Colors } from '../../theme/colors';
@@ -29,10 +29,11 @@ interface StationSearchModalProps {
   onClose: () => void;
   onSelect: (station: StationResult) => void;
   titleKey?: string;
+  nearbyStations?: NearbyStation[];
 }
 
 export function StationSearchModal({
-  visible, onClose, onSelect, titleKey,
+  visible, onClose, onSelect, titleKey, nearbyStations = [],
 }: StationSearchModalProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
@@ -43,7 +44,7 @@ export function StationSearchModal({
   useEffect(() => {
     if (visible) {
       CacheService.get<StationResult[]>('route_history').then(hist => {
-        if (hist) setRecentStations(hist.slice(0, 5));
+        if (hist) setRecentStations(hist.slice(0, 3));
       });
     }
   }, [visible]);
@@ -53,15 +54,23 @@ export function StationSearchModal({
   const filtered = useMemo(() => {
     if (!query.trim()) return allStations;
     if (query.length >= 2 && searchResults.length > 0) return searchResults;
-    const q = query.toLowerCase();
+    const q = normalize(query);
+    const lineQuery = q.match(/^l?([1-6]|4a)$/)?.[1]?.toUpperCase();
     return allStations.filter(
-      s => s.name.toLowerCase().includes(q) || s.shortCode.toLowerCase().includes(q),
+      s => normalize(s.name).includes(q) ||
+        normalize(s.shortCode).includes(q) ||
+        (lineQuery ? (s.lines ?? []).some(line => line.replace(/^L/i, '').toUpperCase() === lineQuery) : false),
     );
   }, [query, allStations, searchResults]);
 
   function handleSelect(station: StationResult) {
     setQuery('');
     onSelect(station);
+  }
+
+  async function handleClearHistory() {
+    await CacheService.set('route_history', [], 30 * 24 * 60 * 60 * 1000);
+    setRecentStations([]);
   }
 
   function renderLineChips(station: StationResult) {
@@ -120,7 +129,12 @@ export function StationSearchModal({
           <>
             {!query.trim() && recentStations.length > 0 && (
               <>
-                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.recent")}</Text></View>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{t("search.recent")}</Text>
+                  <TouchableOpacity onPress={handleClearHistory} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.clearText}>{t('search.clear')}</Text>
+                  </TouchableOpacity>
+                </View>
                 {recentStations.map(station => {
                   const freshStation = withFreshStationData(station);
                   return (
@@ -130,6 +144,31 @@ export function StationSearchModal({
                         <Text style={styles.stationName}>{freshStation.name}</Text>
                         <View style={styles.stationMeta}>
                           <Text style={styles.stationCode}>{freshStation.shortCode}</Text>
+                          {renderLineChips(freshStation)}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.all_stations")}</Text></View>
+              </>
+            )}
+            {!query.trim() && nearbyStations.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{t('search.nearby')}</Text>
+                </View>
+                {nearbyStations.slice(0, 3).map(({ station, distanceMeters }) => {
+                  const freshStation = withFreshStationData(station);
+                  return (
+                    <TouchableOpacity key={`nearby-${freshStation.id}`} style={styles.stationItem} onPress={() => handleSelect(freshStation)} activeOpacity={0.7}>
+                      <View style={styles.nearbyIcon}>
+                        <Feather name="navigation" size={14} color="#1A73E8" />
+                      </View>
+                      <View style={styles.stationInfo}>
+                        <Text style={styles.stationName}>{freshStation.name}</Text>
+                        <View style={styles.stationMeta}>
+                          <Text style={styles.stationCode}>{distanceMeters} m</Text>
                           {renderLineChips(freshStation)}
                         </View>
                       </View>
@@ -166,6 +205,7 @@ export function StationSearchModal({
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>{t("search.empty")}</Text>
+                <Text style={styles.emptyAction}>{t('search.view_lines_map')}</Text>
               </View>
             }
           />
@@ -174,6 +214,14 @@ export function StationSearchModal({
       </View>
     </Modal>
   );
+}
+
+function normalize(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
 }
 
 const styles = StyleSheet.create({
@@ -200,6 +248,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accentPrimary + '15',
     alignItems: 'center', justifyContent: 'center',
   },
+  nearbyIcon: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#E8F1FF',
+    alignItems: 'center', justifyContent: 'center',
+  },
   stationInfo: { flex: 1 },
   stationName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
   stationMeta: {
@@ -209,8 +262,16 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 6,
   },
-  sectionHeader: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: Colors.graySurface },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: Colors.graySurface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   sectionTitle: { fontSize: 11, fontWeight: '700', color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
+  clearText: { fontSize: 12, fontWeight: '700', color: Colors.accentPrimary },
   stationCode: { fontSize: 12, color: Colors.textTertiary },
   lineChips: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   lineChip: {
@@ -227,4 +288,5 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 14, color: Colors.textTertiary },
   empty: { padding: 40, alignItems: 'center' },
   emptyText: { fontSize: 14, color: Colors.textTertiary },
+  emptyAction: { marginTop: 10, fontSize: 13, color: Colors.actionBlue, fontWeight: '700' },
 });

@@ -42,6 +42,9 @@ interface MoviaSidebarProps {
   isLoading?: boolean;
   currentLanguage?: "ES" | "PT" | "EN";
   onLanguageChange?: (lang: "ES" | "PT" | "EN") => void;
+  profileName?: string | null;
+  locationLabel?: string;
+  contextLabel?: string;
 }
 
 const LANGUAGES = [
@@ -88,6 +91,9 @@ export function MoviaSidebar({
   isLoading = false,
   currentLanguage = "ES",
   onLanguageChange,
+  profileName,
+  locationLabel,
+  contextLabel,
 }: MoviaSidebarProps) {
   const tariff = useTariffStatus();
   const { t } = useLocale();
@@ -165,14 +171,14 @@ export function MoviaSidebar({
               <Text style={styles.avatarText}>U</Text>
             </View>
             <View>
-              <Text style={styles.userName}>Usuário Anônimo</Text>
+              <Text style={styles.userName}>{profileName ? `${t('sidebar.hello')}, ${profileName}` : t('location.plan_trip')}</Text>
               <View style={styles.locationRow}>
                 <Feather
                   name="map-pin"
                   size={12}
                   color="rgba(255,255,255,0.75)"
                 />
-                <Text style={styles.locationText}> Santiago, CL</Text>
+                <Text style={styles.locationText}> {locationLabel ?? 'Santiago, CL'}</Text>
               </View>
               <View style={styles.networkRow}>
                 <Animated.View
@@ -181,7 +187,7 @@ export function MoviaSidebar({
                     { transform: [{ scale: pulseAnim }] },
                   ]}
                 />
-                <Text style={styles.networkText}>Metro de Santiago</Text>
+                <Text style={styles.networkText}>{contextLabel ?? t('location.plan_santiago')}</Text>
               </View>
             </View>
           </View>
@@ -198,7 +204,7 @@ export function MoviaSidebar({
           {isLoading ? (
             [1, 2, 3, 4, 5, 6, 7].map((i) => <LineSkeleton key={i} />)
           ) : lines.length === 0 ? (
-            <Text style={styles.empty}>Nenhuma linha disponível</Text>
+            <Text style={styles.empty}>{t('lines.empty')}</Text>
           ) : (
             lines.map((line) => (
               <TouchableOpacity

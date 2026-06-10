@@ -19,6 +19,7 @@ const DEVICE_ID_KEY     = 'movia_secure_device_id';
 const ACCESS_TOKEN_KEY  = 'movia_access_token';
 const REFRESH_TOKEN_KEY = 'movia_refresh_token';
 const LANGUAGE_KEY      = 'movia_language';
+const PROFILE_NAME_KEY  = 'movia_profile_name';
 const DEFAULT_LANG      = 'es-CL';
 
 let cachedLanguage: string | null = null;
@@ -78,6 +79,19 @@ export class IdentityService {
   static async setPreferredLanguage(lang: string): Promise<void> {
     cachedLanguage = lang;
     await SecureStore.setItemAsync(LANGUAGE_KEY, lang);
+  }
+
+  static async getProfileName(): Promise<string | null> {
+    return await SecureStore.getItemAsync(PROFILE_NAME_KEY);
+  }
+
+  static async setProfileName(name: string): Promise<void> {
+    const cleaned = name.trim().slice(0, 40);
+    if (!cleaned) {
+      await SecureStore.deleteItemAsync(PROFILE_NAME_KEY);
+      return;
+    }
+    await SecureStore.setItemAsync(PROFILE_NAME_KEY, cleaned);
   }
 
   static getCachedLanguage(): string {

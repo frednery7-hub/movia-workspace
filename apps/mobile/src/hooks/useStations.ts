@@ -14,6 +14,11 @@ export interface StationResult {
   lines?: string[];
 }
 
+export interface NearbyStation {
+  station: StationResult;
+  distanceMeters: number;
+}
+
 async function fetchAllStations(): Promise<StationResult[]> {
   try {
     const { data } = await api.get<StationResult[]>('/stations');
@@ -32,7 +37,7 @@ async function searchStations(q: string): Promise<StationResult[]> {
 }
 
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -55,6 +60,21 @@ export function findNearestStation(
     const dn = haversineKm(lat, lon, nearest.latitude, nearest.longitude);
     return d < dn ? s : nearest;
   });
+}
+
+export function findNearbyStations(
+  stations: StationResult[],
+  lat: number,
+  lon: number,
+  radiusMeters = 500,
+): NearbyStation[] {
+  return stations
+    .map(station => ({
+      station,
+      distanceMeters: Math.round(haversineKm(lat, lon, station.latitude, station.longitude) * 1000),
+    }))
+    .filter(item => item.distanceMeters <= radiusMeters)
+    .sort((a, b) => a.distanceMeters - b.distanceMeters);
 }
 
 export function useStationSearch(query: string) {

@@ -4,7 +4,7 @@ import { useLanguage } from './_layout';
 import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, View, StyleSheet, Dimensions, PanResponder, AppState, TouchableOpacity,
+  ActivityIndicator, View, Text, StyleSheet, Dimensions, PanResponder, AppState, TouchableOpacity,
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,7 @@ import { NavigationProgress, Station } from '../src/components/movia/NavigationP
 import { useLines } from '../src/hooks/useLines';
 import { useNetworkState } from '../src/hooks/useNetworkState';
 import { useEta } from '../src/hooks/useEta';
-import { useStations, findNearestStation, StationResult } from '../src/hooks/useStations';
+import { useStations, findNearbyStations, findNearestStation, NearbyStation, StationResult } from '../src/hooks/useStations';
 import { IdentityService } from '../src/security/identity.service';
 import { LocationService } from '../src/location/location.service';
 import { InertialService } from '../src/sensors/InertialService';
@@ -29,6 +29,10 @@ const SANTIAGO_DEFAULT = {
   latitude: -33.4372, longitude: -70.6344,
   latitudeDelta: 0.05, longitudeDelta: 0.05,
 };
+
+const SANTIAGO_CENTER = { latitude: -33.4372, longitude: -70.6344 };
+const SANTIAGO_RADIUS_METERS = 35_000;
+const NEARBY_STATION_RADIUS_METERS = 500;
 
 const HAS_GOOGLE_MAPS_KEY = Boolean(
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY ||
@@ -85,7 +89,12 @@ export default function HomeScreen() {
   const [userLon, setUserLon]         = useState<number | null>(null);
   const [locating, setLocating]       = useState(false);
   const [activeStationId, setActiveStationId] = useState<string | null>(null);
+  const [nearbyStations, setNearbyStations] = useState<NearbyStation[]>([]);
+  const [locationMode, setLocationMode] = useState<'loading' | 'nearby' | 'planning' | 'manual' | 'denied'>('loading');
+  const [profileName, setProfileName] = useState<string | null>(null);
   const notifiedRouteRef = useRef<string | null>(null);
+  const notifiedTransferPrepareRef = useRef<Set<string>>(new Set());
+  const notifiedTransferNowRef = useRef<Set<string>>(new Set());
 
   const { data: linesData,    isLoading: linesLoading }  = useLines();
   const { data: networkState }                           = useNetworkState();
@@ -147,10 +156,13 @@ export default function HomeScreen() {
   // Boot: idioma + GPS
   useEffect(() => {
     TripNotificationService.configure();
+    IdentityService.getProfileName().then(setProfileName);
   }, []);
 
   useEffect(() => {
     if (routeKey) notifiedRouteRef.current = null;
+    notifiedTransferPrepareRef.current = new Set();
+    notifiedTransferNowRef.current = new Set();
     setActiveStationId(null);
   }, [routeKey]);
 
@@ -194,6 +206,38 @@ export default function HomeScreen() {
           `${translate('notification.next_station.body', locale)} ${routeDestination.name}.`,
         );
       }
+
+      const transferIndexes = routeEta.path
+        .map((station, index) => (
+          routeEta.path[index + 1]?.lineId && routeEta.path[index + 1].lineId !== station.lineId
+            ? index
+            : -1
+        ))
+        .filter(index => index >= 0);
+
+      for (const transferIndex of transferIndexes) {
+        const nextLine = routeEta.path[transferIndex + 1]?.lineId?.replace(/^L/i, '');
+        const transferStation = routeEta.path[transferIndex];
+        const locale = toLocale(language);
+        const prepareKey = `${routeKey}:prepare:${transferStation.id}`;
+        const nowKey = `${routeKey}:now:${transferStation.id}`;
+
+        if (nearestPathIndex === transferIndex - 1 && !notifiedTransferPrepareRef.current.has(prepareKey)) {
+          notifiedTransferPrepareRef.current.add(prepareKey);
+          await TripNotificationService.notifyNextStation(
+            translate('notification.transfer.prepare_title', locale),
+            `${translate('notification.transfer.prepare_body', locale)} ${transferStation.name}.`,
+          );
+        }
+
+        if (nearestPathIndex === transferIndex && nextLine && !notifiedTransferNowRef.current.has(nowKey)) {
+          notifiedTransferNowRef.current.add(nowKey);
+          await TripNotificationService.notifyNextStation(
+            translate('notification.transfer.now_title', locale),
+            `${translate('notification.transfer.now_body', locale)} ${nextLine}.`,
+          );
+        }
+      }
     }
 
     syncActiveStation();
@@ -216,10 +260,31 @@ export default function HomeScreen() {
         if (loc.latitude && loc.longitude) {
           setUserLat(loc.latitude);
           setUserLon(loc.longitude);
-          const r = { latitude: loc.latitude, longitude: loc.longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 };
-          setRegion(r);
-          mapRef.current?.animateToRegion(r, 800);
+          const distanceToSantiago = findNearbyStations(
+            [{
+              id: 'santiago_center',
+              name: 'Santiago',
+              shortCode: 'SCL',
+              latitude: SANTIAGO_CENTER.latitude,
+              longitude: SANTIAGO_CENTER.longitude,
+            }],
+            loc.latitude,
+            loc.longitude,
+            SANTIAGO_RADIUS_METERS,
+          );
+          if (distanceToSantiago.length === 0) {
+            setLocationMode('planning');
+            setRegion(SANTIAGO_DEFAULT);
+            mapRef.current?.animateToRegion(SANTIAGO_DEFAULT, 800);
+          } else {
+            setLocationMode('manual');
+            const r = { latitude: loc.latitude, longitude: loc.longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 };
+            setRegion(r);
+            mapRef.current?.animateToRegion(r, 800);
+          }
         }
+      } else {
+        setLocationMode('denied');
       }
     }
     init();
@@ -266,6 +331,29 @@ export default function HomeScreen() {
       setUserLat(loc.latitude);
       setUserLon(loc.longitude);
 
+      const isInsideSantiago = findNearbyStations(
+        [{
+          id: 'santiago_center',
+          name: 'Santiago',
+          shortCode: 'SCL',
+          latitude: SANTIAGO_CENTER.latitude,
+          longitude: SANTIAGO_CENTER.longitude,
+        }],
+        loc.latitude,
+        loc.longitude,
+        SANTIAGO_RADIUS_METERS,
+      ).length > 0;
+
+      if (!isInsideSantiago) {
+        setLocationMode('planning');
+        setNearbyStations([]);
+        setOrigin(null);
+        setRegion(SANTIAGO_DEFAULT);
+        mapRef.current?.animateToRegion(SANTIAGO_DEFAULT, 700);
+        setSelectingOrigin(true);
+        return;
+      }
+
       const nextRegion = {
         latitude: loc.latitude,
         longitude: loc.longitude,
@@ -276,12 +364,18 @@ export default function HomeScreen() {
       setRegion(nextRegion);
       mapRef.current?.animateToRegion(nextRegion, 700);
 
-      const nearest = stationsData
-        ? findNearestStation(stationsData, loc.latitude, loc.longitude)
-        : null;
+      const nearby = stationsData
+        ? findNearbyStations(stationsData, loc.latitude, loc.longitude, NEARBY_STATION_RADIUS_METERS)
+        : [];
 
-      if (nearest) {
-        setOrigin(nearest);
+      setNearbyStations(nearby);
+
+      if (nearby.length > 0) {
+        setLocationMode('nearby');
+        setSelectingOrigin(true);
+      } else {
+        setLocationMode('manual');
+        setSelectingOrigin(true);
       }
     } finally {
       setLocating(false);
@@ -290,9 +384,10 @@ export default function HomeScreen() {
 
   // Auto-detecta estação de origem via GPS quando estações carregam
   useEffect(() => {
-    if (!stationsData || !userLat || !userLon || origin) return;
-    const nearest = findNearestStation(stationsData, userLat, userLon);
-    if (nearest) setOrigin(nearest);
+    if (!stationsData || !userLat || !userLon || origin || locationMode === 'planning') return;
+    const nearby = findNearbyStations(stationsData, userLat, userLon, NEARBY_STATION_RADIUS_METERS);
+    setNearbyStations(nearby);
+    setLocationMode(nearby.length > 0 ? 'nearby' : 'manual');
   }, [stationsData, userLat, userLon]);
 
   // Quando ETA chega, vai para navegação
@@ -307,7 +402,7 @@ export default function HomeScreen() {
       CacheService.get<StationResult[]>('route_history').then((hist: StationResult[] | null) => {
         const history: StationResult[] = hist ?? [];
         const entry = { ...station, timestamp: Date.now() };
-        const updated = [entry, ...history.filter((h: StationResult) => h.id !== station.id)].slice(0, 10);
+        const updated = [entry, ...history.filter((h: StationResult) => h.id !== station.id)].slice(0, 3);
         CacheService.set('route_history', updated, 30 * 24 * 60 * 60 * 1000);
       });
     if (origin) {
@@ -385,12 +480,25 @@ export default function HomeScreen() {
         />
       </View>
 
+      {locationMode !== 'nearby' && locationMode !== 'manual' && (
+        <View style={[styles.contextBanner, { top: insets.top + 116 }]}>
+          <Text style={styles.contextTitle}>
+            {locationMode === 'loading' ? translate('location.detecting', toLocale(language)) : translate('location.plan_santiago', toLocale(language))}
+          </Text>
+          <Text style={styles.contextText}>
+            {locationMode === 'denied'
+              ? translate('location.enable_for_nearby', toLocale(language))
+              : translate('location.choose_origin', toLocale(language))}
+          </Text>
+        </View>
+      )}
+
       <TouchableOpacity
         accessibilityLabel="Centralizar no usuario"
         activeOpacity={0.82}
         disabled={locating}
         onPress={handleLocateUser}
-        style={[styles.locationButton, { top: insets.top + 116 }, locating && styles.locationButtonDisabled]}
+        style={[styles.locationButton, { top: insets.top + (locationMode === 'planning' || locationMode === 'denied' || locationMode === 'loading' ? 176 : 116) }, locating && styles.locationButtonDisabled]}
       >
         {locating ? (
           <ActivityIndicator color="#1A73E8" />
@@ -406,6 +514,9 @@ export default function HomeScreen() {
         isLoading={linesLoading}
         currentLanguage={language}
         onLanguageChange={setLanguage}
+        profileName={profileName}
+        locationLabel={locationMode === 'planning' ? 'Santiago, CL' : locationMode === 'denied' ? translate('location.permission_denied', toLocale(language)) : 'Santiago, CL'}
+        contextLabel={locationMode === 'nearby' ? translate('location.near_santiago_metro', toLocale(language)) : translate('location.plan_santiago', toLocale(language))}
       />
 
       {/* NavigationProgress como overlay — mapa continua vivo */}
@@ -425,6 +536,7 @@ export default function HomeScreen() {
         onClose={() => setSelectingOrigin(false)}
         onSelect={handleOriginSelect}
         titleKey="search.origin_title"
+        nearbyStations={nearbyStations}
       />
       <StationSearchModal
         visible={screen === 'searching'}
@@ -441,6 +553,24 @@ const styles = StyleSheet.create({
   map: { width, height },
   mapFallback: { backgroundColor: '#EEF2F3' },
   searchWrapper: { position: 'absolute', left: 16, right: 16 },
+  contextBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 86,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  contextTitle: { fontSize: 13, fontWeight: '800', color: '#111827' },
+  contextText: { marginTop: 3, fontSize: 12, fontWeight: '500', color: '#6B7280' },
   locationButton: {
     position: 'absolute',
     right: 18,

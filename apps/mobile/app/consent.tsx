@@ -2,10 +2,12 @@ import { useState }                                              from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { router }                                                from 'expo-router';
 import { ConsentService }                                        from '../src/privacy/consent.service';
+import { useLocale }                                             from '../src/context/LocaleContext';
 
 export default function ConsentScreen() {
   const [locationUse, setLocationUse] = useState(true);
   const [analytics,   setAnalytics]   = useState(false);
+  const { t } = useLocale();
 
   async function handleAccept() {
     await ConsentService.saveConsent(locationUse, analytics);
@@ -20,26 +22,25 @@ export default function ConsentScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Tu privacidad importa</Text>
+        <Text style={styles.title}>{t('consent.title')}</Text>
         <Text style={styles.subtitle}>
-          Movia usa tu ubicación solo para calcular rutas y tiempos de llegada.
-          Nunca vendemos tus datos ni los compartimos con terceros.
+          {t('consent.subtitle')}
         </Text>
       </View>
 
       <View style={styles.section}>
         <View style={styles.item}>
           <View style={styles.itemText}>
-            <Text style={styles.itemTitle}>Ubicación durante el uso</Text>
+            <Text style={styles.itemTitle}>{t('consent.location_title')}</Text>
             <Text style={styles.itemDesc}>
-              Necesaria para calcular tu ruta y ETA en tiempo real.
+              {t('consent.location_desc')}
             </Text>
           </View>
           <TouchableOpacity
             style={[styles.toggle, locationUse && styles.toggleOn]}
             onPress={() => setLocationUse(!locationUse)}
           >
-            <Text style={styles.toggleText}>{locationUse ? 'Sí' : 'No'}</Text>
+            <Text style={styles.toggleText}>{locationUse ? t('common.yes') : t('common.no')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -47,31 +48,30 @@ export default function ConsentScreen() {
 
         <View style={styles.item}>
           <View style={styles.itemText}>
-            <Text style={styles.itemTitle}>Mejoras del servicio</Text>
+            <Text style={styles.itemTitle}>{t('consent.analytics_title')}</Text>
             <Text style={styles.itemDesc}>
-              Datos anónimos para mejorar tiempos y rutas.
+              {t('consent.analytics_desc')}
             </Text>
           </View>
           <TouchableOpacity
             style={[styles.toggle, analytics && styles.toggleOn]}
             onPress={() => setAnalytics(!analytics)}
           >
-            <Text style={styles.toggleText}>{analytics ? 'Sí' : 'No'}</Text>
+            <Text style={styles.toggleText}>{analytics ? t('common.yes') : t('common.no')}</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <Text style={styles.legal}>
-        Puedes revocar este consentimiento en cualquier momento desde Configuración.
-        Base legal: consentimiento explícito (LGPD Art. 7, I).
+        {t('consent.legal')}
       </Text>
 
       <TouchableOpacity style={styles.btnAccept} onPress={handleAccept}>
-        <Text style={styles.btnAcceptText}>Aceptar y continuar</Text>
+        <Text style={styles.btnAcceptText}>{t('consent.accept')}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.btnDecline} onPress={handleDecline}>
-        <Text style={styles.btnDeclineText}>Solo continuar sin ubicación</Text>
+        <Text style={styles.btnDeclineText}>{t('consent.continue_without_location')}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
