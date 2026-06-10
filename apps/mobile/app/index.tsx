@@ -172,7 +172,7 @@ export default function HomeScreen() {
       return false;
     }
 
-    if (nearest && nearest.distanceMeters <= NEARBY_STATION_RADIUS_METERS) {
+    if (nearest) {
       setOrigin(nearest.station);
       setOriginSource('gps-nearest-station');
       setLocationMode('nearby');
@@ -591,6 +591,8 @@ export default function HomeScreen() {
         onSelect={handleOriginSelect}
         titleKey="search.origin_title"
         nearbyStations={nearbyStations}
+        selectedStation={origin}
+        selectedStationHintKey={originSource === 'gps-nearest-station' ? 'search.nearest_station' : undefined}
       />
       <StationSearchModal
         visible={screen === 'searching'}

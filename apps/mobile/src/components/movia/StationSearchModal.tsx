@@ -30,15 +30,18 @@ interface StationSearchModalProps {
   onSelect: (station: StationResult) => void;
   titleKey?: string;
   nearbyStations?: NearbyStation[];
+  selectedStation?: StationResult | null;
+  selectedStationHintKey?: string;
 }
 
 export function StationSearchModal({
-  visible, onClose, onSelect, titleKey, nearbyStations = [],
+  visible, onClose, onSelect, titleKey, nearbyStations = [], selectedStation, selectedStationHintKey,
 }: StationSearchModalProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const { t } = useLocale();
   const modalTitle = t(titleKey ?? 'where_to');
+  const selectedHint = selectedStationHintKey ? t(selectedStationHintKey) : undefined;
   const [recentStations, setRecentStations] = useState<StationResult[]>([]);
 
   useEffect(() => {
@@ -102,12 +105,12 @@ export function StationSearchModal({
           <Text style={styles.title}>{modalTitle}</Text>
         </View>
 
-        <View style={styles.inputWrapper}>
+        <View style={[styles.inputWrapper, selectedStation && !query.trim() && styles.inputWrapperSelected]}>
           <Feather name="search" size={18} color={Colors.textTertiary} />
           <TextInput
             style={styles.input}
-            placeholder={t("search.placeholder")}
-            placeholderTextColor={Colors.textTertiary}
+            placeholder={selectedStation && !query.trim() ? selectedStation.name : t("search.placeholder")}
+            placeholderTextColor={selectedStation && !query.trim() ? Colors.textPrimary : Colors.textTertiary}
             value={query}
             onChangeText={setQuery}
             autoFocus
@@ -119,6 +122,12 @@ export function StationSearchModal({
             </TouchableOpacity>
           )}
         </View>
+        {selectedStation && !query.trim() && selectedHint && (
+          <View style={styles.selectedOriginHint}>
+            <Feather name="check-circle" size={14} color="#1A73E8" />
+            <Text style={styles.selectedOriginText}>{selectedHint}</Text>
+          </View>
+        )}
 
         {isLoading ? (
           <View style={styles.loading}>
@@ -134,10 +143,11 @@ export function StationSearchModal({
                 </View>
                 {nearbyStations.slice(0, 3).map(({ station, distanceMeters }) => {
                   const freshStation = withFreshStationData(station);
+                  const isSelected = selectedStation?.id === freshStation.id;
                   return (
-                    <TouchableOpacity key={`nearby-${freshStation.id}`} style={styles.stationItem} onPress={() => handleSelect(freshStation)} activeOpacity={0.7}>
+                    <TouchableOpacity key={`nearby-${freshStation.id}`} style={[styles.stationItem, isSelected && styles.stationItemSelected]} onPress={() => handleSelect(freshStation)} activeOpacity={0.7}>
                       <View style={styles.nearbyIcon}>
-                        <Feather name="navigation" size={14} color="#1A73E8" />
+                        <Feather name={isSelected ? "check" : "navigation"} size={14} color="#1A73E8" />
                       </View>
                       <View style={styles.stationInfo}>
                         <Text style={styles.stationName}>{freshStation.name}</Text>
@@ -146,6 +156,7 @@ export function StationSearchModal({
                           {renderLineChips(freshStation)}
                         </View>
                       </View>
+                      {isSelected && <Text style={styles.selectedBadge}>{t('search.selected')}</Text>}
                     </TouchableOpacity>
                   );
                 })}
@@ -239,11 +250,26 @@ const styles = StyleSheet.create({
     margin: 16, paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: Colors.graySurface, borderRadius: 12,
   },
+  inputWrapperSelected: {
+    backgroundColor: '#F5FAFF',
+    borderWidth: 1,
+    borderColor: '#D8E9FF',
+  },
   input: { flex: 1, fontSize: 16, color: Colors.textPrimary },
+  selectedOriginHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: -8,
+    marginHorizontal: 18,
+    marginBottom: 8,
+  },
+  selectedOriginText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '700' },
   stationItem: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 20, paddingVertical: 16,
   },
+  stationItemSelected: { backgroundColor: '#F7FBFF' },
   stationIcon: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: Colors.accentPrimary + '15',
@@ -274,6 +300,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 11, fontWeight: '700', color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
   clearText: { fontSize: 12, fontWeight: '700', color: Colors.accentPrimary },
   stationCode: { fontSize: 12, color: Colors.textTertiary },
+  selectedBadge: { fontSize: 11, fontWeight: '800', color: '#1A73E8' },
   lineChips: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   lineChip: {
     minWidth: 24,
