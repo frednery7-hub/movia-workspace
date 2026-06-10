@@ -29,12 +29,13 @@
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "package": "com.anonymous.movia",
+      "package": "app.movia.mobile",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "POST_NOTIFICATIONS"
-      ]
+      ],
+      "allowBackup": false
     },
     "ios": {
       "supportsTablet": true,
@@ -42,6 +43,6 @@
         "NSLocationWhenInUseUsageDescription": "Movia usa sua localização para encontrar a estação mais próxima."
       }
     },
-    "version": "1.0.0"
+    "version": "1.1.2"
   }
 }
