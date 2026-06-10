@@ -16,7 +16,7 @@ import { NavigationProgress, Station } from '../src/components/movia/NavigationP
 import { useLines } from '../src/hooks/useLines';
 import { useNetworkState } from '../src/hooks/useNetworkState';
 import { useEta } from '../src/hooks/useEta';
-import { useStations, findNearbyStations, findNearestStation, NearbyStation, StationResult } from '../src/hooks/useStations';
+import { useStations, findNearbyStations, findNearestStation, findNearestStationWithDistance, NearbyStation, StationResult } from '../src/hooks/useStations';
 import { IdentityService } from '../src/security/identity.service';
 import { LocationService } from '../src/location/location.service';
 import { InertialService } from '../src/sensors/InertialService';
@@ -33,14 +33,17 @@ const SANTIAGO_DEFAULT = {
 const SANTIAGO_CENTER = { latitude: -33.4372, longitude: -70.6344 };
 const SANTIAGO_RADIUS_METERS = 35_000;
 const NEARBY_STATION_RADIUS_METERS = 500;
+const NEARBY_SUGGESTION_RADIUS_METERS = 2_000;
 
 const HAS_GOOGLE_MAPS_KEY = Boolean(
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY ||
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
 );
+const DEBUG_GPS = __DEV__ && process.env.EXPO_PUBLIC_DEBUG_GPS === '1';
 
 type AppScreen = 'map' | 'searching' | 'navigating';
 type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
+type OriginSource = 'manual' | 'gps-nearest-station' | 'history' | 'planning-mode' | 'empty';
 
 const VALID_LINE_NUMBERS: LineNumber[] = ['1', '2', '3', '4', '4A', '5', '6'];
 
@@ -84,6 +87,7 @@ export default function HomeScreen() {
   const { language, setLanguage } = useLanguage();
   const [region, setRegion]           = useState(SANTIAGO_DEFAULT);
   const [origin, setOrigin]           = useState<StationResult | null>(null);
+  const [originSource, setOriginSource] = useState<OriginSource>('empty');
   const [destination, setDestination] = useState<StationResult | null>(null);
   const [userLat, setUserLat]         = useState<number | null>(null);
   const [userLon, setUserLon]         = useState<number | null>(null);
@@ -136,6 +140,52 @@ export default function HomeScreen() {
   const routeKey = origin && destination && etaData
     ? `${origin.id}:${destination.id}:${etaData.arrivalTime}`
     : null;
+
+  function applyGpsOrigin(
+    loc: { latitude: number; longitude: number },
+    allStations: StationResult[] | undefined,
+    options: { allowManualOverwrite?: boolean } = {},
+  ) {
+    if (!allStations?.length) return false;
+
+    const nearest = findNearestStationWithDistance(allStations, loc.latitude, loc.longitude);
+    const nearby = findNearbyStations(allStations, loc.latitude, loc.longitude, NEARBY_STATION_RADIUS_METERS);
+    const suggestions = nearby.length > 0
+      ? nearby
+      : findNearbyStations(allStations, loc.latitude, loc.longitude, NEARBY_SUGGESTION_RADIUS_METERS);
+    setNearbyStations(suggestions.length > 0 ? suggestions.slice(0, 3) : nearest ? [nearest] : []);
+
+    if (DEBUG_GPS) {
+      console.log('[GPS]', { userLat: loc.latitude, userLng: loc.longitude });
+      console.log('[NEAREST_STATION]', {
+        stationName: nearest?.station.name,
+        distanceMeters: nearest?.distanceMeters,
+      });
+      console.log('[ORIGIN_SOURCE]', {
+        selectedOrigin: origin?.id ?? null,
+        source: originSource,
+      });
+    }
+
+    if (originSource === 'manual' && !options.allowManualOverwrite) {
+      setLocationMode(nearby.length > 0 ? 'nearby' : 'manual');
+      return false;
+    }
+
+    if (nearest && nearest.distanceMeters <= NEARBY_STATION_RADIUS_METERS) {
+      setOrigin(nearest.station);
+      setOriginSource('gps-nearest-station');
+      setLocationMode('nearby');
+      return true;
+    }
+
+    if (originSource === 'gps-nearest-station' || originSource === 'empty') {
+      setOrigin(null);
+      setOriginSource('empty');
+    }
+    setLocationMode('manual');
+    return false;
+  }
 
   // Swipe da esquerda abre sidebar
   const panResponder = useRef(
@@ -275,17 +325,22 @@ export default function HomeScreen() {
           );
           if (distanceToSantiago.length === 0) {
             setLocationMode('planning');
+            setOrigin(null);
+            setOriginSource('planning-mode');
             setRegion(SANTIAGO_DEFAULT);
             mapRef.current?.animateToRegion(SANTIAGO_DEFAULT, 800);
           } else {
-            setLocationMode('manual');
             const r = { latitude: loc.latitude, longitude: loc.longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 };
             setRegion(r);
             mapRef.current?.animateToRegion(r, 800);
+            if (!applyGpsOrigin({ latitude: loc.latitude, longitude: loc.longitude }, stationsData)) {
+              setLocationMode('manual');
+            }
           }
         }
       } else {
         setLocationMode('denied');
+        setOriginSource('empty');
       }
     }
     init();
@@ -301,6 +356,7 @@ export default function HomeScreen() {
 
   function handleOriginSelect(station: StationResult) {
     setOrigin(station);
+    setOriginSource('manual');
     setActiveStationId(null);
     setSelectingOrigin(false);
     if (destination) {
@@ -349,6 +405,7 @@ export default function HomeScreen() {
         setLocationMode('planning');
         setNearbyStations([]);
         setOrigin(null);
+        setOriginSource('planning-mode');
         setRegion(SANTIAGO_DEFAULT);
         mapRef.current?.animateToRegion(SANTIAGO_DEFAULT, 700);
         setSelectingOrigin(true);
@@ -365,14 +422,10 @@ export default function HomeScreen() {
       setRegion(nextRegion);
       mapRef.current?.animateToRegion(nextRegion, 700);
 
-      const nearby = stationsData
-        ? findNearbyStations(stationsData, loc.latitude, loc.longitude, NEARBY_STATION_RADIUS_METERS)
-        : [];
-
-      setNearbyStations(nearby);
-
-      if (nearby.length > 0) {
-        setLocationMode('nearby');
+      const didSetOrigin = applyGpsOrigin({ latitude: loc.latitude, longitude: loc.longitude }, stationsData);
+      if (didSetOrigin) {
+        setSelectingOrigin(false);
+      } else if (stationsData) {
         setSelectingOrigin(true);
       } else {
         setLocationMode('manual');
@@ -385,11 +438,10 @@ export default function HomeScreen() {
 
   // Auto-detecta estação de origem via GPS quando estações carregam
   useEffect(() => {
-    if (!stationsData || !userLat || !userLon || origin || locationMode === 'planning') return;
-    const nearby = findNearbyStations(stationsData, userLat, userLon, NEARBY_STATION_RADIUS_METERS);
-    setNearbyStations(nearby);
-    setLocationMode(nearby.length > 0 ? 'nearby' : 'manual');
-  }, [stationsData, userLat, userLon]);
+    if (!stationsData || !userLat || !userLon || locationMode === 'planning' || locationMode === 'denied') return;
+    if (originSource === 'manual') return;
+    applyGpsOrigin({ latitude: userLat, longitude: userLon }, stationsData);
+  }, [stationsData, userLat, userLon, originSource, locationMode]);
 
   // Quando ETA chega, vai para navegação
   useEffect(() => {
@@ -417,6 +469,7 @@ export default function HomeScreen() {
   function handleSwapRoute() {
     if (!origin || !destination) return;
     setOrigin(destination);
+    setOriginSource('manual');
     setDestination(origin);
     setActiveStationId(null);
     notifiedRouteRef.current = null;
@@ -452,15 +505,15 @@ export default function HomeScreen() {
           {origin && (
             <Marker
               coordinate={{ latitude: origin.latitude, longitude: origin.longitude }}
-              title={origin.name}
-              pinColor="#1A73E8"
+              title={`Origem: ${origin.name}`}
+              pinColor="#E31837"
             />
           )}
           {destination && (
             <Marker
               coordinate={{ latitude: destination.latitude, longitude: destination.longitude }}
-              title={destination.name}
-              pinColor="#E31837"
+              title={`Destino: ${destination.name}`}
+              pinColor="#1A73E8"
             />
           )}
         </MapView>
@@ -517,7 +570,7 @@ export default function HomeScreen() {
         onLanguageChange={setLanguage}
         profileName={profileName}
         locationLabel={locationMode === 'planning' ? 'Santiago, CL' : locationMode === 'denied' ? translate('location.permission_denied', toLocale(language)) : 'Santiago, CL'}
-        contextLabel={locationMode === 'nearby' ? translate('location.near_santiago_metro', toLocale(language)) : translate('location.plan_santiago', toLocale(language))}
+        contextLabel={locationMode === 'nearby' ? translate('location.near_santiago_metro', toLocale(language)) : translate('location.plan_trip_short', toLocale(language))}
       />
 
       {/* NavigationProgress como overlay — mapa continua vivo */}

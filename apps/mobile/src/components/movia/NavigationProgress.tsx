@@ -108,9 +108,9 @@ export function NavigationProgress({
       styles.container,
       { height: sheetHeight },
     ]}>
+      <View style={styles.dragSurface} {...panResponder.panHandlers}>
       {/* Handle de arrasto */}
       <TouchableOpacity
-        {...panResponder.panHandlers}
         onPress={toggleSheet}
         activeOpacity={0.8}
         style={styles.dragHandle}
@@ -164,6 +164,7 @@ export function NavigationProgress({
           </View>
         </View>
       )}
+      </View>
 
       {!isCompact && (
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -269,6 +270,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 10,
   },
+  dragSurface: { backgroundColor: '#fff' },
   dragHandle: { alignItems: 'center', paddingTop: 8, paddingBottom: 4 },
   handleBar: { width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.12)' },
   header: {
@@ -280,18 +282,18 @@ const styles = StyleSheet.create({
   arrow: { fontSize: 16, color: 'rgba(255,255,255,0.9)' },
   destination: { fontSize: 15, color: '#fff', fontWeight: '700' },
   summaryCard: {
-    marginHorizontal: 18, marginTop: 10, marginBottom: 8,
-    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: '#fff',
+    marginHorizontal: 18, marginTop: 8, marginBottom: 7,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 13, backgroundColor: '#fff',
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04, shadowRadius: 10, elevation: 2,
     borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.06)',
   },
-  eta: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary },
-  arrival: { fontSize: 13, color: Colors.textSecondary, marginTop: 3, fontWeight: '500' },
-  updated: { fontSize: 11, color: Colors.textTertiary, marginTop: 3, fontWeight: '600' },
+  eta: { fontSize: 26, fontWeight: '700', color: Colors.textPrimary },
+  arrival: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, fontWeight: '500' },
+  updated: { fontSize: 10, color: Colors.textTertiary, marginTop: 2, fontWeight: '600' },
   expandButton: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 30, height: 30, borderRadius: 15,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#EEF6FF',
   },

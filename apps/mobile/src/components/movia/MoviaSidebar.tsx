@@ -153,7 +153,7 @@ export function MoviaSidebar({
       >
         <LinearGradient colors={["#1a1a2e", "#232340"]} style={styles.header}>
           <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-            <Feather name="x" size={24} color="rgba(255,255,255,0.8)" />
+            <Feather name="x" size={19} color="rgba(255,255,255,0.72)" />
           </TouchableOpacity>
           <View style={styles.profile}>
             <View style={styles.avatar}>
@@ -303,24 +303,24 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   header: {
-    paddingHorizontal: 16,
-    paddingTop: 44,
-    paddingBottom: 12,
-    height: 104,
+    paddingHorizontal: 15,
+    paddingTop: 38,
+    paddingBottom: 10,
+    height: 92,
   },
-  closeBtn: { position: "absolute", top: 42, right: 16 },
-  profile: { flexDirection: "row", alignItems: "center", gap: 9, paddingRight: 34 },
+  closeBtn: { position: "absolute", top: 37, right: 14, padding: 4 },
+  profile: { flexDirection: "row", alignItems: "center", gap: 8, paddingRight: 30 },
   avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  avatarText: { fontSize: 12, fontWeight: "700", color: "#fff" },
   profileText: { flex: 1, minWidth: 0 },
-  userName: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  userName: { fontSize: 13, fontWeight: "700", color: "#fff" },
   contextRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
   },
   contextText: {
     flex: 1,
-    fontSize: 11,
+    fontSize: 10.5,
     color: "rgba(255,255,255,0.74)",
     fontWeight: "500",
   },
@@ -361,9 +361,9 @@ const styles = StyleSheet.create({
   },
   filters: { marginVertical: 8 },
   filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 9,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.1)",
     backgroundColor: "#fff",
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accentPrimary,
     borderColor: Colors.accentPrimary,
   },
-  filterText: { fontSize: 13, fontWeight: "500", color: "#666" },
+  filterText: { fontSize: 12, fontWeight: "600", color: "#666" },
   filterTextActive: { color: "#fff", fontWeight: "600" },
   alertRow: {
     paddingHorizontal: 20,
@@ -395,17 +395,18 @@ const styles = StyleSheet.create({
   langSection: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 8,
-    padding: 20,
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
   },
   langBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 9,
     backgroundColor: "rgba(0,0,0,0.04)",
   },
   langBtnActive: { backgroundColor: Colors.accentPrimary },
-  langText: { fontSize: 14, fontWeight: "500", color: "#666" },
+  langText: { fontSize: 12, fontWeight: "600", color: "#666" },
   langTextActive: { color: "#fff", fontWeight: "600" },
   settingsRow: {
     flexDirection: "row",

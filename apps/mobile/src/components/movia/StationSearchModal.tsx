@@ -127,6 +127,30 @@ export function StationSearchModal({
           </View>
         ) : (
           <>
+            {!query.trim() && nearbyStations.length > 0 && (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{t('search.nearby')}</Text>
+                </View>
+                {nearbyStations.slice(0, 3).map(({ station, distanceMeters }) => {
+                  const freshStation = withFreshStationData(station);
+                  return (
+                    <TouchableOpacity key={`nearby-${freshStation.id}`} style={styles.stationItem} onPress={() => handleSelect(freshStation)} activeOpacity={0.7}>
+                      <View style={styles.nearbyIcon}>
+                        <Feather name="navigation" size={14} color="#1A73E8" />
+                      </View>
+                      <View style={styles.stationInfo}>
+                        <Text style={styles.stationName}>{freshStation.name}</Text>
+                        <View style={styles.stationMeta}>
+                          <Text style={styles.stationCode}>{distanceMeters} m</Text>
+                          {renderLineChips(freshStation)}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            )}
             {!query.trim() && recentStations.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
@@ -150,33 +174,10 @@ export function StationSearchModal({
                     </TouchableOpacity>
                   );
                 })}
-                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.all_stations")}</Text></View>
               </>
             )}
-            {!query.trim() && nearbyStations.length > 0 && (
-              <>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{t('search.nearby')}</Text>
-                </View>
-                {nearbyStations.slice(0, 3).map(({ station, distanceMeters }) => {
-                  const freshStation = withFreshStationData(station);
-                  return (
-                    <TouchableOpacity key={`nearby-${freshStation.id}`} style={styles.stationItem} onPress={() => handleSelect(freshStation)} activeOpacity={0.7}>
-                      <View style={styles.nearbyIcon}>
-                        <Feather name="navigation" size={14} color="#1A73E8" />
-                      </View>
-                      <View style={styles.stationInfo}>
-                        <Text style={styles.stationName}>{freshStation.name}</Text>
-                        <View style={styles.stationMeta}>
-                          <Text style={styles.stationCode}>{distanceMeters} m</Text>
-                          {renderLineChips(freshStation)}
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-                <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.all_stations")}</Text></View>
-              </>
+            {!query.trim() && (nearbyStations.length > 0 || recentStations.length > 0) && (
+              <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.all_stations")}</Text></View>
             )}
           <FlatList
             data={filtered}

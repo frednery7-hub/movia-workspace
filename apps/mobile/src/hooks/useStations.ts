@@ -54,12 +54,21 @@ export function findNearestStation(
   lat: number,
   lon: number,
 ): StationResult | null {
+  return findNearestStationWithDistance(stations, lat, lon)?.station ?? null;
+}
+
+export function findNearestStationWithDistance(
+  stations: StationResult[],
+  lat: number,
+  lon: number,
+): NearbyStation | null {
   if (!stations.length) return null;
-  return stations.reduce((nearest, s) => {
-    const d = haversineKm(lat, lon, s.latitude, s.longitude);
-    const dn = haversineKm(lat, lon, nearest.latitude, nearest.longitude);
-    return d < dn ? s : nearest;
-  });
+  return stations
+    .map(station => ({
+      station,
+      distanceMeters: Math.round(haversineKm(lat, lon, station.latitude, station.longitude) * 1000),
+    }))
+    .sort((a, b) => a.distanceMeters - b.distanceMeters)[0] ?? null;
 }
 
 export function findNearbyStations(

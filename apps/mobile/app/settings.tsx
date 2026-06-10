@@ -151,18 +151,19 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>{t("settings.language")}</Text>
-        {[
-          { code: "ES" as const, label: "Español", switchKey: "settings.switch_to_spanish" },
-          { code: "PT" as const, label: "Português", switchKey: "settings.switch_to_portuguese" },
-          { code: "EN" as const, label: "English", switchKey: "settings.switch_to_english" },
-        ].map(item => (
-          <View key={item.code}>
+        <View style={styles.languageGroup}>
+          {[
+            { code: "ES" as const, label: "Español", flag: "🇨🇱", switchKey: "settings.switch_to_spanish" },
+            { code: "PT" as const, label: "Português", flag: "🇧🇷", switchKey: "settings.switch_to_portuguese" },
+            { code: "EN" as const, label: "English", flag: "🇺🇸", switchKey: "settings.switch_to_english" },
+          ].map(item => (
+            <View key={item.code}>
             <TouchableOpacity
-              style={styles.item}
+              style={styles.languageItem}
               onPress={() => setLanguage(item.code)}
               activeOpacity={0.7}
             >
-              <Feather name="globe" size={19} color="#5A5A5A" />
+              <Text style={styles.languageFlag}>{item.flag}</Text>
               <View style={styles.itemText}>
                 <Text style={styles.itemTitle}>{item.label}</Text>
                 <Text style={styles.itemDesc}>
@@ -174,8 +175,9 @@ export default function SettingsScreen() {
               <Text style={styles.itemArrow}>{language === item.code ? "✓" : "›"}</Text>
             </TouchableOpacity>
             {item.code !== "EN" && <View style={styles.divider} />}
-          </View>
-        ))}
+            </View>
+          ))}
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -287,6 +289,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 12,
   },
+  languageGroup: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  languageItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  languageFlag: { width: 22, fontSize: 16, textAlign: "center" },
   itemText: { flex: 1 },
   itemTitle: { fontSize: 14, fontWeight: "500", color: "#1a1a2e" },
   itemDesc: { fontSize: 12, color: "#999", marginTop: 2 },

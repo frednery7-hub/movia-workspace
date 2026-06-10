@@ -35,7 +35,7 @@ export function SearchBar({
 
       <View style={styles.routeFields}>
         <TouchableOpacity style={styles.routeRow} onPress={onOriginClick} activeOpacity={0.75}>
-          <View style={styles.originDot} />
+          <Feather name="map-pin" size={14} color="#E31837" />
           <Text
             style={[styles.routeText, !originName && styles.placeholder]}
             numberOfLines={1}
@@ -45,7 +45,7 @@ export function SearchBar({
         </TouchableOpacity>
         <View style={styles.divider} />
         <TouchableOpacity style={styles.routeRow} onPress={onDestinationClick} activeOpacity={0.75}>
-          <Feather name="map-pin" size={14} color="#E31837" />
+          <View style={styles.destinationDot} />
           <Text
             style={[styles.routeText, !destinationName && styles.placeholder]}
             numberOfLines={1}
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   },
   routeFields: { flex: 1 },
   routeRow: { height: 30, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  originDot: {
+  destinationDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
