@@ -53,6 +53,12 @@ const LANGUAGES = [
   { code: "EN" as const, flag: "\u{1F1FA}\u{1F1F8}" },
 ];
 
+function getInitials(name?: string | null) {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "M";
+  return `${parts[0][0] ?? "M"}${parts[1]?.[0] ?? ""}`.toUpperCase();
+}
+
 function LineSkeleton() {
   return (
     <View style={skeletonStyles.row}>
@@ -99,24 +105,7 @@ export function MoviaSidebar({
   const { t } = useLocale();
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.4,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, []);
+  const headerContext = `${locationLabel ?? "Santiago, CL"} · ${contextLabel ?? t("location.plan_santiago")}`;
 
   useEffect(() => {
     if (isOpen) {
@@ -168,26 +157,17 @@ export function MoviaSidebar({
           </TouchableOpacity>
           <View style={styles.profile}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>U</Text>
+              <Text style={styles.avatarText}>{getInitials(profileName)}</Text>
             </View>
-            <View>
-              <Text style={styles.userName}>{profileName ? `${t('sidebar.hello')}, ${profileName}` : t('location.plan_trip')}</Text>
-              <View style={styles.locationRow}>
+            <View style={styles.profileText}>
+              <Text style={styles.userName} numberOfLines={1}>{profileName ? `${t('sidebar.hello')}, ${profileName}` : t('location.plan_trip')}</Text>
+              <View style={styles.contextRow}>
                 <Feather
                   name="map-pin"
                   size={12}
                   color="rgba(255,255,255,0.75)"
                 />
-                <Text style={styles.locationText}> {locationLabel ?? 'Santiago, CL'}</Text>
-              </View>
-              <View style={styles.networkRow}>
-                <Animated.View
-                  style={[
-                    styles.statusDot,
-                    { transform: [{ scale: pulseAnim }] },
-                  ]}
-                />
-                <Text style={styles.networkText}>{contextLabel ?? t('location.plan_santiago')}</Text>
+                <Text style={styles.contextText} numberOfLines={1}>{headerContext}</Text>
               </View>
             </View>
           </View>
@@ -323,40 +303,34 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 52,
-    paddingBottom: 20,
-    height: 130,
+    paddingHorizontal: 16,
+    paddingTop: 44,
+    paddingBottom: 12,
+    height: 104,
   },
-  closeBtn: { position: "absolute", top: 52, right: 20 },
-  profile: { flexDirection: "row", alignItems: "center", gap: 12 },
+  closeBtn: { position: "absolute", top: 42, right: 16 },
+  profile: { flexDirection: "row", alignItems: "center", gap: 9, paddingRight: 34 },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { fontSize: 18, fontWeight: "600", color: "#fff" },
-  userName: { fontSize: 15, fontWeight: "600", color: "#fff" },
-  locationRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
-  locationText: { fontSize: 12, color: "rgba(255,255,255,0.75)" },
-  networkRow: {
+  avatarText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  profileText: { flex: 1, minWidth: 0 },
+  userName: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  contextRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 4,
+    gap: 5,
+    marginTop: 3,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.statusGreen,
-  },
-  networkText: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.95)",
+  contextText: {
+    flex: 1,
+    fontSize: 11,
+    color: "rgba(255,255,255,0.74)",
     fontWeight: "500",
   },
   scroll: { flex: 1 },

@@ -119,6 +119,7 @@ export default function HomeScreen() {
   // Converte path do ETA em Station[] para NavigationProgress
   const stations: Station[] = etaPath.map((p, i) => ({
     name:   p.name,
+    line:   toLineNumber(p.lineId),
     status: i < currentPathIndex ? 'passed' : i === currentPathIndex ? 'current' : 'future',
     transfer: etaPath[i + 1]?.lineId && etaPath[i + 1].lineId !== p.lineId
       ? { line: toLineNumber(etaPath[i + 1].lineId), name: etaPath[i + 1].name }
