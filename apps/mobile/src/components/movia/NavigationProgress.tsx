@@ -24,7 +24,8 @@ interface NavigationProgressProps {
   currentDirection?: string;
   navigationConfidenceLabel: string;
   navigationConfidenceColor: string;
-  tripStatus: 'active' | 'approaching-transfer' | 'transferring' | 'arriving' | 'arrived' | 'ended';
+  tripStatus: 'preview' | 'active' | 'approaching-transfer' | 'transferring' | 'approaching-destination' | 'arrived' | 'ended';
+  onStartTrip: () => void;
   onClose: () => void;
 }
 
@@ -39,7 +40,7 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, onStartTrip, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const lineColor = LineColors[currentLine] ?? Colors.accentPrimary;
@@ -49,8 +50,9 @@ export function NavigationProgress({
   const [sheetState, setSheetStateValue] = useState<SheetState>('normal');
   const currentIndex = stations.findIndex(station => station.status === 'current');
   const currentStation = stations[currentIndex] ?? stations[0];
-  const nextStation = stations[currentIndex + 1];
+  const nextStation = currentIndex >= 0 ? stations[currentIndex + 1] : stations[0];
   const hasArrived = tripStatus === 'arrived';
+  const isPreview = tripStatus === 'preview';
   const isCompact = sheetState === 'compact';
   const isExpanded = sheetState === 'expanded';
 
@@ -162,6 +164,12 @@ export function NavigationProgress({
             {currentDirection && (
               <Text style={styles.directionText}>L{currentLine} · {t('direction')} {currentDirection}</Text>
             )}
+            {isPreview && (
+              <TouchableOpacity style={styles.startTripButton} onPress={onStartTrip} activeOpacity={0.82}>
+                <Feather name="play" size={14} color="#fff" />
+                <Text style={styles.startTripText}>{t('trip.start_tracking')}</Text>
+              </TouchableOpacity>
+            )}
           </View>
           <TouchableOpacity onPress={toggleSheet} style={styles.expandButton} activeOpacity={0.8}>
             <Feather name={isExpanded ? 'minimize-2' : 'maximize-2'} size={18} color={Colors.actionBlue} />
@@ -172,8 +180,8 @@ export function NavigationProgress({
       {!isCompact && !isExpanded && (
         <View style={styles.nextPanel}>
           <View style={styles.nextColumn}>
-            <Text style={styles.nextLabel}>{hasArrived ? t('trip.completed') : t('navigation.you_are_here')}</Text>
-            <Text style={styles.nextStationName} numberOfLines={1}>{currentStation?.name ?? origin}</Text>
+            <Text style={styles.nextLabel}>{hasArrived ? t('trip.completed') : isPreview ? t('trip.preview') : t('navigation.you_are_here')}</Text>
+            <Text style={styles.nextStationName} numberOfLines={1}>{isPreview ? origin : currentStation?.name ?? origin}</Text>
           </View>
           {!hasArrived && (
             <View style={styles.nextColumn}>
@@ -326,6 +334,18 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   directionText: { fontSize: 12, color: Colors.textPrimary, marginTop: 3, fontWeight: '800' },
+  startTripButton: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: Colors.actionBlue,
+  },
+  startTripText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   expandButton: {
     width: 30, height: 30, borderRadius: 15,
     alignItems: 'center', justifyContent: 'center',

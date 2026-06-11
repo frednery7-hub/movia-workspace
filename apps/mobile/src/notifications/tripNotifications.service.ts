@@ -32,6 +32,11 @@ export class TripNotificationService {
         importance: Notifications.AndroidImportance.HIGH,
         sound: 'default',
       }).catch(() => undefined);
+      Notifications.setNotificationChannelAsync('active-trip', {
+        name: 'Active trip',
+        importance: Notifications.AndroidImportance.LOW,
+        sound: undefined,
+      }).catch(() => undefined);
     }
 
     Notifications.setNotificationCategoryAsync('active-trip', [
@@ -87,7 +92,7 @@ export class TripNotificationService {
       content: {
         title: input.title,
         body: input.body,
-        sound: 'default',
+        sound: false,
         color: input.lineColor,
         categoryIdentifier: 'active-trip',
         data: {
