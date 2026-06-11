@@ -1,10 +1,10 @@
 export const Colors = {
-  line1: '#E31837', line2: '#F26522', line3: '#FFD100',
-  line4: '#00A0DF', line4a: '#00A0DF', line5: '#00A550', line6: '#9B59B6',
+  line1: '#E53935', line2: '#FBC02D', line3: '#6D4C41',
+  line4: '#1E88E5', line4a: '#26C6DA', line5: '#43A047', line6: '#8E24AA',
   farePunta: '#F26522', fareValle: '#4CAF50', fareBajo: '#2196F3',
   bgDark: '#1a1a2e', bgDark2: '#232340',
   bgWarm: '#F7F5F2',
-  accentPrimary: '#E31837',
+  accentPrimary: '#E53935',
   actionBlue: '#1A73E8',
   statusGreen: '#4CAF50',
   statusGreenV2: '#1E8A3C',
@@ -24,8 +24,8 @@ export const Colors = {
 } as const;
 
 export const LineColors: Record<string, string> = {
-  '1': '#E31837', '2': '#F26522', '3': '#FFD100',
-  '4': '#00A0DF', '4A': '#00A0DF', '5': '#00A550', '6': '#9B59B6',
+  '1': '#E53935', '2': '#FBC02D', '3': '#6D4C41',
+  '4': '#1E88E5', '4A': '#26C6DA', '5': '#43A047', '6': '#8E24AA',
 };
 
 export const FareColors: Record<string, string> = {

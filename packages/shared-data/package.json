@@ -10,6 +10,7 @@
     "@types/node": "^24.12.4"
   },
   "exports": {
-    "./graph/graph-builder": "./src/graph/graph-builder.ts"
+    "./graph/graph-builder": "./src/graph/graph-builder.ts",
+    "./metro/line-directions": "./src/metro/line-directions.ts"
   }
 }

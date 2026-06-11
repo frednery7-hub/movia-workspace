@@ -7,6 +7,7 @@ import {
   ActivityIndicator, View, Text, StyleSheet, Dimensions, PanResponder, AppState, TouchableOpacity,
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
+import { getLineDirectionByStationId } from '@movia/shared-data/metro/line-directions';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MoviaSidebar, LineItem } from '../src/components/movia/MoviaSidebar';
 import { SearchBar } from '../src/components/movia/SearchBar';
@@ -22,6 +23,7 @@ import { LocationService } from '../src/location/location.service';
 import { InertialService } from '../src/sensors/InertialService';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
 import { t as translate, SupportedLocale } from '../src/i18n';
+import { LineColors } from '../src/theme/colors';
 
 const { width, height } = Dimensions.get('window');
 
@@ -44,6 +46,7 @@ const DEBUG_GPS = __DEV__ && process.env.EXPO_PUBLIC_DEBUG_GPS === '1';
 type AppScreen = 'map' | 'searching' | 'navigating';
 type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 type OriginSource = 'manual' | 'gps-nearest-station' | 'history' | 'planning-mode' | 'empty';
+type NavigationConfidenceMode = 'normal' | 'gps-unstable' | 'hybrid' | 'approximate' | 'recalculating' | 'offline';
 
 const VALID_LINE_NUMBERS: LineNumber[] = ['1', '2', '3', '4', '4A', '5', '6'];
 
@@ -77,6 +80,47 @@ function formatArrival(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function toLineLabel(id?: string): string {
+  return `L${toLineNumber(id)}`;
+}
+
+function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: SupportedLocale): string {
+  const labels: Record<SupportedLocale, Record<NavigationConfidenceMode, string>> = {
+    'pt-BR': {
+      normal: 'Navegação normal',
+      'gps-unstable': 'Sinal instável',
+      hybrid: 'Modo híbrido',
+      approximate: 'Estimativa aproximada',
+      recalculating: 'Recalculando rota',
+      offline: 'Sem internet',
+    },
+    'es-CL': {
+      normal: 'Navegación normal',
+      'gps-unstable': 'Señal inestable',
+      hybrid: 'Modo híbrido',
+      approximate: 'Estimación aproximada',
+      recalculating: 'Recalculando ruta',
+      offline: 'Sin internet',
+    },
+    'en-US': {
+      normal: 'Normal navigation',
+      'gps-unstable': 'Unstable signal',
+      hybrid: 'Hybrid mode',
+      approximate: 'Approximate estimate',
+      recalculating: 'Recalculating route',
+      offline: 'No internet',
+    },
+  };
+
+  return labels[locale][mode];
+}
+
+function getArrivalMessage(stationName: string, locale: SupportedLocale): string {
+  if (locale === 'pt-BR') return `Você chegou em ${stationName}`;
+  if (locale === 'en-US') return `You arrived at ${stationName}`;
+  return `Llegaste a ${stationName}`;
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
@@ -95,10 +139,14 @@ export default function HomeScreen() {
   const [activeStationId, setActiveStationId] = useState<string | null>(null);
   const [nearbyStations, setNearbyStations] = useState<NearbyStation[]>([]);
   const [locationMode, setLocationMode] = useState<'loading' | 'nearby' | 'planning' | 'manual' | 'denied'>('loading');
+  const [navigationConfidenceMode, setNavigationConfidenceMode] = useState<NavigationConfidenceMode>('normal');
+  const [arrivalBanner, setArrivalBanner] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const notifiedRouteRef = useRef<string | null>(null);
   const notifiedTransferPrepareRef = useRef<Set<string>>(new Set());
   const notifiedTransferNowRef = useRef<Set<string>>(new Set());
+  const activeStationIdRef = useRef<string | null>(null);
+  const notifiedArrivalsRef = useRef<Set<string>>(new Set());
 
   const { data: linesData,    isLoading: linesLoading }  = useLines();
   const { data: networkState }                           = useNetworkState();
@@ -120,15 +168,43 @@ export default function HomeScreen() {
     : -1;
   const currentPathIndex = activeStationIndex >= 0 ? activeStationIndex : 0;
 
+  function getDirectionForStep(index: number, lineId = etaPath[index]?.lineId): string | undefined {
+    const current = etaPath[index];
+    const next = etaPath[index + 1];
+    if (!current || !next || !lineId) return undefined;
+
+    return getLineDirectionByStationId({
+      lineId,
+      currentStationId: current.id,
+      nextStationId: next.id,
+    })?.directionTerminal;
+  }
+
+  function getTransferDirection(index: number): string | undefined {
+    const next = etaPath[index + 1];
+    if (!next) return undefined;
+    return getDirectionForStep(index, next.lineId);
+  }
+
+  const currentDirection = etaPath[currentPathIndex + 1]?.lineId !== etaPath[currentPathIndex]?.lineId
+    ? getTransferDirection(currentPathIndex)
+    : getDirectionForStep(currentPathIndex);
+  const locale = toLocale(language);
+  const navigationConfidenceLabel = getNavigationConfidenceLabel(navigationConfidenceMode, locale);
+
   // Converte path do ETA em Station[] para NavigationProgress
-  const stations: Station[] = etaPath.map((p, i) => ({
-    name:   p.name,
-    line:   toLineNumber(p.lineId),
-    status: i < currentPathIndex ? 'passed' : i === currentPathIndex ? 'current' : 'future',
-    transfer: etaPath[i + 1]?.lineId && etaPath[i + 1].lineId !== p.lineId
-      ? { line: toLineNumber(etaPath[i + 1].lineId), name: etaPath[i + 1].name }
-      : undefined,
-  }));
+  const stations: Station[] = etaPath.map((p, i) => {
+    const isTransfer = Boolean(etaPath[i + 1]?.lineId && etaPath[i + 1].lineId !== p.lineId);
+    return {
+      name:   p.name,
+      line:   toLineNumber(p.lineId),
+      status: i < currentPathIndex ? 'completed' : i === currentPathIndex ? 'current' : i === currentPathIndex + 1 ? 'next' : isTransfer ? 'transfer' : 'upcoming',
+      direction: etaPath[i + 1]?.lineId === p.lineId ? getDirectionForStep(i) : undefined,
+      transfer: isTransfer
+        ? { line: toLineNumber(etaPath[i + 1].lineId), name: p.name, direction: getTransferDirection(i) }
+        : undefined,
+    };
+  });
 
   // Coordenadas da rota para Polyline (Opção A — cruza path com stationsData)
   const stationById = new Map((stationsData ?? []).map(s => [s.id, s]));
@@ -136,6 +212,8 @@ export default function HomeScreen() {
     .map(p => stationById.get(p.id))
     .filter((s): s is NonNullable<typeof s> => !!s)
     .map(s => ({ latitude: s.latitude, longitude: s.longitude }));
+  const completedRouteCoordinates = routeCoordinates.slice(0, Math.min(currentPathIndex + 1, routeCoordinates.length));
+  const remainingRouteCoordinates = routeCoordinates.slice(Math.max(currentPathIndex, 0));
 
   const routeKey = origin && destination && etaData
     ? `${origin.id}:${destination.id}:${etaData.arrivalTime}`
@@ -214,7 +292,11 @@ export default function HomeScreen() {
     if (routeKey) notifiedRouteRef.current = null;
     notifiedTransferPrepareRef.current = new Set();
     notifiedTransferNowRef.current = new Set();
+    notifiedArrivalsRef.current = new Set();
+    activeStationIdRef.current = null;
     setActiveStationId(null);
+    setArrivalBanner(null);
+    setNavigationConfidenceMode('normal');
   }, [routeKey]);
 
   useEffect(() => {
@@ -232,18 +314,39 @@ export default function HomeScreen() {
     async function syncActiveStation() {
       const loc = await LocationService.getCurrentLocation();
       if (cancelled || !loc.latitude || !loc.longitude || routeStations.length === 0) {
+        setNavigationConfidenceMode('approximate');
         return;
       }
 
       setUserLat(loc.latitude);
       setUserLon(loc.longitude);
+      setNavigationConfidenceMode('normal');
 
       const nearest = findNearestStation(routeStations, loc.latitude, loc.longitude);
       if (!nearest) return;
 
+      const previousActiveStationId = activeStationIdRef.current;
+      activeStationIdRef.current = nearest.id;
       setActiveStationId(nearest.id);
 
       const nearestPathIndex = routeEta.path.findIndex(p => p.id === nearest.id);
+      const locale = toLocale(language);
+
+      if (
+        previousActiveStationId &&
+        previousActiveStationId !== nearest.id &&
+        !notifiedArrivalsRef.current.has(`${routeKey}:arrival:${nearest.id}`)
+      ) {
+        const arrivalMessage = getArrivalMessage(nearest.name, locale);
+        notifiedArrivalsRef.current.add(`${routeKey}:arrival:${nearest.id}`);
+        setArrivalBanner(arrivalMessage);
+        setTimeout(() => setArrivalBanner(null), 4500);
+        await TripNotificationService.notifyNextStation(
+          translate('notification.arrival.title', locale),
+          arrivalMessage,
+        );
+      }
+
       const penultimateIndex = routeEta.path.length - 2;
 
       if (
@@ -251,7 +354,6 @@ export default function HomeScreen() {
         notifiedRouteRef.current !== routeKey
       ) {
         notifiedRouteRef.current = routeKey;
-        const locale = toLocale(language);
         await TripNotificationService.notifyNextStation(
           translate('notification.next_station.title', locale),
           `${translate('notification.next_station.body', locale)} ${routeDestination.name}.`,
@@ -269,7 +371,14 @@ export default function HomeScreen() {
       for (const transferIndex of transferIndexes) {
         const nextLine = routeEta.path[transferIndex + 1]?.lineId?.replace(/^L/i, '');
         const transferStation = routeEta.path[transferIndex];
-        const locale = toLocale(language);
+        const transferDirection = getLineDirectionByStationId({
+          lineId: routeEta.path[transferIndex + 1]?.lineId ?? '',
+          currentStationId: transferStation.id,
+          nextStationId: routeEta.path[transferIndex + 1]?.id ?? '',
+        })?.directionTerminal;
+        const directionText = transferDirection
+          ? ` · ${translate('direction', locale)} ${transferDirection}`
+          : '';
         const prepareKey = `${routeKey}:prepare:${transferStation.id}`;
         const nowKey = `${routeKey}:now:${transferStation.id}`;
 
@@ -277,7 +386,7 @@ export default function HomeScreen() {
           notifiedTransferPrepareRef.current.add(prepareKey);
           await TripNotificationService.notifyNextStation(
             translate('notification.transfer.prepare_title', locale),
-            `${translate('notification.transfer.prepare_body', locale)} ${transferStation.name}.`,
+            `${translate('notification.transfer.prepare_body', locale)} ${transferStation.name}. ${toLineLabel(routeEta.path[transferIndex + 1]?.lineId)}${directionText}`,
           );
         }
 
@@ -285,7 +394,7 @@ export default function HomeScreen() {
           notifiedTransferNowRef.current.add(nowKey);
           await TripNotificationService.notifyNextStation(
             translate('notification.transfer.now_title', locale),
-            `${translate('notification.transfer.now_body', locale)} ${nextLine}.`,
+            `${translate('notification.transfer.now_body', locale)} ${nextLine}${directionText}.`,
           );
         }
       }
@@ -299,6 +408,26 @@ export default function HomeScreen() {
       clearInterval(timer);
     };
   }, [screen, etaData, stationsData, destination, routeKey, language]);
+
+  useEffect(() => {
+    if (screen !== 'navigating' || !etaData || etaPath.length === 0 || navigationConfidenceMode === 'normal') {
+      return undefined;
+    }
+
+    const startedAt = Date.now();
+    const secondsPerStation = Math.max(45, etaData.timing.totalEstimatedSeconds / Math.max(etaPath.length - 1, 1));
+
+    const timer = setInterval(() => {
+      const elapsedSeconds = (Date.now() - startedAt) / 1000;
+      const nextIndex = Math.min(Math.floor(elapsedSeconds / secondsPerStation), etaPath.length - 1);
+      const nextStationId = etaPath[nextIndex]?.id;
+      if (!nextStationId) return;
+      activeStationIdRef.current = nextStationId;
+      setActiveStationId(nextStationId);
+    }, 15_000);
+
+    return () => clearInterval(timer);
+  }, [screen, etaData, etaPath.length, routeKey, navigationConfidenceMode]);
 
   useEffect(() => {
     async function init() {
@@ -494,10 +623,18 @@ export default function HomeScreen() {
           showsMyLocationButton={false}
           followsUserLocation
         >
-          {routeCoordinates.length > 1 && (
+          {completedRouteCoordinates.length > 1 && (
             <Polyline
-              coordinates={routeCoordinates}
-              strokeColor="#1A73E8"
+              coordinates={completedRouteCoordinates}
+              strokeColor="#B8C0CC"
+              strokeWidth={4}
+              lineDashPattern={[0]}
+            />
+          )}
+          {remainingRouteCoordinates.length > 1 && (
+            <Polyline
+              coordinates={remainingRouteCoordinates}
+              strokeColor={LineColors[toLineNumber(etaPath[currentPathIndex]?.lineId)] ?? '#1A73E8'}
               strokeWidth={4}
               lineDashPattern={[0]}
             />
@@ -547,6 +684,13 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {arrivalBanner && (
+        <View style={[styles.arrivalBanner, { top: insets.top + 116 }]}>
+          <Feather name="map-pin" size={16} color="#fff" />
+          <Text style={styles.arrivalBannerText} numberOfLines={2}>{arrivalBanner}</Text>
+        </View>
+      )}
+
       <TouchableOpacity
         accessibilityLabel="Centralizar no usuario"
         activeOpacity={0.82}
@@ -582,6 +726,8 @@ export default function HomeScreen() {
           arrivalTime={etaData ? formatArrival(etaData.arrivalTime) : '--:--'}
           stations={stations}
           currentLine={toLineNumber(etaPath[currentPathIndex]?.lineId ?? etaData?.linesOnRoute?.[0])}
+          currentDirection={currentDirection}
+          navigationConfidenceLabel={navigationConfidenceLabel}
           onClose={handleCloseNavigation}
         />
       )}
@@ -608,6 +754,30 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { width, height },
   mapFallback: { backgroundColor: '#EEF2F3' },
+  arrivalBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    minHeight: 48,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(17,24,39,0.92)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  arrivalBannerText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
   searchWrapper: { position: 'absolute', left: 16, right: 16 },
   contextBanner: {
     position: 'absolute',
