@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -29,10 +29,13 @@ export interface LineItem {
 }
 
 export interface AlertItem {
+  lineId: "L1" | "L2" | "L3" | "L4" | "L4A" | "L5" | "L6";
   type: "normal" | "delay" | "alert";
   text: string;
   time: string;
 }
+
+type IncidentLineFilter = "ALL" | AlertItem["lineId"];
 
 interface MoviaSidebarProps {
   isOpen: boolean;
@@ -52,6 +55,8 @@ const LANGUAGES = [
   { code: "PT" as const, flag: "\u{1F1E7}\u{1F1F7}" },
   { code: "EN" as const, flag: "\u{1F1FA}\u{1F1F8}" },
 ];
+
+const INCIDENT_FILTERS: IncidentLineFilter[] = ["ALL", "L1", "L2", "L3", "L4", "L4A", "L5", "L6"];
 
 function getInitials(name?: string | null) {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
@@ -103,9 +108,14 @@ export function MoviaSidebar({
 }: MoviaSidebarProps) {
   const tariff = useTariffStatus();
   const { t } = useLocale();
+  const [incidentFilter, setIncidentFilter] = useState<IncidentLineFilter>("ALL");
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const headerContext = `${locationLabel ?? "Santiago, CL"} · ${contextLabel ?? t("location.plan_santiago")}`;
+  const filteredAlerts = useMemo(
+    () => incidentFilter === "ALL" ? alerts : alerts.filter(alert => alert.lineId === incidentFilter),
+    [alerts, incidentFilter],
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -208,35 +218,46 @@ export function MoviaSidebar({
             style={styles.filters}
             contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
           >
-            {[t("filter.all"), "L1", "L2", "L3", "L4", "L5", "L6"].map(
-              (f, i) => (
+            {INCIDENT_FILTERS.map(
+              filter => (
                 <TouchableOpacity
-                  key={f}
+                  key={filter}
+                  onPress={() => setIncidentFilter(filter)}
                   style={[
                     styles.filterChip,
-                    i === 0 && styles.filterChipActive,
+                    incidentFilter === filter && styles.filterChipActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.filterText,
-                      i === 0 && styles.filterTextActive,
+                      incidentFilter === filter && styles.filterTextActive,
                     ]}
                   >
-                    {f}
+                    {filter === "ALL" ? t("filter.all") : filter}
                   </Text>
                 </TouchableOpacity>
               ),
             )}
           </ScrollView>
 
-          {alerts.map((alert, i) => (
+          {filteredAlerts.length === 0 && (
+            <View style={styles.alertEmpty}>
+              <Text style={styles.alertEmptyTitle}>
+                {incidentFilter === "ALL" ? t("alerts.empty_all_title") : `${t("alerts.empty_line_title")} ${incidentFilter}`}
+              </Text>
+              <Text style={styles.alertEmptyText}>{t("alerts.empty_body")}</Text>
+            </View>
+          )}
+
+          {filteredAlerts.map((alert, i) => (
             <TouchableOpacity
-              key={i}
+              key={`${alert.lineId}-${i}-${alert.text}`}
               style={styles.alertRow}
               activeOpacity={0.7}
             >
               <StatusBadge status={alert.type} />
+              <Text style={styles.alertLine}>{alert.lineId}</Text>
               <Text style={styles.alertText} numberOfLines={2}>
                 {alert.text}
               </Text>
@@ -374,6 +395,18 @@ const styles = StyleSheet.create({
   },
   filterText: { fontSize: 12, fontWeight: "600", color: "#666" },
   filterTextActive: { color: "#fff", fontWeight: "600" },
+  alertEmpty: {
+    marginHorizontal: 20,
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  alertEmptyTitle: { fontSize: 13, fontWeight: "800", color: Colors.textPrimary },
+  alertEmptyText: { marginTop: 4, fontSize: 12, lineHeight: 17, color: Colors.textSecondary },
   alertRow: {
     paddingHorizontal: 20,
     paddingVertical: 14,
@@ -386,6 +419,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginTop: 6,
   },
+  alertLine: { marginTop: 8, fontSize: 11, fontWeight: "800", color: Colors.accentPrimary },
   alertTime: {
     fontSize: 11,
     color: Colors.textTertiary,

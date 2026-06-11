@@ -9,7 +9,7 @@ import {
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { getLineDirectionByStationId } from '@movia/shared-data/metro/line-directions';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MoviaSidebar, LineItem } from '../src/components/movia/MoviaSidebar';
+import { MoviaSidebar, AlertItem, LineItem } from '../src/components/movia/MoviaSidebar';
 import { SearchBar } from '../src/components/movia/SearchBar';
 import { MapOverlay } from '../src/components/movia/MapOverlay';
 import { StationSearchModal } from '../src/components/movia/StationSearchModal';
@@ -46,7 +46,27 @@ const DEBUG_GPS = __DEV__ && process.env.EXPO_PUBLIC_DEBUG_GPS === '1';
 type AppScreen = 'map' | 'searching' | 'navigating';
 type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 type OriginSource = 'manual' | 'gps-nearest-station' | 'history' | 'planning-mode' | 'empty';
-type NavigationConfidenceMode = 'normal' | 'gps-unstable' | 'hybrid' | 'approximate' | 'recalculating' | 'offline';
+type NavigationConfidenceMode = 'normal' | 'gps-unstable' | 'hybrid' | 'approximate' | 'recalculating' | 'offline' | 'error';
+type OrderedRouteStation = {
+  id: string;
+  name: string;
+  lineId: string;
+  latitude: number;
+  longitude: number;
+};
+
+type ActiveTripState = {
+  routeId: string;
+  orderedRoutePath: OrderedRouteStation[];
+  currentStationIndex: number;
+  currentStation: OrderedRouteStation;
+  nextStation: OrderedRouteStation | null;
+  originStation: OrderedRouteStation;
+  destinationStation: OrderedRouteStation;
+  currentLine: string;
+  directionTerminal?: string;
+  navigationMode: NavigationConfidenceMode;
+};
 
 const VALID_LINE_NUMBERS: LineNumber[] = ['1', '2', '3', '4', '4A', '5', '6'];
 
@@ -93,6 +113,7 @@ function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: Su
       approximate: 'Estimativa aproximada',
       recalculating: 'Recalculando rota',
       offline: 'Sem internet',
+      error: 'Rota perdida',
     },
     'es-CL': {
       normal: 'Navegación normal',
@@ -101,6 +122,7 @@ function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: Su
       approximate: 'Estimación aproximada',
       recalculating: 'Recalculando ruta',
       offline: 'Sin internet',
+      error: 'Ruta perdida',
     },
     'en-US': {
       normal: 'Normal navigation',
@@ -109,10 +131,25 @@ function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: Su
       approximate: 'Approximate estimate',
       recalculating: 'Recalculating route',
       offline: 'No internet',
+      error: 'Route lost',
     },
   };
 
   return labels[locale][mode];
+}
+
+function getNavigationConfidenceColor(mode: NavigationConfidenceMode): string {
+  const colors: Record<NavigationConfidenceMode, string> = {
+    normal: '#22C55E',
+    'gps-unstable': '#F59E0B',
+    hybrid: '#3B82F6',
+    approximate: '#F59E0B',
+    recalculating: '#64748B',
+    offline: '#64748B',
+    error: '#EF4444',
+  };
+
+  return colors[mode];
 }
 
 function getArrivalMessage(stationName: string, locale: SupportedLocale): string {
@@ -154,6 +191,7 @@ export default function HomeScreen() {
   const { data: etaData, isLoading: etaLoading }         = useEta(
     origin?.id, destination?.id,
   );
+  const locale = toLocale(language);
 
   // Monta LineItem[] mesclando linhas + networkState
   const lines: LineItem[] = (linesData ?? []).map(l => ({
@@ -161,12 +199,34 @@ export default function HomeScreen() {
     name:   l.name,
     status: toSidebarStatus(networkState?.find(s => s.lineId === l.id)?.status),
   }));
+  const alerts: AlertItem[] = (networkState ?? [])
+    .filter(item => item.status !== 'NORMAL')
+    .map(item => ({
+      lineId: toLineLabel(item.lineId) as AlertItem['lineId'],
+      type: toSidebarStatus(item.status) === 'delay' ? 'delay' : 'alert',
+      text: item.message ?? `${toLineLabel(item.lineId)} · ${translate(`status.${toSidebarStatus(item.status)}`, locale)}`,
+      time: formatArrival(item.updatedAt),
+    }));
 
   const etaPath = etaData?.path ?? [];
   const activeStationIndex = activeStationId
     ? etaPath.findIndex(p => p.id === activeStationId)
     : -1;
   const currentPathIndex = activeStationIndex >= 0 ? activeStationIndex : 0;
+  const stationById = new Map((stationsData ?? []).map(s => [s.id, s]));
+  const orderedRoutePath: OrderedRouteStation[] = etaPath
+    .map(p => {
+      const station = stationById.get(p.id);
+      if (!station) return null;
+      return {
+        id: p.id,
+        name: p.name,
+        lineId: p.lineId,
+        latitude: station.latitude,
+        longitude: station.longitude,
+      };
+    })
+    .filter((station): station is OrderedRouteStation => Boolean(station));
 
   function getDirectionForStep(index: number, lineId = etaPath[index]?.lineId): string | undefined {
     const current = etaPath[index];
@@ -186,11 +246,28 @@ export default function HomeScreen() {
     return getDirectionForStep(index, next.lineId);
   }
 
+  const routeKey = origin && destination && etaData
+    ? `${origin.id}:${destination.id}:${etaData.arrivalTime}`
+    : null;
   const currentDirection = etaPath[currentPathIndex + 1]?.lineId !== etaPath[currentPathIndex]?.lineId
     ? getTransferDirection(currentPathIndex)
     : getDirectionForStep(currentPathIndex);
-  const locale = toLocale(language);
   const navigationConfidenceLabel = getNavigationConfidenceLabel(navigationConfidenceMode, locale);
+  const navigationConfidenceColor = getNavigationConfidenceColor(navigationConfidenceMode);
+  const activeTripState: ActiveTripState | null = routeKey && orderedRoutePath.length > 0
+    ? {
+      routeId: routeKey,
+      orderedRoutePath,
+      currentStationIndex: Math.min(currentPathIndex, orderedRoutePath.length - 1),
+      currentStation: orderedRoutePath[Math.min(currentPathIndex, orderedRoutePath.length - 1)],
+      nextStation: currentPathIndex + 1 < orderedRoutePath.length ? orderedRoutePath[currentPathIndex + 1] : null,
+      originStation: orderedRoutePath[0],
+      destinationStation: orderedRoutePath[orderedRoutePath.length - 1],
+      currentLine: orderedRoutePath[Math.min(currentPathIndex, orderedRoutePath.length - 1)]?.lineId ?? etaData?.linesOnRoute?.[0] ?? 'L1',
+      directionTerminal: currentDirection,
+      navigationMode: navigationConfidenceMode,
+    }
+    : null;
 
   // Converte path do ETA em Station[] para NavigationProgress
   const stations: Station[] = etaPath.map((p, i) => {
@@ -207,17 +284,59 @@ export default function HomeScreen() {
   });
 
   // Coordenadas da rota para Polyline (Opção A — cruza path com stationsData)
-  const stationById = new Map((stationsData ?? []).map(s => [s.id, s]));
-  const routeCoordinates = etaPath
-    .map(p => stationById.get(p.id))
-    .filter((s): s is NonNullable<typeof s> => !!s)
+  const routeCoordinates = (activeTripState?.orderedRoutePath ?? [])
     .map(s => ({ latitude: s.latitude, longitude: s.longitude }));
   const completedRouteCoordinates = routeCoordinates.slice(0, Math.min(currentPathIndex + 1, routeCoordinates.length));
   const remainingRouteCoordinates = routeCoordinates.slice(Math.max(currentPathIndex, 0));
 
-  const routeKey = origin && destination && etaData
-    ? `${origin.id}:${destination.id}:${etaData.arrivalTime}`
-    : null;
+  useEffect(() => {
+    if (!__DEV__ || !activeTripState) return;
+
+    const mapPolylinePoints = activeTripState.orderedRoutePath.map(station => ({
+      latitude: station.latitude,
+      longitude: station.longitude,
+      stationName: station.name,
+      lineId: station.lineId,
+    }));
+
+    console.log('[ROUTE_PATH_ORDER]', activeTripState.orderedRoutePath.map(s => ({
+      name: s.name,
+      lineId: s.lineId,
+      lat: s.latitude,
+      lng: s.longitude,
+    })));
+    console.log('[MAP_POLYLINE_POINTS]', mapPolylinePoints.map(p => ({
+      name: p.stationName,
+      lineId: p.lineId,
+      lat: p.latitude,
+      lng: p.longitude,
+    })));
+    console.log('[CURRENT_ROUTE_STATE]', {
+      origin: activeTripState.originStation.name,
+      destination: activeTripState.destinationStation.name,
+      currentStationIndex: activeTripState.currentStationIndex,
+      currentStationName: activeTripState.currentStation.name,
+      nextStationName: activeTripState.nextStation?.name ?? null,
+    });
+  }, [activeTripState?.routeId, activeTripState?.currentStationIndex]);
+
+  useEffect(() => {
+    if (!activeTripState || screen !== 'navigating' || activeTripState.currentStationIndex === 0) return;
+
+    const arrivalKey = `${activeTripState.routeId}:arrival:${activeTripState.currentStation.id}`;
+    if (notifiedArrivalsRef.current.has(arrivalKey)) return;
+
+    const arrivalMessage = getArrivalMessage(activeTripState.currentStation.name, locale);
+    notifiedArrivalsRef.current.add(arrivalKey);
+    setArrivalBanner(arrivalMessage);
+    const timer = setTimeout(() => setArrivalBanner(null), 4500);
+    TripNotificationService.notifyNextStation(
+      translate('notification.arrival.title', locale),
+      arrivalMessage,
+    ).catch(() => undefined);
+
+    return () => clearTimeout(timer);
+  }, [activeTripState?.routeId, activeTripState?.currentStationIndex, screen, locale]);
 
   function applyGpsOrigin(
     loc: { latitude: number; longitude: number },
@@ -634,7 +753,7 @@ export default function HomeScreen() {
           {remainingRouteCoordinates.length > 1 && (
             <Polyline
               coordinates={remainingRouteCoordinates}
-              strokeColor={LineColors[toLineNumber(etaPath[currentPathIndex]?.lineId)] ?? '#1A73E8'}
+              strokeColor={LineColors[toLineNumber(activeTripState?.currentLine)] ?? '#1A73E8'}
               strokeWidth={4}
               lineDashPattern={[0]}
             />
@@ -709,6 +828,7 @@ export default function HomeScreen() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         lines={lines}
+        alerts={alerts}
         isLoading={linesLoading}
         currentLanguage={language}
         onLanguageChange={setLanguage}
@@ -725,9 +845,10 @@ export default function HomeScreen() {
           estimatedTime={etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : etaLoading ? '...' : '--'}
           arrivalTime={etaData ? formatArrival(etaData.arrivalTime) : '--:--'}
           stations={stations}
-          currentLine={toLineNumber(etaPath[currentPathIndex]?.lineId ?? etaData?.linesOnRoute?.[0])}
+          currentLine={toLineNumber(activeTripState?.currentLine ?? etaData?.linesOnRoute?.[0])}
           currentDirection={currentDirection}
           navigationConfidenceLabel={navigationConfidenceLabel}
+          navigationConfidenceColor={navigationConfidenceColor}
           onClose={handleCloseNavigation}
         />
       )}

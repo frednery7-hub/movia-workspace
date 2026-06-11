@@ -23,6 +23,7 @@ interface NavigationProgressProps {
   currentLine: '1' | '2' | '3' | '4' | '4A' | '5' | '6';
   currentDirection?: string;
   navigationConfidenceLabel: string;
+  navigationConfidenceColor: string;
   onClose: () => void;
 }
 
@@ -37,7 +38,7 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const lineColor = LineColors[currentLine] ?? Colors.accentPrimary;
@@ -54,8 +55,8 @@ export function NavigationProgress({
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.02, duration: 1000, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.06, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
       ])
     ).start();
   }, []);
@@ -136,10 +137,11 @@ export function NavigationProgress({
         <TouchableOpacity style={styles.compactSummary} onPress={toggleSheet} activeOpacity={0.86}>
           <View style={styles.compactCopy}>
             <Text style={styles.compactEta} numberOfLines={1}>
-              {estimatedTime} · {nextStation ? `${t('navigation.next')}: ${nextStation.name}` : `${t('eta.arrives')} ${arrivalTime}`}
+              {estimatedTime}
             </Text>
-            <Text style={styles.compactUpdated} numberOfLines={1}>
+            <Text style={styles.compactUpdated} numberOfLines={2}>
               {currentDirection ? `L${currentLine} · ${t('direction')} ${currentDirection}` : navigationConfidenceLabel}
+              {nextStation ? `\n${t('navigation.next')}: ${nextStation.name}` : `\n${t('eta.arrives')} ${arrivalTime}`}
             </Text>
           </View>
           <Feather name="chevron-up" size={18} color={Colors.textTertiary} />
@@ -149,9 +151,12 @@ export function NavigationProgress({
           <View>
             <Text style={styles.eta}>{estimatedTime}</Text>
             <Text style={styles.arrival}>{t('eta.arrives')} {arrivalTime} · {stations.length} {t('eta.stations')}</Text>
-            <Text style={styles.updated}>
-              {navigationConfidenceLabel} · {t('navigation.updated_now')}
-            </Text>
+            <View style={styles.statusRow}>
+              <View style={[styles.statusDot, { backgroundColor: navigationConfidenceColor }]} />
+              <Text style={styles.updated}>
+                {navigationConfidenceLabel} · {t('navigation.updated_now')}
+              </Text>
+            </View>
             {currentDirection && (
               <Text style={styles.directionText}>L{currentLine} · {t('direction')} {currentDirection}</Text>
             )}
@@ -204,6 +209,7 @@ export function NavigationProgress({
                     isCurrent && { borderColor: stationLineColor },
                     isNext && { borderColor: stationLineColor },
                     isPassed && { backgroundColor: stationLineColor },
+                    station.transfer && !isPassed && !isCurrent && { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: nextLineColor, backgroundColor: stationLineColor },
                   ]} />
                   {!isLast && station.transfer ? (
                     <LinearGradient colors={[stationLineColor, nextLineColor]} style={styles.trackTransfer} />
@@ -219,16 +225,17 @@ export function NavigationProgress({
                 <Animated.View style={[styles.stationInfo, isCurrent && { transform: [{ scale: pulseAnim }] }]}>
                   {isCurrent ? (
                     <LinearGradient
-                      colors={['#fff5f7', '#ffe5eb']}
+                      colors={['#FFFFFF', `${stationLineColor}18`]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={[styles.currentStationCard, { borderLeftColor: stationLineColor }]}
                     >
                       <View style={styles.currentTitleRow}>
+                        <View style={[styles.currentHalo, { backgroundColor: `${stationLineColor}22` }]} />
                         <View style={[styles.currentIcon, { backgroundColor: stationLineColor }]}>
                           <Feather name="navigation" size={14} color="#fff" />
                         </View>
-                        <Text style={styles.stationNameCurrent}>{station.name}</Text>
+                        <Text style={[styles.stationNameCurrent, { color: stationLineColor }]}>{station.name}</Text>
                       </View>
                       <View style={styles.currentBadge}>
                         <View style={[styles.currentBadgeDot, { backgroundColor: stationLineColor }]} />
@@ -312,6 +319,8 @@ const styles = StyleSheet.create({
   eta: { fontSize: 26, fontWeight: '700', color: Colors.textPrimary },
   arrival: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, fontWeight: '500' },
   updated: { fontSize: 10, color: Colors.textTertiary, marginTop: 2, fontWeight: '600' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
   directionText: { fontSize: 12, color: Colors.textPrimary, marginTop: 3, fontWeight: '800' },
   expandButton: {
     width: 30, height: 30, borderRadius: 15,
@@ -319,7 +328,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEF6FF',
   },
   compactSummary: {
-    height: 56,
+    minHeight: 70,
     marginHorizontal: 18,
     marginTop: 6,
     marginBottom: 12,
@@ -333,8 +342,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   compactCopy: { flex: 1 },
-  compactEta: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
-  compactUpdated: { marginTop: 2, fontSize: 11, fontWeight: '600', color: Colors.textTertiary },
+  compactEta: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
+  compactUpdated: { marginTop: 2, fontSize: 11, lineHeight: 15, fontWeight: '700', color: Colors.textTertiary },
   nextPanel: {
     marginHorizontal: 18,
     marginBottom: 10,
@@ -372,7 +381,7 @@ const styles = StyleSheet.create({
     shadowColor: Colors.accentPrimary, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3, shadowRadius: 6, elevation: 3,
   },
-  dotPassed: { backgroundColor: Colors.grayText, opacity: 0.5 },
+  dotPassed: { opacity: 1 },
   dotNext: {
     width: 12,
     height: 12,
@@ -410,6 +419,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   currentTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  currentHalo: {
+    position: 'absolute',
+    left: -4,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
   currentIcon: {
     width: 26,
     height: 26,
@@ -423,7 +439,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.accentPrimary,
   },
-  stationNamePassed: { color: Colors.grayText, opacity: 0.5, fontWeight: '400' },
+  stationNamePassed: { color: Colors.grayText, opacity: 0.72, fontWeight: '400' },
   stationDirection: { marginTop: 3, fontSize: 12, fontWeight: '700', color: Colors.textTertiary },
   currentBadge: {
     flexDirection: 'row',
