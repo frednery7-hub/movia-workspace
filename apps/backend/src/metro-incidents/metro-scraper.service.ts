@@ -38,7 +38,9 @@ export class MetroScraperService {
           this.logger.warn('METRO_SCRAPER_STATUS_TEXT_TIMEOUT');
         });
 
-      return page.content();
+      const html = await page.content();
+      this.logger.log(`METRO_SCRAPER_HTML_SAMPLE: ${html.slice(0, 500)}`);
+      return html;
     } finally {
       await browser.close();
     }

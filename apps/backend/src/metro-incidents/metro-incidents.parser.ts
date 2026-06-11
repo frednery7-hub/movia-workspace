@@ -14,6 +14,25 @@ interface ParsedLine {
   description?: string;
 }
 
+const LINE_TERMINAL_MAP: Record<string, string> = {
+  'san pablo': 'L1',
+  'los dominicos': 'L1',
+  'hospital el pino': 'L2',
+  'vespucio norte': 'L2',
+  'castillo velasco': 'L3',
+  'los libertadores': 'L3',
+  quilicura: 'L3',
+  'puente alto': 'L4',
+  tobalaba: 'L4',
+  'la cisterna': 'L4A',
+  'vicu\u00f1a mackenna': 'L4A',
+  'ma\u00edp\u00fa': 'L5',
+  'plaza de maip': 'L5',
+  'vicente vald\u00e9s': 'L5',
+  cerrillos: 'L6',
+  'los leones': 'L6',
+};
+
 const STATUS_PATTERNS: Array<{
   status: MetroIncidentStatus;
   pattern: RegExp;
@@ -24,7 +43,7 @@ const STATUS_PATTERNS: Array<{
     pattern: /parcial|solo disponible|tramo|combinaci[oó]n/i,
   },
   { status: 'delay', pattern: /retras|demora|frecuencia|mayor tiempo/i },
-  { status: 'normal', pattern: /servicio normal|normal/i },
+  { status: 'normal', pattern: /servicio normal|normal|disponible/i },
 ];
 
 @Injectable()
@@ -68,6 +87,21 @@ export class MetroIncidentsParser {
   }
 
   private extractLineContext(text: string, lineId: MetroLineId): string | null {
+    // Tenta por terminal da linha
+    const terminalEntry = Object.entries(LINE_TERMINAL_MAP).find(
+      ([, lid]) => lid === lineId,
+    );
+    if (terminalEntry) {
+      const [terminal] = terminalEntry;
+      const idx = text.toLowerCase().indexOf(terminal.toLowerCase());
+      if (idx >= 0) {
+        const start = Math.max(0, idx - 50);
+        return text
+          .slice(start, idx + 200)
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+    }
     const labels =
       lineId === 'L4A'
         ? ['L4A', 'Línea 4A', 'Linea 4A']
