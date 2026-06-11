@@ -21,6 +21,7 @@ import { StationsModule } from './stations/stations.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { LoggingInterceptor } from './common/logging.interceptor';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
+import { MetroIncidentsModule } from './metro-incidents/metro-incidents.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { GlobalExceptionFilter } from './common/http-exception.filter';
     AiEngineModule,
     StationsModule,
     ObservabilityModule,
+    MetroIncidentsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

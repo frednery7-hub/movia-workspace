@@ -24,6 +24,7 @@ interface NavigationProgressProps {
   currentDirection?: string;
   navigationConfidenceLabel: string;
   navigationConfidenceColor: string;
+  tripStatus: 'active' | 'approaching-transfer' | 'transferring' | 'arriving' | 'arrived' | 'ended';
   onClose: () => void;
 }
 
@@ -38,7 +39,7 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const lineColor = LineColors[currentLine] ?? Colors.accentPrimary;
@@ -49,6 +50,7 @@ export function NavigationProgress({
   const currentIndex = stations.findIndex(station => station.status === 'current');
   const currentStation = stations[currentIndex] ?? stations[0];
   const nextStation = stations[currentIndex + 1];
+  const hasArrived = tripStatus === 'arrived';
   const isCompact = sheetState === 'compact';
   const isExpanded = sheetState === 'expanded';
 
@@ -137,11 +139,11 @@ export function NavigationProgress({
         <TouchableOpacity style={styles.compactSummary} onPress={toggleSheet} activeOpacity={0.86}>
           <View style={styles.compactCopy}>
             <Text style={styles.compactEta} numberOfLines={1}>
-              {estimatedTime}
+              {hasArrived ? t('trip.completed') : estimatedTime}
             </Text>
             <Text style={styles.compactUpdated} numberOfLines={2}>
-              {currentDirection ? `L${currentLine} · ${t('direction')} ${currentDirection}` : navigationConfidenceLabel}
-              {nextStation ? `\n${t('navigation.next')}: ${nextStation.name}` : `\n${t('eta.arrives')} ${arrivalTime}`}
+              {hasArrived ? `${t('trip.arrived_destination')}\n${destination}` : currentDirection ? `L${currentLine} · ${t('direction')} ${currentDirection}` : navigationConfidenceLabel}
+              {!hasArrived && (nextStation ? `\n${t('navigation.next')}: ${nextStation.name}` : `\n${t('eta.arrives')} ${arrivalTime}`)}
             </Text>
           </View>
           <Feather name="chevron-up" size={18} color={Colors.textTertiary} />
@@ -149,8 +151,8 @@ export function NavigationProgress({
       ) : (
         <View style={styles.summaryCard}>
           <View>
-            <Text style={styles.eta}>{estimatedTime}</Text>
-            <Text style={styles.arrival}>{t('eta.arrives')} {arrivalTime} · {stations.length} {t('eta.stations')}</Text>
+            <Text style={styles.eta}>{hasArrived ? t('trip.completed') : estimatedTime}</Text>
+            <Text style={styles.arrival}>{hasArrived ? `${t('trip.arrived_to')} ${destination}` : `${t('eta.arrives')} ${arrivalTime} · ${stations.length} ${t('eta.stations')}`}</Text>
             <View style={styles.statusRow}>
               <View style={[styles.statusDot, { backgroundColor: navigationConfidenceColor }]} />
               <Text style={styles.updated}>
@@ -170,13 +172,15 @@ export function NavigationProgress({
       {!isCompact && !isExpanded && (
         <View style={styles.nextPanel}>
           <View style={styles.nextColumn}>
-            <Text style={styles.nextLabel}>{t('navigation.you_are_here')}</Text>
+            <Text style={styles.nextLabel}>{hasArrived ? t('trip.completed') : t('navigation.you_are_here')}</Text>
             <Text style={styles.nextStationName} numberOfLines={1}>{currentStation?.name ?? origin}</Text>
           </View>
-          <View style={styles.nextColumn}>
-            <Text style={styles.nextLabel}>{t('navigation.next')}</Text>
-            <Text style={styles.nextStationName} numberOfLines={1}>{nextStation?.name ?? destination}</Text>
-          </View>
+          {!hasArrived && (
+            <View style={styles.nextColumn}>
+              <Text style={styles.nextLabel}>{t('navigation.next')}</Text>
+              <Text style={styles.nextStationName} numberOfLines={1}>{nextStation?.name ?? destination}</Text>
+            </View>
+          )}
         </View>
       )}
       </View>
@@ -239,7 +243,7 @@ export function NavigationProgress({
                       </View>
                       <View style={styles.currentBadge}>
                         <View style={[styles.currentBadgeDot, { backgroundColor: stationLineColor }]} />
-                        <Text style={styles.youAreHere}>{t('navigation.you_are_here')}</Text>
+                        <Text style={styles.youAreHere}>{hasArrived && index === currentIndex ? t('trip.arrived_destination') : t('navigation.you_are_here')}</Text>
                       </View>
                     </LinearGradient>
                   ) : (

@@ -16,6 +16,7 @@ import { StationSearchModal } from '../src/components/movia/StationSearchModal';
 import { NavigationProgress, Station } from '../src/components/movia/NavigationProgress';
 import { useLines } from '../src/hooks/useLines';
 import { useNetworkState } from '../src/hooks/useNetworkState';
+import { MetroIncident, useMetroIncidents } from '../src/hooks/useMetroIncidents';
 import { useEta } from '../src/hooks/useEta';
 import { useStations, findNearbyStations, findNearestStation, findNearestStationWithDistance, NearbyStation, StationResult } from '../src/hooks/useStations';
 import { IdentityService } from '../src/security/identity.service';
@@ -47,6 +48,7 @@ type AppScreen = 'map' | 'searching' | 'navigating';
 type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 type OriginSource = 'manual' | 'gps-nearest-station' | 'history' | 'planning-mode' | 'empty';
 type NavigationConfidenceMode = 'normal' | 'gps-unstable' | 'hybrid' | 'approximate' | 'recalculating' | 'offline' | 'error';
+type ActiveTripStatus = 'active' | 'approaching-transfer' | 'transferring' | 'arriving' | 'arrived' | 'ended';
 type OrderedRouteStation = {
   id: string;
   name: string;
@@ -66,6 +68,7 @@ type ActiveTripState = {
   currentLine: string;
   directionTerminal?: string;
   navigationMode: NavigationConfidenceMode;
+  tripStatus: ActiveTripStatus;
 };
 
 const VALID_LINE_NUMBERS: LineNumber[] = ['1', '2', '3', '4', '4A', '5', '6'];
@@ -100,8 +103,44 @@ function formatArrival(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function formatRelativeTime(iso: string, locale: SupportedLocale): string {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (locale === 'pt-BR') return minutes <= 1 ? 'há 1 min' : `há ${minutes} min`;
+  if (locale === 'en-US') return minutes <= 1 ? '1 min ago' : `${minutes} min ago`;
+  return minutes <= 1 ? 'hace 1 min' : `hace ${minutes} min`;
+}
+
 function toLineLabel(id?: string): string {
   return `L${toLineNumber(id)}`;
+}
+
+function toIncidentSidebarStatus(status?: MetroIncident['status']): LineItem['status'] | null {
+  switch (status) {
+    case 'normal':
+      return 'normal';
+    case 'delay':
+    case 'partial':
+      return 'delay';
+    case 'interrupted':
+    case 'unknown':
+      return 'alert';
+    default:
+      return null;
+  }
+}
+
+function getIncidentTitle(incident: MetroIncident, locale: SupportedLocale): string {
+  if (incident.status !== 'unknown') return incident.title;
+  if (locale === 'pt-BR') return 'Não foi possível verificar o estado desta linha.';
+  if (locale === 'en-US') return 'Could not verify this line status.';
+  return 'No fue posible verificar el estado de esta línea.';
+}
+
+function getIncidentDescription(incident: MetroIncident, locale: SupportedLocale): string | undefined {
+  if (incident.status !== 'unknown') return incident.description;
+  if (locale === 'pt-BR') return 'Consulte metro.cl para informações atualizadas.';
+  if (locale === 'en-US') return 'Check metro.cl for updated information.';
+  return 'Consulte metro.cl para información actualizada.';
 }
 
 function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: SupportedLocale): string {
@@ -138,24 +177,16 @@ function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: Su
   return labels[locale][mode];
 }
 
-function getNavigationConfidenceColor(mode: NavigationConfidenceMode): string {
-  const colors: Record<NavigationConfidenceMode, string> = {
-    normal: '#22C55E',
-    'gps-unstable': '#F59E0B',
-    hybrid: '#3B82F6',
-    approximate: '#F59E0B',
-    recalculating: '#64748B',
-    offline: '#64748B',
-    error: '#EF4444',
-  };
-
-  return colors[mode];
-}
-
 function getArrivalMessage(stationName: string, locale: SupportedLocale): string {
   if (locale === 'pt-BR') return `Você chegou em ${stationName}`;
   if (locale === 'en-US') return `You arrived at ${stationName}`;
   return `Llegaste a ${stationName}`;
+}
+
+function getDestinationArrivalMessage(stationName: string, locale: SupportedLocale): string {
+  if (locale === 'pt-BR') return `Você chegou ao seu destino ${stationName}`;
+  if (locale === 'en-US') return `You arrived at your destination ${stationName}`;
+  return `Llegaste a tu destino ${stationName}`;
 }
 
 export default function HomeScreen() {
@@ -177,6 +208,7 @@ export default function HomeScreen() {
   const [nearbyStations, setNearbyStations] = useState<NearbyStation[]>([]);
   const [locationMode, setLocationMode] = useState<'loading' | 'nearby' | 'planning' | 'manual' | 'denied'>('loading');
   const [navigationConfidenceMode, setNavigationConfidenceMode] = useState<NavigationConfidenceMode>('normal');
+  const [tripStatus, setTripStatus] = useState<ActiveTripStatus>('ended');
   const [arrivalBanner, setArrivalBanner] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const notifiedRouteRef = useRef<string | null>(null);
@@ -187,6 +219,7 @@ export default function HomeScreen() {
 
   const { data: linesData,    isLoading: linesLoading }  = useLines();
   const { data: networkState }                           = useNetworkState();
+  const { data: metroIncidents }                         = useMetroIncidents();
   const { data: stationsData }                           = useStations();
   const { data: etaData, isLoading: etaLoading }         = useEta(
     origin?.id, destination?.id,
@@ -197,15 +230,22 @@ export default function HomeScreen() {
   const lines: LineItem[] = (linesData ?? []).map(l => ({
     number: toLineNumber(l.id),
     name:   l.name,
-    status: toSidebarStatus(networkState?.find(s => s.lineId === l.id)?.status),
+    status: toIncidentSidebarStatus(metroIncidents?.incidents.find(s => s.lineId === l.id)?.status)
+      ?? toSidebarStatus(networkState?.find(s => s.lineId === l.id)?.status),
   }));
-  const alerts: AlertItem[] = (networkState ?? [])
-    .filter(item => item.status !== 'NORMAL')
+  const incidentsSourceLabel = translate('alerts.source_metro_site', locale);
+  const incidentsUpdatedLabel = metroIncidents?.updatedAt
+    ? `${translate('alerts.updated', locale)} ${formatRelativeTime(metroIncidents.updatedAt, locale)}`
+    : undefined;
+  const alerts: AlertItem[] = (metroIncidents?.incidents ?? [])
+    .filter(item => item.status !== 'normal')
     .map(item => ({
-      lineId: toLineLabel(item.lineId) as AlertItem['lineId'],
-      type: toSidebarStatus(item.status) === 'delay' ? 'delay' : 'alert',
-      text: item.message ?? `${toLineLabel(item.lineId)} · ${translate(`status.${toSidebarStatus(item.status)}`, locale)}`,
-      time: formatArrival(item.updatedAt),
+      lineId: item.lineId,
+      type: item.status === 'delay' ? 'delay' : 'alert',
+      text: getIncidentTitle(item, locale),
+      description: getIncidentDescription(item, locale),
+      time: `${translate('alerts.updated', locale)} ${formatRelativeTime(item.updatedAt, locale)}`,
+      sourceLabel: incidentsSourceLabel,
     }));
 
   const etaPath = etaData?.path ?? [];
@@ -253,7 +293,10 @@ export default function HomeScreen() {
     ? getTransferDirection(currentPathIndex)
     : getDirectionForStep(currentPathIndex);
   const navigationConfidenceLabel = getNavigationConfidenceLabel(navigationConfidenceMode, locale);
-  const navigationConfidenceColor = getNavigationConfidenceColor(navigationConfidenceMode);
+  const activeLineNumber = toLineNumber(orderedRoutePath[Math.min(currentPathIndex, Math.max(orderedRoutePath.length - 1, 0))]?.lineId ?? etaData?.linesOnRoute?.[0]);
+  const navigationConfidenceColor = navigationConfidenceMode === 'error'
+    ? '#EF4444'
+    : LineColors[activeLineNumber] ?? '#64748B';
   const activeTripState: ActiveTripState | null = routeKey && orderedRoutePath.length > 0
     ? {
       routeId: routeKey,
@@ -266,6 +309,7 @@ export default function HomeScreen() {
       currentLine: orderedRoutePath[Math.min(currentPathIndex, orderedRoutePath.length - 1)]?.lineId ?? etaData?.linesOnRoute?.[0] ?? 'L1',
       directionTerminal: currentDirection,
       navigationMode: navigationConfidenceMode,
+      tripStatus,
     }
     : null;
 
@@ -326,17 +370,63 @@ export default function HomeScreen() {
     const arrivalKey = `${activeTripState.routeId}:arrival:${activeTripState.currentStation.id}`;
     if (notifiedArrivalsRef.current.has(arrivalKey)) return;
 
-    const arrivalMessage = getArrivalMessage(activeTripState.currentStation.name, locale);
+    const isDestination = activeTripState.currentStationIndex === activeTripState.orderedRoutePath.length - 1;
+    const arrivalMessage = isDestination
+      ? getDestinationArrivalMessage(activeTripState.currentStation.name, locale)
+      : getArrivalMessage(activeTripState.currentStation.name, locale);
     notifiedArrivalsRef.current.add(arrivalKey);
     setArrivalBanner(arrivalMessage);
+    if (isDestination) setTripStatus('arrived');
     const timer = setTimeout(() => setArrivalBanner(null), 4500);
     TripNotificationService.notifyNextStation(
-      translate('notification.arrival.title', locale),
+      isDestination ? translate('notification.destination.title', locale) : translate('notification.arrival.title', locale),
       arrivalMessage,
     ).catch(() => undefined);
 
     return () => clearTimeout(timer);
   }, [activeTripState?.routeId, activeTripState?.currentStationIndex, screen, locale]);
+
+  useEffect(() => {
+    if (!activeTripState || screen !== 'navigating') return;
+
+    const lineNumber = toLineNumber(activeTripState.currentLine);
+    const lineColor = LineColors[lineNumber];
+    const directionText = activeTripState.directionTerminal
+      ? `L${lineNumber} · ${translate('direction', locale)} ${activeTripState.directionTerminal}`
+      : `L${lineNumber}`;
+    const nextText = activeTripState.nextStation
+      ? `${translate('navigation.next', locale)}: ${activeTripState.nextStation.name}`
+      : activeTripState.destinationStation.name;
+
+    let title = `${etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : '--'} · ${nextText}`;
+    let body = `${directionText}\n${navigationConfidenceLabel}`;
+
+    if (activeTripState.tripStatus === 'arrived') {
+      title = translate('trip.completed', locale);
+      body = getDestinationArrivalMessage(activeTripState.destinationStation.name, locale);
+    } else if (activeTripState.nextStation?.lineId && activeTripState.nextStation.lineId !== activeTripState.currentLine) {
+      title = translate('notification.transfer.prepare_title', locale);
+      body = `${translate('notification.transfer.prepare_body', locale)} ${activeTripState.nextStation.name}. ${directionText}`;
+    }
+
+    TripNotificationService.updateActiveTrip({
+      routeId: activeTripState.routeId,
+      title,
+      body,
+      lineColor,
+      tripStatus: activeTripState.tripStatus,
+    }).catch(() => undefined);
+  }, [
+    activeTripState?.routeId,
+    activeTripState?.currentStationIndex,
+    activeTripState?.currentLine,
+    activeTripState?.directionTerminal,
+    activeTripState?.tripStatus,
+    screen,
+    etaData?.timing.totalEstimatedSeconds,
+    navigationConfidenceLabel,
+    locale,
+  ]);
 
   function applyGpsOrigin(
     loc: { latitude: number; longitude: number },
@@ -416,10 +506,11 @@ export default function HomeScreen() {
     setActiveStationId(null);
     setArrivalBanner(null);
     setNavigationConfidenceMode('normal');
+    setTripStatus(routeKey ? 'active' : 'ended');
   }, [routeKey]);
 
   useEffect(() => {
-    if (screen !== 'navigating' || !etaData || !stationsData || !destination || !routeKey) {
+    if (screen !== 'navigating' || tripStatus === 'arrived' || tripStatus === 'ended' || !etaData || !stationsData || !destination || !routeKey) {
       return undefined;
     }
 
@@ -526,10 +617,10 @@ export default function HomeScreen() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [screen, etaData, stationsData, destination, routeKey, language]);
+  }, [screen, etaData, stationsData, destination, routeKey, language, tripStatus]);
 
   useEffect(() => {
-    if (screen !== 'navigating' || !etaData || etaPath.length === 0 || navigationConfidenceMode === 'normal') {
+    if (screen !== 'navigating' || tripStatus === 'arrived' || tripStatus === 'ended' || !etaData || etaPath.length === 0 || navigationConfidenceMode === 'normal') {
       return undefined;
     }
 
@@ -546,7 +637,7 @@ export default function HomeScreen() {
     }, 15_000);
 
     return () => clearInterval(timer);
-  }, [screen, etaData, etaPath.length, routeKey, navigationConfidenceMode]);
+  }, [screen, etaData, etaPath.length, routeKey, navigationConfidenceMode, tripStatus]);
 
   useEffect(() => {
     async function init() {
@@ -725,8 +816,10 @@ export default function HomeScreen() {
   }
 
   function handleCloseNavigation() {
+    if (routeKey) TripNotificationService.endActiveTrip(routeKey).catch(() => undefined);
     setDestination(null);
     setActiveStationId(null);
+    setTripStatus('ended');
     setScreen('map');
   }
 
@@ -835,6 +928,8 @@ export default function HomeScreen() {
         profileName={profileName}
         locationLabel={locationMode === 'planning' ? 'Santiago, CL' : locationMode === 'denied' ? translate('location.permission_denied', toLocale(language)) : 'Santiago, CL'}
         contextLabel={locationMode === 'nearby' ? translate('location.near_santiago_metro', toLocale(language)) : translate('location.plan_trip_short', toLocale(language))}
+        incidentsSourceLabel={incidentsSourceLabel}
+        incidentsUpdatedLabel={incidentsUpdatedLabel}
       />
 
       {/* NavigationProgress como overlay — mapa continua vivo */}
@@ -849,6 +944,7 @@ export default function HomeScreen() {
           currentDirection={currentDirection}
           navigationConfidenceLabel={navigationConfidenceLabel}
           navigationConfidenceColor={navigationConfidenceColor}
+          tripStatus={tripStatus}
           onClose={handleCloseNavigation}
         />
       )}

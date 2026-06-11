@@ -32,7 +32,9 @@ export interface AlertItem {
   lineId: "L1" | "L2" | "L3" | "L4" | "L4A" | "L5" | "L6";
   type: "normal" | "delay" | "alert";
   text: string;
+  description?: string;
   time: string;
+  sourceLabel: string;
 }
 
 type IncidentLineFilter = "ALL" | AlertItem["lineId"];
@@ -48,6 +50,8 @@ interface MoviaSidebarProps {
   profileName?: string | null;
   locationLabel?: string;
   contextLabel?: string;
+  incidentsSourceLabel?: string;
+  incidentsUpdatedLabel?: string;
 }
 
 const LANGUAGES = [
@@ -105,6 +109,8 @@ export function MoviaSidebar({
   profileName,
   locationLabel,
   contextLabel,
+  incidentsSourceLabel,
+  incidentsUpdatedLabel,
 }: MoviaSidebarProps) {
   const tariff = useTariffStatus();
   const { t } = useLocale();
@@ -247,6 +253,12 @@ export function MoviaSidebar({
                 {incidentFilter === "ALL" ? t("alerts.empty_all_title") : `${t("alerts.empty_line_title")} ${incidentFilter}`}
               </Text>
               <Text style={styles.alertEmptyText}>{t("alerts.empty_body")}</Text>
+              {!!incidentsSourceLabel && (
+                <Text style={styles.alertMeta}>{incidentsSourceLabel}</Text>
+              )}
+              {!!incidentsUpdatedLabel && (
+                <Text style={styles.alertMeta}>{incidentsUpdatedLabel}</Text>
+              )}
             </View>
           )}
 
@@ -261,6 +273,12 @@ export function MoviaSidebar({
               <Text style={styles.alertText} numberOfLines={2}>
                 {alert.text}
               </Text>
+              {!!alert.description && (
+                <Text style={styles.alertDescription} numberOfLines={3}>
+                  {alert.description}
+                </Text>
+              )}
+              <Text style={styles.alertMeta}>{alert.sourceLabel}</Text>
               <Text style={styles.alertTime}>{alert.time}</Text>
             </TouchableOpacity>
           ))}
@@ -407,6 +425,7 @@ const styles = StyleSheet.create({
   },
   alertEmptyTitle: { fontSize: 13, fontWeight: "800", color: Colors.textPrimary },
   alertEmptyText: { marginTop: 4, fontSize: 12, lineHeight: 17, color: Colors.textSecondary },
+  alertMeta: { marginTop: 5, fontSize: 11, lineHeight: 15, color: Colors.textTertiary, fontWeight: "600" },
   alertRow: {
     paddingHorizontal: 20,
     paddingVertical: 14,
@@ -419,6 +438,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginTop: 6,
   },
+  alertDescription: { marginTop: 4, fontSize: 12, lineHeight: 17, color: Colors.textSecondary },
   alertLine: { marginTop: 8, fontSize: 11, fontWeight: "800", color: Colors.accentPrimary },
   alertTime: {
     fontSize: 11,
