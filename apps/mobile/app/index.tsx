@@ -28,11 +28,23 @@ import { InertialService } from '../src/sensors/InertialService';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
 import {
   buildActiveTripState,
+  EMPTY_SENT_TRIP_NOTIFICATIONS,
+  markAtTransferSent,
+  markDestinationArrivalSent,
+  markOneBeforeDestinationSent,
+  markOneBeforeTransferSent,
+  markStationArrivalSent,
+  shouldNotifyAtTransfer,
+  shouldNotifyDestinationArrival,
+  shouldNotifyOneBeforeDestination,
+  shouldNotifyOneBeforeTransfer,
+  shouldNotifyStationArrival,
   shouldTransitionToArrived,
   transitionTripStatus,
   type ActiveTripState,
   type NavigationMode,
   type RouteStation,
+  type SentTripNotifications,
   type TripStatus,
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
@@ -206,13 +218,10 @@ export default function HomeScreen() {
   const [locationMode, setLocationMode] = useState<'loading' | 'nearby' | 'planning' | 'manual' | 'denied'>('loading');
   const [navigationConfidenceMode, setNavigationConfidenceMode] = useState<NavigationConfidenceMode>('normal');
   const [tripStatus, setTripStatus] = useState<TripStatus>('ended');
+  const [sentNotifications, setSentNotifications] = useState<SentTripNotifications>(EMPTY_SENT_TRIP_NOTIFICATIONS);
   const [arrivalBanner, setArrivalBanner] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
-  const notifiedRouteRef = useRef<string | null>(null);
-  const notifiedTransferPrepareRef = useRef<Set<string>>(new Set());
-  const notifiedTransferNowRef = useRef<Set<string>>(new Set());
   const activeStationIdRef = useRef<string | null>(null);
-  const notifiedArrivalsRef = useRef<Set<string>>(new Set());
 
   const { data: linesData,    isLoading: linesLoading }  = useLines();
   const { data: networkState }                           = useNetworkState();
@@ -296,9 +305,17 @@ export default function HomeScreen() {
       orderedRoutePath,
       currentStationIndex: currentRouteStationIndex,
       navigationMode: toActiveTripNavigationMode(navigationConfidenceMode),
+      sentNotifications,
       tripStatus,
     })
     : null;
+  const sentNotificationsKey = [
+    sentNotifications.stationArrivalStationIds.join('|'),
+    sentNotifications.oneBeforeTransferStationIds.join('|'),
+    sentNotifications.atTransferStationIds.join('|'),
+    sentNotifications.oneBeforeDestinationSent ? '1' : '0',
+    sentNotifications.destinationArrivalSent ? '1' : '0',
+  ].join(';');
   const currentDirection = activeTripState?.directionTerminal ?? getDirectionForStep(directionIndex);
   const transferPointByIndex = new Map(
     (activeTripState?.transferPoints ?? []).map((transferPoint) => [transferPoint.index, transferPoint]),
@@ -381,20 +398,25 @@ export default function HomeScreen() {
       activeTripState.currentStationIndex === 0
     ) return;
 
-    const arrivalKey = `${activeTripState.routeId}:arrival:${activeTripState.currentStation.id}`;
-    if (notifiedArrivalsRef.current.has(arrivalKey)) return;
+    if (!shouldNotifyStationArrival(activeTripState)) return;
 
     const isDestination = activeTripState.currentStationIndex === activeTripState.orderedRoutePath.length - 1;
     const arrivalMessage = isDestination
       ? getDestinationArrivalMessage(activeTripState.currentStation.name, locale)
       : getArrivalMessage(activeTripState.currentStation.name, locale);
-    notifiedArrivalsRef.current.add(arrivalKey);
+
+    let nextTripState = markStationArrivalSent(activeTripState, activeTripState.currentStation.id);
+    if (isDestination && shouldNotifyDestinationArrival(nextTripState)) {
+      nextTripState = markDestinationArrivalSent(nextTripState);
+    }
+    setSentNotifications(nextTripState.sentNotifications);
+
     setArrivalBanner(arrivalMessage);
     if (shouldTransitionToArrived(activeTripState)) {
       applyTripStatusTransition('arrived');
     }
     const timer = setTimeout(() => setArrivalBanner(null), 4500);
-    if (isDestination) {
+    if (isDestination && shouldNotifyDestinationArrival(activeTripState)) {
       TripNotificationService.notifyNextStation(
         translate('notification.destination.title', locale),
         arrivalMessage,
@@ -402,7 +424,7 @@ export default function HomeScreen() {
     }
 
     return () => clearTimeout(timer);
-  }, [activeTripState?.routeId, activeTripState?.currentStationIndex, screen, locale, tripStatus]);
+  }, [activeTripState?.routeId, activeTripState?.currentStationIndex, sentNotificationsKey, screen, locale, tripStatus]);
 
   useEffect(() => {
     if (!activeTripState || screen !== 'navigating' || activeTripState.tripStatus === 'preview' || activeTripState.tripStatus === 'ended') return;
@@ -521,10 +543,7 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (routeKey) notifiedRouteRef.current = null;
-    notifiedTransferPrepareRef.current = new Set();
-    notifiedTransferNowRef.current = new Set();
-    notifiedArrivalsRef.current = new Set();
+    setSentNotifications(EMPTY_SENT_TRIP_NOTIFICATIONS);
     activeStationIdRef.current = null;
     setCurrentTrackedStationIndex(null);
     setVisualFocusedStationIndex(0);
@@ -539,9 +558,14 @@ export default function HomeScreen() {
     }
 
     let cancelled = false;
+    const routeId = routeKey;
+    const routeActiveTripState = activeTripState;
     const routeEta = etaData;
     const routeDestination = destination;
-    const routeTransferPoints = activeTripState.transferPoints;
+    const routeTransferPoints = routeActiveTripState.transferPoints;
+    const routePath = routeActiveTripState.orderedRoutePath;
+    const routeNavigationMode = routeActiveTripState.navigationMode;
+    const routeSentNotifications = routeActiveTripState.sentNotifications;
     const routeStations = routeEta.path
       .map(p => stationById.get(p.id))
       .filter((s): s is StationResult => !!s);
@@ -570,14 +594,18 @@ export default function HomeScreen() {
       setCurrentTrackedStationIndex(nearestPathIndex);
       setVisualFocusedStationIndex(nearestPathIndex);
       const locale = toLocale(language);
+      let notificationTripState = buildActiveTripState({
+        routeId,
+        orderedRoutePath: routePath,
+        currentStationIndex: nearestPathIndex,
+        navigationMode: routeNavigationMode,
+        sentNotifications: routeSentNotifications,
+        tripStatus,
+      });
 
-      const penultimateIndex = routeEta.path.length - 2;
-
-      if (
-        nearestPathIndex === penultimateIndex &&
-        notifiedRouteRef.current !== routeKey
-      ) {
-        notifiedRouteRef.current = routeKey;
+      if (shouldNotifyOneBeforeDestination(notificationTripState)) {
+        notificationTripState = markOneBeforeDestinationSent(notificationTripState);
+        setSentNotifications(notificationTripState.sentNotifications);
         await TripNotificationService.notifyNextStation(
           translate('notification.next_station.title', locale),
           `${translate('notification.next_station.body', locale)} ${routeDestination.name}.`,
@@ -589,19 +617,18 @@ export default function HomeScreen() {
         const directionText = transferPoint.directionTerminal
           ? ` · ${translate('direction', locale)} ${transferPoint.directionTerminal}`
           : '';
-        const prepareKey = `${routeKey}:prepare:${transferPoint.stationId}`;
-        const nowKey = `${routeKey}:now:${transferPoint.stationId}`;
-
-        if (nearestPathIndex === transferPoint.index - 1 && !notifiedTransferPrepareRef.current.has(prepareKey)) {
-          notifiedTransferPrepareRef.current.add(prepareKey);
+        if (shouldNotifyOneBeforeTransfer(notificationTripState, transferPoint)) {
+          notificationTripState = markOneBeforeTransferSent(notificationTripState, transferPoint.stationId);
+          setSentNotifications(notificationTripState.sentNotifications);
           await TripNotificationService.notifyNextStation(
             translate('notification.transfer.prepare_title', locale),
             `${translate('notification.transfer.prepare_body', locale)} ${transferPoint.stationName}. ${toLineLabel(transferPoint.toLine)}${directionText}`,
           );
         }
 
-        if (nearestPathIndex === transferPoint.index && !notifiedTransferNowRef.current.has(nowKey)) {
-          notifiedTransferNowRef.current.add(nowKey);
+        if (shouldNotifyAtTransfer(notificationTripState, transferPoint)) {
+          notificationTripState = markAtTransferSent(notificationTripState, transferPoint.stationId);
+          setSentNotifications(notificationTripState.sentNotifications);
           await TripNotificationService.notifyNextStation(
             translate('notification.transfer.now_title', locale),
             `${translate('notification.transfer.now_body', locale)} ${nextLine}${directionText}.`,
@@ -617,7 +644,7 @@ export default function HomeScreen() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [screen, etaData, stationsData, destination, routeKey, language, tripStatus, activeTripState?.routeId]);
+  }, [screen, etaData, stationsData, destination, routeKey, language, tripStatus, activeTripState?.routeId, sentNotificationsKey]);
 
   useEffect(() => {
     if (screen !== 'navigating' || tripStatus !== 'active' || !etaData || etaPath.length === 0 || navigationConfidenceMode === 'normal') {
@@ -812,7 +839,6 @@ export default function HomeScreen() {
     setOriginSource('manual');
     setDestination(origin);
     setCurrentTrackedStationIndex(null);
-    notifiedRouteRef.current = null;
     setScreen('navigating');
   }
 

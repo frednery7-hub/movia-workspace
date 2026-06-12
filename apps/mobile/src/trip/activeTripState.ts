@@ -28,6 +28,7 @@ export type TransferPoint = {
 };
 
 export type SentTripNotifications = {
+  stationArrivalStationIds: string[];
   oneBeforeTransferStationIds: string[];
   atTransferStationIds: string[];
   oneBeforeDestinationSent: boolean;
@@ -62,6 +63,7 @@ export type BuildActiveTripStateInput = {
 };
 
 export const EMPTY_SENT_TRIP_NOTIFICATIONS: SentTripNotifications = {
+  stationArrivalStationIds: [],
   oneBeforeTransferStationIds: [],
   atTransferStationIds: [],
   oneBeforeDestinationSent: false,
@@ -144,6 +146,84 @@ export function transitionTripStatus<TState extends { tripStatus: TripStatus }>(
   return {
     ...state,
     tripStatus: nextStatus,
+  };
+}
+
+export function shouldNotifyStationArrival(state: ActiveTripState): boolean {
+  return (
+    state.tripStatus !== 'preview' &&
+    state.tripStatus !== 'ended' &&
+    state.currentStationIndex !== null &&
+    state.currentStationIndex > 0 &&
+    state.currentStation !== null &&
+    !state.sentNotifications.stationArrivalStationIds.includes(
+      state.currentStation.id,
+    )
+  );
+}
+
+export function shouldNotifyOneBeforeTransfer(
+  state: ActiveTripState,
+  transferPoint: TransferPoint,
+): boolean {
+  return (
+    state.tripStatus === 'active' &&
+    state.currentStationIndex === transferPoint.index - 1 &&
+    !state.sentNotifications.oneBeforeTransferStationIds.includes(
+      transferPoint.stationId,
+    )
+  );
+}
+
+export function shouldNotifyAtTransfer(
+  state: ActiveTripState,
+  transferPoint: TransferPoint,
+): boolean {
+  return (
+    state.tripStatus === 'active' &&
+    state.currentStationIndex === transferPoint.index &&
+    !state.sentNotifications.atTransferStationIds.includes(
+      transferPoint.stationId,
+    )
+  );
+}
+
+export function shouldNotifyOneBeforeDestination(
+  state: ActiveTripState,
+): boolean {
+  return (
+    state.tripStatus === 'active' &&
+    state.currentStationIndex === state.orderedRoutePath.length - 2 &&
+    !state.sentNotifications.oneBeforeDestinationSent
+  );
+}
+
+export function shouldNotifyDestinationArrival(
+  state: ActiveTripState,
+): boolean {
+  return (
+    shouldTransitionToArrived(state) &&
+    !state.sentNotifications.destinationArrivalSent
+  );
+}
+
+export function markStationArrivalSent(
+  state: ActiveTripState,
+  stationId: string,
+): ActiveTripState {
+  if (state.sentNotifications.stationArrivalStationIds.includes(stationId)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    sentNotifications: {
+      ...state.sentNotifications,
+      stationArrivalStationIds: [
+        ...state.sentNotifications.stationArrivalStationIds,
+        stationId,
+      ],
+    },
   };
 }
 
