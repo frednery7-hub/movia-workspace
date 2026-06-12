@@ -23,8 +23,9 @@ export class MetroScraperService {
         `METRO_SCRAPER_OK: ${html.length} bytes from datosdechile.cl`,
       );
       return html;
-    } catch (err) {
-      this.logger.error(`METRO_SCRAPER_ERROR: ${err}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      this.logger.error(`METRO_SCRAPER_ERROR: ${errorMessage}`);
       return '';
     }
   }
