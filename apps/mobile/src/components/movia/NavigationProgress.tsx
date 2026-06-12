@@ -52,7 +52,7 @@ export function NavigationProgress({
   const sheetHeight = useRef(new Animated.Value(SHEET_HEIGHTS.normal)).current;
   const sheetStateRef = useRef<SheetState>('normal');
   const [sheetState, setSheetStateValue] = useState<SheetState>('normal');
-  const currentIndex = stations.findIndex(station => station.status === 'current');
+  const currentIndex = stations.findIndex(station => station.status === 'current' || station.status === 'arrived');
   const hasCurrentStation = currentIndex >= 0;
   const currentStation = hasCurrentStation ? stations[currentIndex] : undefined;
   const nextStation = currentIndex >= 0 ? stations[currentIndex + 1] : stations[0];
