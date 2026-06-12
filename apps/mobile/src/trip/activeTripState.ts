@@ -79,6 +79,12 @@ export const EMPTY_SENT_TRIP_NOTIFICATIONS: SentTripNotifications = {
 };
 
 export const TRIP_RECOVERY_WINDOW_MS = 10 * 60 * 1000;
+export const AUTO_TRACKING_STATION_RADIUS_METERS = 150;
+
+export type GeoLocation = {
+  latitude: number;
+  longitude: number;
+};
 
 export function buildActiveTripState(
   input: BuildActiveTripStateInput,
@@ -184,6 +190,31 @@ function canTransitionTripStatus(
     case 'ended':
       return false;
   }
+}
+
+export function shouldAutoStartTracking(params: {
+  tripStatus: TripStatus;
+  orderedRoutePath: RouteStation[];
+  userLocation: GeoLocation | null;
+  nearestRouteStation: RouteStation | null;
+  distanceToNearestRouteStationMeters: number | null;
+  isMovementCompatibleWithRoute?: boolean;
+}): boolean {
+  if (params.tripStatus !== 'preview') return false;
+  if (!params.userLocation) return false;
+  if (params.orderedRoutePath.length === 0) return false;
+
+  if (
+    params.nearestRouteStation &&
+    params.distanceToNearestRouteStationMeters !== null &&
+    params.distanceToNearestRouteStationMeters <= AUTO_TRACKING_STATION_RADIUS_METERS
+  ) {
+    return params.orderedRoutePath.some(
+      station => station.id === params.nearestRouteStation?.id,
+    );
+  }
+
+  return params.isMovementCompatibleWithRoute === true;
 }
 
 export function shouldNotifyStationArrival(state: ActiveTripState): boolean {

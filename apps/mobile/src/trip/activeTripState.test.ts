@@ -4,6 +4,7 @@ import {
   markDestinationArrivalSent,
   markOneBeforeDestinationSent,
   markOneBeforeTransferSent,
+  shouldAutoStartTracking,
   shouldNotifyAtTransfer,
   shouldNotifyDestinationArrival,
   shouldNotifyOneBeforeDestination,
@@ -147,6 +148,69 @@ describe('transitionTripStatus', () => {
 
   it('active -> preview permitido para troca de rota', () => {
     expect(transitionTripStatus({ tripStatus: 'active' }, 'preview').tripStatus).toBe('preview');
+  });
+});
+
+describe('shouldAutoStartTracking', () => {
+  it('retorna false se a rota está apenas calculada sem localização', () => {
+    expect(shouldAutoStartTracking({
+      tripStatus: 'preview',
+      orderedRoutePath: transferPath,
+      userLocation: null,
+      nearestRouteStation: null,
+      distanceToNearestRouteStationMeters: null,
+    })).toBe(false);
+  });
+
+  it('retorna true em preview quando o GPS está próximo de estação da rota', () => {
+    expect(shouldAutoStartTracking({
+      tripStatus: 'preview',
+      orderedRoutePath: transferPath,
+      userLocation: { latitude: -33.4, longitude: -70.6 },
+      nearestRouteStation: transferPath[1],
+      distanceToNearestRouteStationMeters: 120,
+    })).toBe(true);
+  });
+
+  it('retorna false quando a estação próxima não pertence à rota', () => {
+    expect(shouldAutoStartTracking({
+      tripStatus: 'preview',
+      orderedRoutePath: transferPath,
+      userLocation: { latitude: -33.4, longitude: -70.6 },
+      nearestRouteStation: station('st_santa_julia', 'Santa Julia', 'L4'),
+      distanceToNearestRouteStationMeters: 80,
+    })).toBe(false);
+  });
+
+  it('retorna false quando a estação da rota está fora do raio conservador', () => {
+    expect(shouldAutoStartTracking({
+      tripStatus: 'preview',
+      orderedRoutePath: transferPath,
+      userLocation: { latitude: -33.4, longitude: -70.6 },
+      nearestRouteStation: transferPath[1],
+      distanceToNearestRouteStationMeters: 151,
+    })).toBe(false);
+  });
+
+  it('retorna true quando movimento compatível é confirmado em preview', () => {
+    expect(shouldAutoStartTracking({
+      tripStatus: 'preview',
+      orderedRoutePath: transferPath,
+      userLocation: { latitude: -33.4, longitude: -70.6 },
+      nearestRouteStation: null,
+      distanceToNearestRouteStationMeters: null,
+      isMovementCompatibleWithRoute: true,
+    })).toBe(true);
+  });
+
+  it('retorna false fora de preview mesmo com GPS próximo', () => {
+    expect(shouldAutoStartTracking({
+      tripStatus: 'active',
+      orderedRoutePath: transferPath,
+      userLocation: { latitude: -33.4, longitude: -70.6 },
+      nearestRouteStation: transferPath[1],
+      distanceToNearestRouteStationMeters: 50,
+    })).toBe(false);
   });
 });
 

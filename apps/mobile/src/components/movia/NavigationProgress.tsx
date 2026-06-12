@@ -11,7 +11,7 @@ import type { ExpressRouteState } from '../../data/expressRoute';
 
 export interface Station {
   name: string;
-  status: 'completed' | 'current' | 'next' | 'upcoming' | 'transfer';
+  status: 'completed' | 'current' | 'next' | 'upcoming' | 'transfer' | 'arrived';
   line?: '1' | '2' | '3' | '4' | '4A' | '5' | '6';
   direction?: string;
   transfer?: { line: '1' | '2' | '3' | '4' | '4A' | '5' | '6'; name: string; direction?: string };
@@ -29,7 +29,6 @@ interface NavigationProgressProps {
   navigationConfidenceLabel: string;
   navigationConfidenceColor: string;
   tripStatus: TripStatus;
-  onStartTrip: () => void;
   onClose: () => void;
 }
 
@@ -44,11 +43,12 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, onStartTrip, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const lineColor = getLineColor(currentLine);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseOpacity = useRef(new Animated.Value(0.25)).current;
   const sheetHeight = useRef(new Animated.Value(SHEET_HEIGHTS.normal)).current;
   const sheetStateRef = useRef<SheetState>('normal');
   const [sheetState, setSheetStateValue] = useState<SheetState>('normal');
@@ -64,8 +64,14 @@ export function NavigationProgress({
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.06, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.parallel([
+          Animated.timing(pulseAnim, { toValue: 1.04, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseOpacity, { toValue: 0.45, duration: 800, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseOpacity, { toValue: 0.25, duration: 800, useNativeDriver: true }),
+        ]),
       ])
     ).start();
   }, []);
@@ -169,12 +175,6 @@ export function NavigationProgress({
             {currentDirection && (
               <Text style={styles.directionText}>L{currentLine} · {t('direction')} {currentDirection}</Text>
             )}
-            {isPreview && (
-              <TouchableOpacity style={styles.startTripButton} onPress={onStartTrip} activeOpacity={0.82}>
-                <Feather name="play" size={14} color="#fff" />
-                <Text style={styles.startTripText}>{t('trip.start_tracking')}</Text>
-              </TouchableOpacity>
-            )}
           </View>
           <TouchableOpacity onPress={toggleSheet} style={styles.expandButton} activeOpacity={0.8}>
             <Feather name={isExpanded ? 'minimize-2' : 'maximize-2'} size={18} color={Colors.actionBlue} />
@@ -205,7 +205,8 @@ export function NavigationProgress({
         )}
         <View style={styles.progressList}>
           {stations.map((station, index) => {
-            const isCurrent = station.status === 'current';
+            const isCurrent = station.status === 'current' || station.status === 'arrived';
+            const isArrivedStation = station.status === 'arrived';
             const isPassed = station.status === 'completed';
             const isNext = station.status === 'next';
             const isFuture = station.status === 'upcoming';
@@ -239,7 +240,7 @@ export function NavigationProgress({
                   )}
                 </View>
 
-                <Animated.View style={[styles.stationInfo, isCurrent && { transform: [{ scale: pulseAnim }] }]}>
+                <Animated.View style={styles.stationInfo}>
                   {isCurrent ? (
                     <LinearGradient
                       colors={['#FFFFFF', `${stationLineColor}18`]}
@@ -248,7 +249,16 @@ export function NavigationProgress({
                       style={[styles.currentStationCard, { borderLeftColor: stationLineColor, shadowColor: stationLineColor }]}
                     >
                       <View style={styles.currentTitleRow}>
-                        <View style={[styles.currentHalo, { backgroundColor: `${stationLineColor}22` }]} />
+                        <Animated.View
+                          style={[
+                            styles.currentHalo,
+                            {
+                              backgroundColor: stationLineColor,
+                              opacity: pulseOpacity,
+                              transform: [{ scale: pulseAnim }],
+                            },
+                          ]}
+                        />
                         <View style={[styles.currentIcon, { backgroundColor: stationLineColor }]}>
                           <Feather name="navigation" size={14} color="#fff" />
                         </View>
@@ -256,7 +266,7 @@ export function NavigationProgress({
                       </View>
                       <View style={styles.currentBadge}>
                         <View style={[styles.currentBadgeDot, { backgroundColor: stationLineColor }]} />
-                        <Text style={styles.youAreHere}>{hasArrived && index === currentIndex ? t('trip.arrived_destination') : t('navigation.you_are_here')}</Text>
+                        <Text style={styles.youAreHere}>{isArrivedStation ? t('trip.arrived_destination') : t('navigation.you_are_here')}</Text>
                       </View>
                       {station.expressRoute && (
                         <View style={styles.timelineExpressBadge}>
@@ -357,18 +367,6 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   directionText: { fontSize: 12, color: Colors.textPrimary, marginTop: 3, fontWeight: '800' },
-  startTripButton: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: Colors.actionBlue,
-  },
-  startTripText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   expandButton: {
     width: 30, height: 30, borderRadius: 15,
     alignItems: 'center', justifyContent: 'center',
