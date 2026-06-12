@@ -8,7 +8,6 @@ import {
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import {
-  getLineDirectionByStationId,
   isMetroLineId,
 } from '@movia/shared-data/metro/line-directions';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,7 +47,7 @@ import {
   type TripStatus,
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
-import { LineColors } from '../src/theme/colors';
+import { Colors, getLineColor } from '../src/theme/colors';
 
 const { width, height } = Dimensions.get('window');
 
@@ -273,32 +272,14 @@ export default function HomeScreen() {
     })
     .filter((station): station is RouteStation => Boolean(station));
 
-  function getDirectionForStep(index: number, lineId = etaPath[index]?.lineId): string | undefined {
-    const current = etaPath[index];
-    const next = etaPath[index + 1];
-    if (!current || !next || !lineId) return undefined;
-
-    return getLineDirectionByStationId({
-      lineId,
-      currentStationId: current.id,
-      nextStationId: next.id,
-    })?.directionTerminal;
-  }
-
   const routeKey = origin && destination && etaData
     ? `${origin.id}:${destination.id}:${etaData.arrivalTime}`
     : null;
   const hasCurrentStation = currentTrackedStationIndex !== null;
-  const focusedRouteIndex = hasCurrentStation ? currentPathIndex : selectedRouteStationIndex;
   const navigationConfidenceLabel = getNavigationConfidenceLabel(navigationConfidenceMode, locale);
-  const activeLineNumber = toLineNumber(orderedRoutePath[Math.min(focusedRouteIndex, Math.max(orderedRoutePath.length - 1, 0))]?.lineId ?? etaData?.linesOnRoute?.[0]);
-  const navigationConfidenceColor = navigationConfidenceMode === 'error'
-    ? '#EF4444'
-    : LineColors[activeLineNumber] ?? '#64748B';
   const currentRouteStationIndex = hasCurrentStation
     ? Math.min(currentPathIndex, orderedRoutePath.length - 1)
     : null;
-  const directionIndex = currentRouteStationIndex ?? selectedRouteStationIndex;
   const activeTripState: ActiveTripState | null = routeKey && orderedRoutePath.length > 0
     ? buildActiveTripState({
       routeId: routeKey,
@@ -316,7 +297,10 @@ export default function HomeScreen() {
     sentNotifications.oneBeforeDestinationSent ? '1' : '0',
     sentNotifications.destinationArrivalSent ? '1' : '0',
   ].join(';');
-  const currentDirection = activeTripState?.directionTerminal ?? getDirectionForStep(directionIndex);
+  const currentDirection = activeTripState?.directionTerminal ?? undefined;
+  const navigationConfidenceColor = navigationConfidenceMode === 'error'
+    ? Colors.alertDangerText
+    : getLineColor(activeTripState?.currentLine);
   const transferPointByIndex = new Map(
     (activeTripState?.transferPoints ?? []).map((transferPoint) => [transferPoint.index, transferPoint]),
   );
@@ -338,7 +322,7 @@ export default function HomeScreen() {
       status: hasConfirmedStation
         ? i < currentPathIndex ? 'completed' : i === currentPathIndex ? 'current' : i === currentPathIndex + 1 ? 'next' : transferPoint ? 'transfer' : 'upcoming'
         : transferPoint ? 'transfer' : i === visualFocusedStationIndex ? 'next' : 'upcoming',
-      direction: etaPath[i + 1]?.lineId === p.lineId ? getDirectionForStep(i) : undefined,
+      direction: undefined,
       transfer: transferPoint
         ? { line: toLineNumber(transferPoint.toLine), name: transferPoint.stationName, direction: transferPoint.directionTerminal ?? undefined }
         : undefined,
@@ -441,7 +425,7 @@ export default function HomeScreen() {
     if (activeTripState.currentStationIndex === null) return;
 
     const lineNumber = toLineNumber(activeTripState.currentLine);
-    const lineColor = LineColors[lineNumber];
+    const lineColor = getLineColor(activeTripState.currentLine);
     const directionText = activeTripState.directionTerminal
       ? `L${lineNumber} · ${translate('direction', locale)} ${activeTripState.directionTerminal}`
       : `L${lineNumber}`;
@@ -913,7 +897,7 @@ export default function HomeScreen() {
           {remainingRouteCoordinates.length > 1 && (
             <Polyline
               coordinates={remainingRouteCoordinates}
-              strokeColor={LineColors[toLineNumber(activeTripState?.currentLine)] ?? '#1A73E8'}
+              strokeColor={getLineColor(activeTripState?.currentLine, Colors.actionBlue)}
               strokeWidth={4}
               lineDashPattern={[0]}
             />
@@ -922,7 +906,7 @@ export default function HomeScreen() {
             <Marker
               coordinate={{ latitude: origin.latitude, longitude: origin.longitude }}
               title={`Origem: ${origin.name}`}
-              pinColor="#E31837"
+              pinColor={getLineColor(activeTripState?.currentLine, Colors.actionBlue)}
             />
           )}
           {destination && (

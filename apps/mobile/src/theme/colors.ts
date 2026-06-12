@@ -1,3 +1,5 @@
+import type { MetroLineId } from '@movia/shared-data/metro/line-directions';
+
 export const Colors = {
   line1: '#E53935', line2: '#FBC02D', line3: '#6D4C41',
   line4: '#1E88E5', line4a: '#26C6DA', line5: '#43A047', line6: '#8E24AA',
@@ -23,10 +25,32 @@ export const Colors = {
   border: '#E5E7EB',
 } as const;
 
-export const LineColors: Record<string, string> = {
-  '1': '#E53935', '2': '#FBC02D', '3': '#6D4C41',
-  '4': '#1E88E5', '4A': '#26C6DA', '5': '#43A047', '6': '#8E24AA',
+export type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
+
+export const LINE_THEME: Record<MetroLineId, { number: LineNumber; color: string }> = {
+  L1: { number: '1', color: Colors.line1 },
+  L2: { number: '2', color: Colors.line2 },
+  L3: { number: '3', color: Colors.line3 },
+  L4: { number: '4', color: Colors.line4 },
+  L4A: { number: '4A', color: Colors.line4a },
+  L5: { number: '5', color: Colors.line5 },
+  L6: { number: '6', color: Colors.line6 },
 };
+
+export function getLineTheme(line?: string | null) {
+  const lineId = normalizeLineId(line);
+  return lineId ? LINE_THEME[lineId] : null;
+}
+
+export function getLineColor(line?: string | null, fallback: string = Colors.textSecondary): string {
+  return getLineTheme(line)?.color ?? fallback;
+}
+
+function normalizeLineId(line?: string | null): MetroLineId | null {
+  if (!line) return null;
+  const prefixed = line.startsWith('L') ? line : `L${line}`;
+  return prefixed in LINE_THEME ? prefixed as MetroLineId : null;
+}
 
 export const FareColors: Record<string, string> = {
   punta: '#F26522', valle: '#4CAF50', bajo: '#2196F3',

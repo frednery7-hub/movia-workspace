@@ -8,8 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NearbyStation, useStations, useStationSearch, StationResult } from '../../hooks/useStations';
 import { useLocale } from '../../context/LocaleContext';
 import { CacheService } from '../../config/cache.service';
-import { Colors } from '../../theme/colors';
-import { LineColors } from '../../theme/colors';
+import { Colors, getLineColor } from '../../theme/colors';
 
 type StationLine = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 
@@ -83,7 +82,7 @@ export function StationSearchModal({
     return (
       <View style={styles.lineChips}>
         {stationLines.map(line => (
-          <View key={line} style={[styles.lineChip, { backgroundColor: LineColors[line] }]}>
+          <View key={line} style={[styles.lineChip, { backgroundColor: getLineColor(line) }]}>
             <Text style={styles.lineChipText}>L{line}</Text>
           </View>
         ))}

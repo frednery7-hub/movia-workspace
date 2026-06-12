@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { LineColors } from '../../theme/colors';
+import { getLineColor } from '../../theme/colors';
 
 interface LineChipProps {
   line: '1' | '2' | '3' | '4' | '4A' | '5' | '6';
@@ -8,7 +8,7 @@ interface LineChipProps {
 }
 
 export function LineChip({ line, variant = 'compact' }: LineChipProps) {
-  const bg = LineColors[line] ?? '#999';
+  const bg = getLineColor(line);
   if (variant === 'compact') {
     return (
       <View style={[styles.compact, { backgroundColor: bg }]}>

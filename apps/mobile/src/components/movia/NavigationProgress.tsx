@@ -4,7 +4,7 @@ import { useLocale } from '../../context/LocaleContext';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChip } from './LineChip';
-import { Colors, LineColors } from '../../theme/colors';
+import { Colors, getLineColor } from '../../theme/colors';
 import type { TripStatus } from '../../trip/activeTripState';
 
 export interface Station {
@@ -44,7 +44,7 @@ export function NavigationProgress({
   stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, onStartTrip, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
-  const lineColor = LineColors[currentLine] ?? Colors.accentPrimary;
+  const lineColor = getLineColor(currentLine);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const sheetHeight = useRef(new Animated.Value(SHEET_HEIGHTS.normal)).current;
   const sheetStateRef = useRef<SheetState>('normal');
@@ -208,8 +208,8 @@ export function NavigationProgress({
             const isFuture = station.status === 'upcoming';
             const isLast = index === stations.length - 1;
             const stationLine = station.line ?? currentLine;
-            const stationLineColor = LineColors[stationLine] ?? lineColor;
-            const nextLineColor = station.transfer ? LineColors[station.transfer.line] : stationLineColor;
+            const stationLineColor = getLineColor(stationLine, lineColor);
+            const nextLineColor = station.transfer ? getLineColor(station.transfer.line, stationLineColor) : stationLineColor;
 
             return (
               <View key={index} style={styles.stationRow}>
@@ -220,7 +220,7 @@ export function NavigationProgress({
                     isPassed && styles.dotPassed,
                     isNext && styles.dotNext,
                     isFuture && styles.dotFuture,
-                    isCurrent && { borderColor: stationLineColor },
+                    isCurrent && { borderColor: stationLineColor, shadowColor: stationLineColor },
                     isNext && { borderColor: stationLineColor },
                     isPassed && { backgroundColor: stationLineColor },
                     station.transfer && !isPassed && !isCurrent && { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: nextLineColor, backgroundColor: stationLineColor },
@@ -242,7 +242,7 @@ export function NavigationProgress({
                       colors={['#FFFFFF', `${stationLineColor}18`]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
-                      style={[styles.currentStationCard, { borderLeftColor: stationLineColor }]}
+                      style={[styles.currentStationCard, { borderLeftColor: stationLineColor, shadowColor: stationLineColor }]}
                     >
                       <View style={styles.currentTitleRow}>
                         <View style={[styles.currentHalo, { backgroundColor: `${stationLineColor}22` }]} />
@@ -267,7 +267,7 @@ export function NavigationProgress({
                   {station.transfer && (
                     <View style={styles.transferCard}>
                       <LinearGradient colors={[stationLineColor, nextLineColor]} style={styles.transferAccent} />
-                      <View style={[styles.transferIcon, { backgroundColor: LineColors[station.transfer.line] }]}>
+                      <View style={[styles.transferIcon, { backgroundColor: getLineColor(station.transfer.line, stationLineColor) }]}>
                         <Feather name="repeat" size={14} color="#fff" />
                       </View>
                       <View style={styles.transferTextGroup}>
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
     width: 14, height: 14, borderRadius: 7,
     backgroundColor: '#fff', borderWidth: 3,
     marginTop: 0, marginLeft: -3,
-    shadowColor: Colors.accentPrimary, shadowOffset: { width: 0, height: 2 },
+    shadowColor: Colors.textSecondary, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3, shadowRadius: 6, elevation: 3,
   },
   dotPassed: { opacity: 1 },
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginLeft: -4,
-    shadowColor: '#E31837',
+    shadowColor: Colors.textSecondary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
     shadowRadius: 16,
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '800',
-    color: Colors.accentPrimary,
+    color: Colors.textPrimary,
   },
   stationNamePassed: { color: Colors.grayText, opacity: 0.72, fontWeight: '400' },
   stationDirection: { marginTop: 3, fontSize: 12, fontWeight: '700', color: Colors.textTertiary },
