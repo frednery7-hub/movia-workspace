@@ -28,7 +28,7 @@ export function ExpressRouteBadge({
 }: ExpressRouteBadgeProps) {
   const { t } = useLocale();
   const [detailsVisible, setDetailsVisible] = useState(false);
-  const { label, dotStyle, badgeStyle, textStyle, icon } = useMemo(
+  const { label, badgeStyle, textStyle, icon } = useMemo(
     () => getBadgePresentation(type, availability, t),
     [type, availability, t],
   );
@@ -45,7 +45,7 @@ export function ExpressRouteBadge({
         {icon ? (
           <Feather name={icon} size={compact ? 11 : 12} color={Colors.textSecondary} />
         ) : (
-          <View style={[styles.dot, dotStyle]} />
+          <ExpressRouteDot type={type} availability={availability} />
         )}
         <Text style={[styles.label, compact && styles.labelCompact, textStyle]} numberOfLines={1}>
           {label}
@@ -83,7 +83,7 @@ export function ExpressRouteBadge({
               <Text style={styles.legendText}>{t('expressRoute.green')}</Text>
             </View>
             <View style={styles.legendRow}>
-              <View style={[styles.legendDot, styles.commonDot]} />
+              <ExpressRouteDot type="common" availability="active" />
               <Text style={styles.legendText}>{t('expressRoute.common')}</Text>
             </View>
 
@@ -94,6 +94,31 @@ export function ExpressRouteBadge({
         </TouchableOpacity>
       </Modal>
     </>
+  );
+}
+
+function ExpressRouteDot({ type, availability }: {
+  type: ExpressRouteType;
+  availability: ExpressRouteAvailability;
+}) {
+  const isInactive = availability === 'inactive';
+
+  if (type === 'common') {
+    return (
+      <View style={[styles.dot, styles.commonDotSplit, isInactive && styles.dotInactive]}>
+        <View style={styles.commonDotRedHalf} />
+        <View style={styles.commonDotGreenHalf} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[
+      styles.dot,
+      type === 'red' && styles.redDot,
+      type === 'green' && styles.greenDot,
+      isInactive && styles.dotInactive,
+    ]} />
   );
 }
 
@@ -108,11 +133,6 @@ function getBadgePresentation(
   return {
     label: getExpressRouteBadgeLabel(type, availability, translate),
     icon: isUnknown ? 'alert-circle' as const : null,
-    dotStyle: [
-      type === 'red' && styles.redDot,
-      type === 'green' && styles.greenDot,
-      type === 'common' && styles.commonDot,
-    ],
     badgeStyle: [
       type === 'red' && styles.redBadge,
       type === 'green' && styles.greenBadge,
@@ -154,6 +174,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+    overflow: 'hidden',
   },
   redBadge: {
     backgroundColor: '#FEF2F2',
@@ -164,8 +185,8 @@ const styles = StyleSheet.create({
     borderColor: '#86EFAC',
   },
   commonBadge: {
-    backgroundColor: Colors.graySurface,
-    borderColor: Colors.grayBorder,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#D9F99D',
   },
   inactiveBadge: {
     opacity: 0.62,
@@ -183,8 +204,22 @@ const styles = StyleSheet.create({
   greenDot: {
     backgroundColor: '#16A34A',
   },
-  commonDot: {
-    backgroundColor: Colors.textSecondary,
+  dotInactive: {
+    opacity: 0.65,
+  },
+  commonDotSplit: {
+    flexDirection: 'row',
+    borderWidth: 0.5,
+    borderColor: 'rgba(17,24,39,0.18)',
+    backgroundColor: '#fff',
+  },
+  commonDotRedHalf: {
+    flex: 1,
+    backgroundColor: '#DC2626',
+  },
+  commonDotGreenHalf: {
+    flex: 1,
+    backgroundColor: '#16A34A',
   },
   inactiveText: {
     color: Colors.textSecondary,

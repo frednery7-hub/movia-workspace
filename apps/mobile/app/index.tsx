@@ -276,7 +276,8 @@ export default function HomeScreen() {
   const routeKey = origin && destination && etaData
     ? `${origin.id}:${destination.id}:${etaData.arrivalTime}`
     : null;
-  const hasCurrentStation = currentTrackedStationIndex !== null;
+  const canShowCurrentStation = tripStatus === 'active' || tripStatus === 'arrived';
+  const hasCurrentStation = canShowCurrentStation && currentTrackedStationIndex !== null;
   const navigationConfidenceLabel = getNavigationConfidenceLabel(navigationConfidenceMode, locale);
   const currentRouteStationIndex = hasCurrentStation
     ? Math.min(currentPathIndex, orderedRoutePath.length - 1)
@@ -316,14 +317,16 @@ export default function HomeScreen() {
   // Converte path do ETA em Station[] para NavigationProgress
   const stations: Station[] = etaPath.map((p, i) => {
     const transferPoint = transferPointByIndex.get(i);
-    const hasConfirmedStation = currentTrackedStationIndex !== null && tripStatus !== 'preview';
+    const hasConfirmedStation = currentTrackedStationIndex !== null && canShowCurrentStation;
     return {
       name:   p.name,
       line:   toLineNumber(p.lineId),
       status: hasConfirmedStation
-        ? i < currentPathIndex ? 'completed' : i === currentPathIndex ? 'current' : i === currentPathIndex + 1 ? 'next' : transferPoint ? 'transfer' : 'upcoming'
+        ? i < currentPathIndex ? 'completed' : i === currentPathIndex ? tripStatus === 'arrived' ? 'arrived' : 'current' : i === currentPathIndex + 1 ? 'next' : transferPoint ? 'transfer' : 'upcoming'
         : transferPoint ? 'transfer' : i === visualFocusedStationIndex ? 'next' : 'upcoming',
-      direction: undefined,
+      direction: p.lineId === activeTripState?.currentLine
+        ? activeTripState.directionTerminal ?? undefined
+        : undefined,
       expressRoute: activeTripState?.currentStationIndex === i
         ? activeTripState.expressRoute
         : getExpressRouteState(p.lineId, p.name),

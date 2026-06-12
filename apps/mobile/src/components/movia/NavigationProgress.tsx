@@ -11,7 +11,7 @@ import type { ExpressRouteState } from '../../data/expressRoute';
 
 export interface Station {
   name: string;
-  status: 'completed' | 'current' | 'next' | 'upcoming' | 'transfer';
+  status: 'completed' | 'current' | 'next' | 'upcoming' | 'transfer' | 'arrived';
   line?: '1' | '2' | '3' | '4' | '4A' | '5' | '6';
   direction?: string;
   transfer?: { line: '1' | '2' | '3' | '4' | '4A' | '5' | '6'; name: string; direction?: string };
@@ -49,10 +49,11 @@ export function NavigationProgress({
   const { t } = useLocale();
   const lineColor = getLineColor(currentLine);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseOpacity = useRef(new Animated.Value(0.25)).current;
   const sheetHeight = useRef(new Animated.Value(SHEET_HEIGHTS.normal)).current;
   const sheetStateRef = useRef<SheetState>('normal');
   const [sheetState, setSheetStateValue] = useState<SheetState>('normal');
-  const currentIndex = stations.findIndex(station => station.status === 'current');
+  const currentIndex = stations.findIndex(station => station.status === 'current' || station.status === 'arrived');
   const hasCurrentStation = currentIndex >= 0;
   const currentStation = hasCurrentStation ? stations[currentIndex] : undefined;
   const nextStation = currentIndex >= 0 ? stations[currentIndex + 1] : stations[0];
@@ -64,8 +65,14 @@ export function NavigationProgress({
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.06, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.parallel([
+          Animated.timing(pulseAnim, { toValue: 1.04, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseOpacity, { toValue: 0.45, duration: 800, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseOpacity, { toValue: 0.25, duration: 800, useNativeDriver: true }),
+        ]),
       ])
     ).start();
   }, []);
@@ -205,7 +212,8 @@ export function NavigationProgress({
         )}
         <View style={styles.progressList}>
           {stations.map((station, index) => {
-            const isCurrent = station.status === 'current';
+            const isCurrent = station.status === 'current' || station.status === 'arrived';
+            const isArrivedStation = station.status === 'arrived';
             const isPassed = station.status === 'completed';
             const isNext = station.status === 'next';
             const isFuture = station.status === 'upcoming';
@@ -239,7 +247,7 @@ export function NavigationProgress({
                   )}
                 </View>
 
-                <Animated.View style={[styles.stationInfo, isCurrent && { transform: [{ scale: pulseAnim }] }]}>
+                <Animated.View style={styles.stationInfo}>
                   {isCurrent ? (
                     <LinearGradient
                       colors={['#FFFFFF', `${stationLineColor}18`]}
@@ -248,7 +256,16 @@ export function NavigationProgress({
                       style={[styles.currentStationCard, { borderLeftColor: stationLineColor, shadowColor: stationLineColor }]}
                     >
                       <View style={styles.currentTitleRow}>
-                        <View style={[styles.currentHalo, { backgroundColor: `${stationLineColor}22` }]} />
+                        <Animated.View
+                          style={[
+                            styles.currentHalo,
+                            {
+                              backgroundColor: stationLineColor,
+                              opacity: pulseOpacity,
+                              transform: [{ scale: pulseAnim }],
+                            },
+                          ]}
+                        />
                         <View style={[styles.currentIcon, { backgroundColor: stationLineColor }]}>
                           <Feather name="navigation" size={14} color="#fff" />
                         </View>
@@ -256,7 +273,7 @@ export function NavigationProgress({
                       </View>
                       <View style={styles.currentBadge}>
                         <View style={[styles.currentBadgeDot, { backgroundColor: stationLineColor }]} />
-                        <Text style={styles.youAreHere}>{hasArrived && index === currentIndex ? t('trip.arrived_destination') : t('navigation.you_are_here')}</Text>
+                        <Text style={styles.youAreHere}>{isArrivedStation ? t('trip.arrived_destination') : t('navigation.you_are_here')}</Text>
                       </View>
                       {station.expressRoute && (
                         <View style={styles.timelineExpressBadge}>
