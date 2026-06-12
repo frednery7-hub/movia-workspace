@@ -123,17 +123,23 @@ export function buildActiveTripState(
   };
 }
 
-export function shouldTransitionToArrived(state: ActiveTripState): boolean {
+export function shouldTransitionToArrived(
+  state: {
+    tripStatus: TripStatus;
+    currentStationIndex: number | null;
+    orderedRoutePath: readonly unknown[];
+  },
+): boolean {
   return (
     state.tripStatus === 'active' &&
     state.currentStationIndex === state.orderedRoutePath.length - 1
   );
 }
 
-export function transitionTripStatus(
-  state: ActiveTripState,
+export function transitionTripStatus<TState extends { tripStatus: TripStatus }>(
+  state: TState,
   nextStatus: TripStatus,
-): ActiveTripState {
+): TState {
   return {
     ...state,
     tripStatus: nextStatus,

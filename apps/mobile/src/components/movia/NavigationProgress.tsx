@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChip } from './LineChip';
 import { Colors, LineColors } from '../../theme/colors';
+import type { TripStatus } from '../../trip/activeTripState';
 
 export interface Station {
   name: string;
@@ -24,7 +25,7 @@ interface NavigationProgressProps {
   currentDirection?: string;
   navigationConfidenceLabel: string;
   navigationConfidenceColor: string;
-  tripStatus: 'preview' | 'active' | 'approaching-transfer' | 'transferring' | 'approaching-destination' | 'arrived' | 'ended';
+  tripStatus: TripStatus;
   onStartTrip: () => void;
   onClose: () => void;
 }

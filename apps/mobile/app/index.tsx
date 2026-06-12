@@ -23,6 +23,11 @@ import { IdentityService } from '../src/security/identity.service';
 import { LocationService } from '../src/location/location.service';
 import { InertialService } from '../src/sensors/InertialService';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
+import {
+  shouldTransitionToArrived,
+  transitionTripStatus,
+  type TripStatus,
+} from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
 import { LineColors } from '../src/theme/colors';
 
@@ -49,7 +54,6 @@ type AppScreen = 'map' | 'searching' | 'navigating';
 type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 type OriginSource = 'manual' | 'gps-nearest-station' | 'history' | 'planning-mode' | 'empty';
 type NavigationConfidenceMode = 'normal' | 'gps-unstable' | 'hybrid' | 'approximate' | 'recalculating' | 'offline' | 'error';
-type ActiveTripStatus = 'preview' | 'active' | 'approaching-transfer' | 'transferring' | 'approaching-destination' | 'arrived' | 'ended';
 type OrderedRouteStation = {
   id: string;
   name: string;
@@ -69,7 +73,7 @@ type ActiveTripState = {
   currentLine: string;
   directionTerminal?: string;
   navigationMode: NavigationConfidenceMode;
-  tripStatus: ActiveTripStatus;
+  tripStatus: TripStatus;
 };
 
 const VALID_LINE_NUMBERS: LineNumber[] = ['1', '2', '3', '4', '4A', '5', '6'];
@@ -210,7 +214,7 @@ export default function HomeScreen() {
   const [nearbyStations, setNearbyStations] = useState<NearbyStation[]>([]);
   const [locationMode, setLocationMode] = useState<'loading' | 'nearby' | 'planning' | 'manual' | 'denied'>('loading');
   const [navigationConfidenceMode, setNavigationConfidenceMode] = useState<NavigationConfidenceMode>('normal');
-  const [tripStatus, setTripStatus] = useState<ActiveTripStatus>('ended');
+  const [tripStatus, setTripStatus] = useState<TripStatus>('ended');
   const [arrivalBanner, setArrivalBanner] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const notifiedRouteRef = useRef<string | null>(null);
@@ -323,6 +327,12 @@ export default function HomeScreen() {
     }
     : null;
 
+  function applyTripStatusTransition(nextStatus: TripStatus) {
+    setTripStatus(currentStatus => (
+      transitionTripStatus({ tripStatus: currentStatus }, nextStatus).tripStatus
+    ));
+  }
+
   // TODO(active-trip-state): remover estado paralelo
   // Converte path do ETA em Station[] para NavigationProgress
   const stations: Station[] = etaPath.map((p, i) => {
@@ -403,7 +413,9 @@ export default function HomeScreen() {
       : getArrivalMessage(activeTripState.currentStation.name, locale);
     notifiedArrivalsRef.current.add(arrivalKey);
     setArrivalBanner(arrivalMessage);
-    if (isDestination) setTripStatus('arrived');
+    if (shouldTransitionToArrived(activeTripState)) {
+      applyTripStatusTransition('arrived');
+    }
     const timer = setTimeout(() => setArrivalBanner(null), 4500);
     if (isDestination) {
       TripNotificationService.notifyNextStation(
@@ -537,7 +549,7 @@ export default function HomeScreen() {
     setVisualFocusedStationIndex(0);
     setArrivalBanner(null);
     setNavigationConfidenceMode('normal');
-    setTripStatus(routeKey ? 'preview' : 'ended');
+    applyTripStatusTransition(routeKey ? 'preview' : 'ended');
   }, [routeKey]);
 
   useEffect(() => {
@@ -598,16 +610,6 @@ export default function HomeScreen() {
         ))
         .filter(index => index >= 0);
 
-      if (nearestPathIndex === penultimateIndex) {
-        setTripStatus('approaching-destination');
-      } else if (transferIndexes.some(index => nearestPathIndex === index - 1)) {
-        setTripStatus('approaching-transfer');
-      } else if (transferIndexes.includes(nearestPathIndex)) {
-        setTripStatus('transferring');
-      } else if (tripStatus !== 'active') {
-        setTripStatus('active');
-      }
-
       for (const transferIndex of transferIndexes) {
         const nextLine = routeEta.path[transferIndex + 1]?.lineId?.replace(/^L/i, '');
         const transferStation = routeEta.path[transferIndex];
@@ -650,7 +652,7 @@ export default function HomeScreen() {
   }, [screen, etaData, stationsData, destination, routeKey, language, tripStatus]);
 
   useEffect(() => {
-    if (screen !== 'navigating' || tripStatus === 'arrived' || tripStatus === 'ended' || !etaData || etaPath.length === 0 || navigationConfidenceMode === 'normal') {
+    if (screen !== 'navigating' || tripStatus !== 'active' || !etaData || etaPath.length === 0 || navigationConfidenceMode === 'normal') {
       return undefined;
     }
 
@@ -848,7 +850,7 @@ export default function HomeScreen() {
 
   function handleStartTrip() {
     if (!routeKey) return;
-    setTripStatus('active');
+    applyTripStatusTransition('active');
     setNavigationConfidenceMode(userLat && userLon ? 'hybrid' : 'approximate');
     setCurrentTrackedStationIndex(null);
   }
@@ -856,7 +858,7 @@ export default function HomeScreen() {
   function handleCloseNavigation() {
     if (routeKey) TripNotificationService.endActiveTrip(routeKey).catch(() => undefined);
     setDestination(null);
-    setTripStatus('ended');
+    applyTripStatusTransition('ended');
     setScreen('map');
   }
 
