@@ -7,7 +7,10 @@ import {
   ActivityIndicator, View, Text, StyleSheet, Dimensions, PanResponder, AppState, TouchableOpacity,
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import { getLineDirectionByStationId } from '@movia/shared-data/metro/line-directions';
+import {
+  getLineDirectionByStationId,
+  isMetroLineId,
+} from '@movia/shared-data/metro/line-directions';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MoviaSidebar, AlertItem, LineItem } from '../src/components/movia/MoviaSidebar';
 import { SearchBar } from '../src/components/movia/SearchBar';
@@ -24,8 +27,12 @@ import { LocationService } from '../src/location/location.service';
 import { InertialService } from '../src/sensors/InertialService';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
 import {
+  buildActiveTripState,
   shouldTransitionToArrived,
   transitionTripStatus,
+  type ActiveTripState,
+  type NavigationMode,
+  type RouteStation,
   type TripStatus,
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
@@ -54,27 +61,6 @@ type AppScreen = 'map' | 'searching' | 'navigating';
 type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 type OriginSource = 'manual' | 'gps-nearest-station' | 'history' | 'planning-mode' | 'empty';
 type NavigationConfidenceMode = 'normal' | 'gps-unstable' | 'hybrid' | 'approximate' | 'recalculating' | 'offline' | 'error';
-type OrderedRouteStation = {
-  id: string;
-  name: string;
-  lineId: string;
-  latitude: number;
-  longitude: number;
-};
-
-type ActiveTripState = {
-  routeId: string;
-  orderedRoutePath: OrderedRouteStation[];
-  currentStationIndex: number | null;
-  currentStation: OrderedRouteStation | null;
-  nextStation: OrderedRouteStation | null;
-  originStation: OrderedRouteStation;
-  destinationStation: OrderedRouteStation;
-  currentLine: string;
-  directionTerminal?: string;
-  navigationMode: NavigationConfidenceMode;
-  tripStatus: TripStatus;
-};
 
 const VALID_LINE_NUMBERS: LineNumber[] = ['1', '2', '3', '4', '4A', '5', '6'];
 
@@ -96,6 +82,11 @@ function toSidebarStatus(s?: string): 'normal' | 'delay' | 'alert' | 'suspended'
     case 'SUSPENDED': return 'suspended';
     default:          return 'normal';
   }
+}
+
+function toActiveTripNavigationMode(mode: NavigationConfidenceMode): NavigationMode {
+  if (mode === 'error' || mode === 'recalculating') return 'approximate';
+  return mode;
 }
 
 function formatMinutes(seconds: number): string {
@@ -259,10 +250,10 @@ export default function HomeScreen() {
   // TODO(active-trip-state): remover estado paralelo
   const currentPathIndex = currentTrackedStationIndex ?? selectedRouteStationIndex;
   const stationById = new Map((stationsData ?? []).map(s => [s.id, s]));
-  const orderedRoutePath: OrderedRouteStation[] = etaPath
+  const orderedRoutePath: RouteStation[] = etaPath
     .map(p => {
       const station = stationById.get(p.id);
-      if (!station) return null;
+      if (!station || !isMetroLineId(p.lineId)) return null;
       return {
         id: p.id,
         name: p.name,
@@ -271,7 +262,7 @@ export default function HomeScreen() {
         longitude: station.longitude,
       };
     })
-    .filter((station): station is OrderedRouteStation => Boolean(station));
+    .filter((station): station is RouteStation => Boolean(station));
 
   function getDirectionForStep(index: number, lineId = etaPath[index]?.lineId): string | undefined {
     const current = etaPath[index];
@@ -283,12 +274,6 @@ export default function HomeScreen() {
       currentStationId: current.id,
       nextStationId: next.id,
     })?.directionTerminal;
-  }
-
-  function getTransferDirection(index: number): string | undefined {
-    const next = etaPath[index + 1];
-    if (!next) return undefined;
-    return getDirectionForStep(index, next.lineId);
   }
 
   const routeKey = origin && destination && etaData
@@ -305,27 +290,19 @@ export default function HomeScreen() {
     ? Math.min(currentPathIndex, orderedRoutePath.length - 1)
     : null;
   const directionIndex = currentRouteStationIndex ?? selectedRouteStationIndex;
-  // TODO(active-trip-state): remover estado paralelo
-  const currentDirection = etaPath[directionIndex + 1]?.lineId !== etaPath[directionIndex]?.lineId
-    ? getTransferDirection(directionIndex)
-    : getDirectionForStep(directionIndex);
   const activeTripState: ActiveTripState | null = routeKey && orderedRoutePath.length > 0
-    ? {
+    ? buildActiveTripState({
       routeId: routeKey,
       orderedRoutePath,
       currentStationIndex: currentRouteStationIndex,
-      currentStation: currentRouteStationIndex === null ? null : orderedRoutePath[currentRouteStationIndex],
-      nextStation: currentRouteStationIndex === null
-        ? orderedRoutePath[0]
-        : currentRouteStationIndex + 1 < orderedRoutePath.length ? orderedRoutePath[currentRouteStationIndex + 1] : null,
-      originStation: orderedRoutePath[0],
-      destinationStation: orderedRoutePath[orderedRoutePath.length - 1],
-      currentLine: orderedRoutePath[Math.min(focusedRouteIndex, orderedRoutePath.length - 1)]?.lineId ?? etaData?.linesOnRoute?.[0] ?? 'L1',
-      directionTerminal: currentDirection,
-      navigationMode: navigationConfidenceMode,
+      navigationMode: toActiveTripNavigationMode(navigationConfidenceMode),
       tripStatus,
-    }
+    })
     : null;
+  const currentDirection = activeTripState?.directionTerminal ?? getDirectionForStep(directionIndex);
+  const transferPointByIndex = new Map(
+    (activeTripState?.transferPoints ?? []).map((transferPoint) => [transferPoint.index, transferPoint]),
+  );
 
   function applyTripStatusTransition(nextStatus: TripStatus) {
     setTripStatus(currentStatus => (
@@ -336,17 +313,17 @@ export default function HomeScreen() {
   // TODO(active-trip-state): remover estado paralelo
   // Converte path do ETA em Station[] para NavigationProgress
   const stations: Station[] = etaPath.map((p, i) => {
-    const isTransfer = Boolean(etaPath[i + 1]?.lineId && etaPath[i + 1].lineId !== p.lineId);
+    const transferPoint = transferPointByIndex.get(i);
     const hasConfirmedStation = currentTrackedStationIndex !== null && tripStatus !== 'preview';
     return {
       name:   p.name,
       line:   toLineNumber(p.lineId),
       status: hasConfirmedStation
-        ? i < currentPathIndex ? 'completed' : i === currentPathIndex ? 'current' : i === currentPathIndex + 1 ? 'next' : isTransfer ? 'transfer' : 'upcoming'
-        : isTransfer ? 'transfer' : i === visualFocusedStationIndex ? 'next' : 'upcoming',
+        ? i < currentPathIndex ? 'completed' : i === currentPathIndex ? 'current' : i === currentPathIndex + 1 ? 'next' : transferPoint ? 'transfer' : 'upcoming'
+        : transferPoint ? 'transfer' : i === visualFocusedStationIndex ? 'next' : 'upcoming',
       direction: etaPath[i + 1]?.lineId === p.lineId ? getDirectionForStep(i) : undefined,
-      transfer: isTransfer
-        ? { line: toLineNumber(etaPath[i + 1].lineId), name: p.name, direction: getTransferDirection(i) }
+      transfer: transferPoint
+        ? { line: toLineNumber(transferPoint.toLine), name: transferPoint.stationName, direction: transferPoint.directionTerminal ?? undefined }
         : undefined,
     };
   });
@@ -443,12 +420,16 @@ export default function HomeScreen() {
     let title = `${etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : '--'} · ${nextText}`;
     let body = `${directionText}\n${navigationConfidenceLabel}`;
 
+    const activeTransferPoint = activeTripState.transferPoints.find(
+      transferPoint => transferPoint.index === activeTripState.currentStationIndex,
+    );
+
     if (activeTripState.tripStatus === 'arrived') {
       title = translate('trip.completed', locale);
       body = getDestinationArrivalMessage(activeTripState.destinationStation.name, locale);
-    } else if (activeTripState.nextStation?.lineId && activeTripState.nextStation.lineId !== activeTripState.currentLine) {
+    } else if (activeTransferPoint) {
       title = translate('notification.transfer.prepare_title', locale);
-      body = `${translate('notification.transfer.prepare_body', locale)} ${activeTripState.nextStation.name}. ${directionText}`;
+      body = `${translate('notification.transfer.prepare_body', locale)} ${activeTransferPoint.stationName}. ${directionText}`;
     }
 
     TripNotificationService.updateActiveTrip({
@@ -553,13 +534,14 @@ export default function HomeScreen() {
   }, [routeKey]);
 
   useEffect(() => {
-    if (screen !== 'navigating' || tripStatus !== 'active' || !etaData || !stationsData || !destination || !routeKey) {
+    if (screen !== 'navigating' || tripStatus !== 'active' || !etaData || !stationsData || !destination || !routeKey || !activeTripState) {
       return undefined;
     }
 
     let cancelled = false;
     const routeEta = etaData;
     const routeDestination = destination;
+    const routeTransferPoints = activeTripState.transferPoints;
     const routeStations = routeEta.path
       .map(p => stationById.get(p.id))
       .filter((s): s is StationResult => !!s);
@@ -602,37 +584,23 @@ export default function HomeScreen() {
         );
       }
 
-      const transferIndexes = routeEta.path
-        .map((station, index) => (
-          routeEta.path[index + 1]?.lineId && routeEta.path[index + 1].lineId !== station.lineId
-            ? index
-            : -1
-        ))
-        .filter(index => index >= 0);
-
-      for (const transferIndex of transferIndexes) {
-        const nextLine = routeEta.path[transferIndex + 1]?.lineId?.replace(/^L/i, '');
-        const transferStation = routeEta.path[transferIndex];
-        const transferDirection = getLineDirectionByStationId({
-          lineId: routeEta.path[transferIndex + 1]?.lineId ?? '',
-          currentStationId: transferStation.id,
-          nextStationId: routeEta.path[transferIndex + 1]?.id ?? '',
-        })?.directionTerminal;
-        const directionText = transferDirection
-          ? ` · ${translate('direction', locale)} ${transferDirection}`
+      for (const transferPoint of routeTransferPoints) {
+        const nextLine = toLineNumber(transferPoint.toLine);
+        const directionText = transferPoint.directionTerminal
+          ? ` · ${translate('direction', locale)} ${transferPoint.directionTerminal}`
           : '';
-        const prepareKey = `${routeKey}:prepare:${transferStation.id}`;
-        const nowKey = `${routeKey}:now:${transferStation.id}`;
+        const prepareKey = `${routeKey}:prepare:${transferPoint.stationId}`;
+        const nowKey = `${routeKey}:now:${transferPoint.stationId}`;
 
-        if (nearestPathIndex === transferIndex - 1 && !notifiedTransferPrepareRef.current.has(prepareKey)) {
+        if (nearestPathIndex === transferPoint.index - 1 && !notifiedTransferPrepareRef.current.has(prepareKey)) {
           notifiedTransferPrepareRef.current.add(prepareKey);
           await TripNotificationService.notifyNextStation(
             translate('notification.transfer.prepare_title', locale),
-            `${translate('notification.transfer.prepare_body', locale)} ${transferStation.name}. ${toLineLabel(routeEta.path[transferIndex + 1]?.lineId)}${directionText}`,
+            `${translate('notification.transfer.prepare_body', locale)} ${transferPoint.stationName}. ${toLineLabel(transferPoint.toLine)}${directionText}`,
           );
         }
 
-        if (nearestPathIndex === transferIndex && nextLine && !notifiedTransferNowRef.current.has(nowKey)) {
+        if (nearestPathIndex === transferPoint.index && !notifiedTransferNowRef.current.has(nowKey)) {
           notifiedTransferNowRef.current.add(nowKey);
           await TripNotificationService.notifyNextStation(
             translate('notification.transfer.now_title', locale),
@@ -649,7 +617,7 @@ export default function HomeScreen() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [screen, etaData, stationsData, destination, routeKey, language, tripStatus]);
+  }, [screen, etaData, stationsData, destination, routeKey, language, tripStatus, activeTripState?.routeId]);
 
   useEffect(() => {
     if (screen !== 'navigating' || tripStatus !== 'active' || !etaData || etaPath.length === 0 || navigationConfidenceMode === 'normal') {

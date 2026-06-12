@@ -113,6 +113,7 @@ export function buildActiveTripState(
       orderedRoutePath,
       currentStationIndex,
       currentLine,
+      transferPoints,
     ),
     transferPoints,
     navigationMode: input.navigationMode,
@@ -254,8 +255,12 @@ function deriveDirectionTerminal(
   path: RouteStation[],
   currentStationIndex: number | null,
   currentLine: MetroLineId,
+  transferPoints: TransferPoint[],
 ): string | null {
   const index = currentStationIndex ?? 0;
+  const transferPoint = transferPoints.find((point) => point.index === index);
+  if (transferPoint) return transferPoint.directionTerminal;
+
   const currentStation = path[index];
   const nextStation = path[index + 1];
   if (!currentStation || !nextStation) return null;
