@@ -143,10 +143,31 @@ export function transitionTripStatus<TState extends { tripStatus: TripStatus }>(
   state: TState,
   nextStatus: TripStatus,
 ): TState {
+  if (!canTransitionTripStatus(state.tripStatus, nextStatus)) return state;
+
   return {
     ...state,
     tripStatus: nextStatus,
   };
+}
+
+function canTransitionTripStatus(
+  currentStatus: TripStatus,
+  nextStatus: TripStatus,
+): boolean {
+  if (currentStatus === nextStatus) return true;
+  if (nextStatus === 'preview') return true;
+
+  switch (currentStatus) {
+    case 'preview':
+      return nextStatus === 'active' || nextStatus === 'ended';
+    case 'active':
+      return nextStatus === 'arrived' || nextStatus === 'ended';
+    case 'arrived':
+      return nextStatus === 'ended';
+    case 'ended':
+      return false;
+  }
 }
 
 export function shouldNotifyStationArrival(state: ActiveTripState): boolean {
@@ -299,13 +320,21 @@ function buildTransferPoints(path: RouteStation[]): TransferPoint[] {
   return path.flatMap((station, index) => {
     const nextStation = path[index + 1];
     if (!nextStation || station.lineId === nextStation.lineId) return [];
+    const isSameStationTransfer = station.id === nextStation.id;
+    const directionCurrentStationId = isSameStationTransfer
+      ? nextStation.id
+      : station.id;
+    const directionNextStation =
+      isSameStationTransfer ? path[index + 2] : nextStation;
 
     const directionTerminal =
-      getLineDirectionByStationId({
-        lineId: nextStation.lineId,
-        currentStationId: station.id,
-        nextStationId: nextStation.id,
-      })?.directionTerminal ?? null;
+      directionNextStation
+        ? getLineDirectionByStationId({
+          lineId: nextStation.lineId,
+          currentStationId: directionCurrentStationId,
+          nextStationId: directionNextStation.id,
+        })?.directionTerminal ?? null
+        : null;
 
     return [
       {
