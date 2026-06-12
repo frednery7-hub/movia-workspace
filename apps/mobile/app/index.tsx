@@ -274,8 +274,11 @@ export default function HomeScreen() {
     })
     .filter((station): station is RouteStation => Boolean(station));
 
+  const routePathKey = etaPath
+    .map(station => `${station.id}:${station.lineId}`)
+    .join('>');
   const routeKey = origin && destination && etaData
-    ? `${origin.id}:${destination.id}:${etaData.arrivalTime}`
+    ? `${origin.id}:${destination.id}:${routePathKey}`
     : null;
   const canShowCurrentStation = tripStatus === 'active' || tripStatus === 'arrived';
   const hasCurrentStation = canShowCurrentStation && currentTrackedStationIndex !== null;
@@ -314,6 +317,30 @@ export default function HomeScreen() {
     ));
   }
 
+  function startTripTracking(params: {
+    currentStationIndex: number;
+    source: 'gps-nearest-station' | 'gps-route-station' | 'hybrid-progress';
+  }) {
+    const nextStationIndex = Math.max(
+      0,
+      Math.min(params.currentStationIndex, Math.max(orderedRoutePath.length - 1, 0)),
+    );
+
+    activeStationIdRef.current = orderedRoutePath[nextStationIndex]?.id ?? null;
+    setCurrentTrackedStationIndex(nextStationIndex);
+    setVisualFocusedStationIndex(nextStationIndex);
+    setNavigationConfidenceMode(params.source === 'hybrid-progress' ? 'hybrid' : 'normal');
+    applyTripStatusTransition('active');
+
+    if (__DEV__) {
+      console.log('[START_TRIP_TRACKING]', {
+        source: params.source,
+        currentStationIndex: nextStationIndex,
+        currentStation: orderedRoutePath[nextStationIndex]?.name ?? null,
+      });
+    }
+  }
+
   // TODO(active-trip-state): remover estado paralelo
   // Converte path do ETA em Station[] para NavigationProgress
   const stations: Station[] = etaPath.map((p, i) => {
@@ -350,6 +377,17 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!__DEV__ || !activeTripState) return;
+
+    console.log('[CURRENT_BANNER_DEBUG]', {
+      tripStatus: activeTripState.tripStatus,
+      currentStationIndex: activeTripState.currentStationIndex,
+      currentStation: activeTripState.currentStation?.name ?? null,
+      currentLine: activeTripState.currentLine,
+      shouldShowCurrentStationBanner:
+        activeTripState.tripStatus === 'active' &&
+        activeTripState.currentStationIndex !== null &&
+        activeTripState.currentStation !== null,
+    });
 
     const mapPolylinePoints = activeTripState.orderedRoutePath.map(station => ({
       latitude: station.latitude,
@@ -607,10 +645,12 @@ export default function HomeScreen() {
       });
 
       if (shouldStartTracking && nearestPathIndex >= 0) {
-        activeStationIdRef.current = nearest?.station.id ?? null;
-        setCurrentTrackedStationIndex(nearestPathIndex);
-        setVisualFocusedStationIndex(nearestPathIndex);
-        applyTripStatusTransition('active');
+        startTripTracking({
+          currentStationIndex: nearestPathIndex,
+          source: originSource === 'gps-nearest-station'
+            ? 'gps-nearest-station'
+            : 'gps-route-station',
+        });
         return;
       }
 
