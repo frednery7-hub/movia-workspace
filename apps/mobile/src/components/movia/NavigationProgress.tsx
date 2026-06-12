@@ -49,7 +49,8 @@ export function NavigationProgress({
   const sheetStateRef = useRef<SheetState>('normal');
   const [sheetState, setSheetStateValue] = useState<SheetState>('normal');
   const currentIndex = stations.findIndex(station => station.status === 'current');
-  const currentStation = stations[currentIndex] ?? stations[0];
+  const hasCurrentStation = currentIndex >= 0;
+  const currentStation = hasCurrentStation ? stations[currentIndex] : undefined;
   const nextStation = currentIndex >= 0 ? stations[currentIndex + 1] : stations[0];
   const hasArrived = tripStatus === 'arrived';
   const isPreview = tripStatus === 'preview';
@@ -180,8 +181,8 @@ export function NavigationProgress({
       {!isCompact && !isExpanded && (
         <View style={styles.nextPanel}>
           <View style={styles.nextColumn}>
-            <Text style={styles.nextLabel}>{hasArrived ? t('trip.completed') : isPreview ? t('trip.preview') : t('navigation.you_are_here')}</Text>
-            <Text style={styles.nextStationName} numberOfLines={1}>{isPreview ? origin : currentStation?.name ?? origin}</Text>
+            <Text style={styles.nextLabel}>{hasArrived ? t('trip.completed') : isPreview ? t('trip.preview') : hasCurrentStation ? t('navigation.you_are_here') : navigationConfidenceLabel}</Text>
+            <Text style={styles.nextStationName} numberOfLines={1}>{hasCurrentStation ? currentStation?.name : origin}</Text>
           </View>
           {!hasArrived && (
             <View style={styles.nextColumn}>

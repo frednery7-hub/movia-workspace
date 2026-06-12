@@ -61,8 +61,8 @@ type OrderedRouteStation = {
 type ActiveTripState = {
   routeId: string;
   orderedRoutePath: OrderedRouteStation[];
-  currentStationIndex: number;
-  currentStation: OrderedRouteStation;
+  currentStationIndex: number | null;
+  currentStation: OrderedRouteStation | null;
   nextStation: OrderedRouteStation | null;
   originStation: OrderedRouteStation;
   destinationStation: OrderedRouteStation;
@@ -252,6 +252,7 @@ export default function HomeScreen() {
 
   const etaPath = etaData?.path ?? [];
   const selectedRouteStationIndex = 0;
+  // TODO(active-trip-state): remover estado paralelo
   const currentPathIndex = currentTrackedStationIndex ?? selectedRouteStationIndex;
   const stationById = new Map((stationsData ?? []).map(s => [s.id, s]));
   const orderedRoutePath: OrderedRouteStation[] = etaPath
@@ -289,30 +290,40 @@ export default function HomeScreen() {
   const routeKey = origin && destination && etaData
     ? `${origin.id}:${destination.id}:${etaData.arrivalTime}`
     : null;
-  const currentDirection = etaPath[currentPathIndex + 1]?.lineId !== etaPath[currentPathIndex]?.lineId
-    ? getTransferDirection(currentPathIndex)
-    : getDirectionForStep(currentPathIndex);
+  const hasCurrentStation = currentTrackedStationIndex !== null;
+  const focusedRouteIndex = hasCurrentStation ? currentPathIndex : selectedRouteStationIndex;
   const navigationConfidenceLabel = getNavigationConfidenceLabel(navigationConfidenceMode, locale);
-  const activeLineNumber = toLineNumber(orderedRoutePath[Math.min(currentPathIndex, Math.max(orderedRoutePath.length - 1, 0))]?.lineId ?? etaData?.linesOnRoute?.[0]);
+  const activeLineNumber = toLineNumber(orderedRoutePath[Math.min(focusedRouteIndex, Math.max(orderedRoutePath.length - 1, 0))]?.lineId ?? etaData?.linesOnRoute?.[0]);
   const navigationConfidenceColor = navigationConfidenceMode === 'error'
     ? '#EF4444'
     : LineColors[activeLineNumber] ?? '#64748B';
+  const currentRouteStationIndex = hasCurrentStation
+    ? Math.min(currentPathIndex, orderedRoutePath.length - 1)
+    : null;
+  const directionIndex = currentRouteStationIndex ?? selectedRouteStationIndex;
+  // TODO(active-trip-state): remover estado paralelo
+  const currentDirection = etaPath[directionIndex + 1]?.lineId !== etaPath[directionIndex]?.lineId
+    ? getTransferDirection(directionIndex)
+    : getDirectionForStep(directionIndex);
   const activeTripState: ActiveTripState | null = routeKey && orderedRoutePath.length > 0
     ? {
       routeId: routeKey,
       orderedRoutePath,
-      currentStationIndex: Math.min(currentPathIndex, orderedRoutePath.length - 1),
-      currentStation: orderedRoutePath[Math.min(currentPathIndex, orderedRoutePath.length - 1)],
-      nextStation: currentPathIndex + 1 < orderedRoutePath.length ? orderedRoutePath[currentPathIndex + 1] : null,
+      currentStationIndex: currentRouteStationIndex,
+      currentStation: currentRouteStationIndex === null ? null : orderedRoutePath[currentRouteStationIndex],
+      nextStation: currentRouteStationIndex === null
+        ? orderedRoutePath[0]
+        : currentRouteStationIndex + 1 < orderedRoutePath.length ? orderedRoutePath[currentRouteStationIndex + 1] : null,
       originStation: orderedRoutePath[0],
       destinationStation: orderedRoutePath[orderedRoutePath.length - 1],
-      currentLine: orderedRoutePath[Math.min(currentPathIndex, orderedRoutePath.length - 1)]?.lineId ?? etaData?.linesOnRoute?.[0] ?? 'L1',
+      currentLine: orderedRoutePath[Math.min(focusedRouteIndex, orderedRoutePath.length - 1)]?.lineId ?? etaData?.linesOnRoute?.[0] ?? 'L1',
       directionTerminal: currentDirection,
       navigationMode: navigationConfidenceMode,
       tripStatus,
     }
     : null;
 
+  // TODO(active-trip-state): remover estado paralelo
   // Converte path do ETA em Station[] para NavigationProgress
   const stations: Station[] = etaPath.map((p, i) => {
     const isTransfer = Boolean(etaPath[i + 1]?.lineId && etaPath[i + 1].lineId !== p.lineId);
@@ -330,11 +341,16 @@ export default function HomeScreen() {
     };
   });
 
+  // TODO(active-trip-state): remover estado paralelo
   // Coordenadas da rota para Polyline (Opção A — cruza path com stationsData)
   const routeCoordinates = (activeTripState?.orderedRoutePath ?? [])
     .map(s => ({ latitude: s.latitude, longitude: s.longitude }));
-  const completedRouteCoordinates = routeCoordinates.slice(0, Math.min(currentPathIndex + 1, routeCoordinates.length));
-  const remainingRouteCoordinates = routeCoordinates.slice(Math.max(currentPathIndex, 0));
+  const completedRouteCoordinates = activeTripState?.currentStationIndex === null
+    ? []
+    : routeCoordinates.slice(0, Math.min(currentPathIndex + 1, routeCoordinates.length));
+  const remainingRouteCoordinates = activeTripState?.currentStationIndex === null
+    ? routeCoordinates
+    : routeCoordinates.slice(Math.max(currentPathIndex, 0));
 
   useEffect(() => {
     if (!__DEV__ || !activeTripState) return;
@@ -362,13 +378,21 @@ export default function HomeScreen() {
       origin: activeTripState.originStation.name,
       destination: activeTripState.destinationStation.name,
       currentStationIndex: activeTripState.currentStationIndex,
-      currentStationName: activeTripState.currentStation.name,
+      currentStationName: activeTripState.currentStation?.name ?? null,
       nextStationName: activeTripState.nextStation?.name ?? null,
     });
   }, [activeTripState?.routeId, activeTripState?.currentStationIndex]);
 
   useEffect(() => {
-    if (!activeTripState || screen !== 'navigating' || tripStatus === 'preview' || tripStatus === 'ended' || activeTripState.currentStationIndex === 0) return;
+    if (
+      !activeTripState ||
+      screen !== 'navigating' ||
+      tripStatus === 'preview' ||
+      tripStatus === 'ended' ||
+      activeTripState.currentStationIndex === null ||
+      activeTripState.currentStation === null ||
+      activeTripState.currentStationIndex === 0
+    ) return;
 
     const arrivalKey = `${activeTripState.routeId}:arrival:${activeTripState.currentStation.id}`;
     if (notifiedArrivalsRef.current.has(arrivalKey)) return;
@@ -393,6 +417,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!activeTripState || screen !== 'navigating' || activeTripState.tripStatus === 'preview' || activeTripState.tripStatus === 'ended') return;
+    if (activeTripState.currentStationIndex === null) return;
 
     const lineNumber = toLineNumber(activeTripState.currentLine);
     const lineColor = LineColors[lineNumber];
