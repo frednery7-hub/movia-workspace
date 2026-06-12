@@ -48,6 +48,7 @@ import {
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
 import { Colors, getLineColor } from '../src/theme/colors';
+import { getExpressRouteState } from '../src/data/expressRoute';
 
 const { width, height } = Dimensions.get('window');
 
@@ -323,6 +324,9 @@ export default function HomeScreen() {
         ? i < currentPathIndex ? 'completed' : i === currentPathIndex ? 'current' : i === currentPathIndex + 1 ? 'next' : transferPoint ? 'transfer' : 'upcoming'
         : transferPoint ? 'transfer' : i === visualFocusedStationIndex ? 'next' : 'upcoming',
       direction: undefined,
+      expressRoute: activeTripState?.currentStationIndex === i
+        ? activeTripState.expressRoute
+        : getExpressRouteState(p.lineId, p.name),
       transfer: transferPoint
         ? { line: toLineNumber(transferPoint.toLine), name: transferPoint.stationName, direction: transferPoint.directionTerminal ?? undefined }
         : undefined,

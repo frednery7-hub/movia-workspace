@@ -107,6 +107,25 @@ describe('buildActiveTripState', () => {
     expect(buildState(1).directionTerminal).toBe('Plaza de Puente Alto');
     expect(buildState(2).directionTerminal).toBe('Plaza de Puente Alto');
   });
+
+  it('deriva Ruta Expresa a partir da linha e estação atuais', () => {
+    const state = buildActiveTripState({
+      routeId: 'route-express',
+      orderedRoutePath: [
+        station('st_tobalaba', 'Tobalaba', 'L4'),
+        station('st_cristobal_colon', 'Cristóbal Colón', 'L4'),
+      ],
+      currentStationIndex: 1,
+      navigationMode: 'normal',
+      tripStatus: 'active',
+      expressRouteDate: new Date('2026-06-15T08:00:00'),
+    });
+
+    expect(state.expressRoute).toEqual({
+      type: 'green',
+      availability: 'active',
+    });
+  });
 });
 
 describe('transitionTripStatus', () => {

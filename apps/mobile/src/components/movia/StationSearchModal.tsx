@@ -9,6 +9,8 @@ import { NearbyStation, useStations, useStationSearch, StationResult } from '../
 import { useLocale } from '../../context/LocaleContext';
 import { CacheService } from '../../config/cache.service';
 import { Colors, getLineColor } from '../../theme/colors';
+import { getExpressRouteState, type ExpressRouteState } from '../../data/expressRoute';
+import { ExpressRouteBadge } from './ExpressRouteBadge';
 
 type StationLine = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 
@@ -90,6 +92,30 @@ export function StationSearchModal({
     );
   }
 
+  function renderExpressRouteBadges(station: StationResult) {
+    const expressRoutes: Array<{ line: StationLine; state: ExpressRouteState }> = [];
+
+    getStationLines(station).forEach(line => {
+      const state = getExpressRouteState(`L${line}`, station.name);
+      if (state) expressRoutes.push({ line, state });
+    });
+
+    if (expressRoutes.length === 0) return null;
+
+    return (
+      <View style={styles.expressRouteBadges}>
+        {expressRoutes.map(({ line, state }) => (
+          <ExpressRouteBadge
+            key={`${station.id}-${line}`}
+            type={state.type}
+            availability={state.availability}
+            compact
+          />
+        ))}
+      </View>
+    );
+  }
+
   function withFreshStationData(station: StationResult) {
     return allStations.find(s => s.id === station.id) ?? station;
   }
@@ -154,6 +180,7 @@ export function StationSearchModal({
                           <Text style={styles.stationCode}>{distanceMeters} m</Text>
                           {renderLineChips(freshStation)}
                         </View>
+                        {renderExpressRouteBadges(freshStation)}
                       </View>
                       {isSelected && <Text style={styles.selectedBadge}>{t('search.selected')}</Text>}
                     </TouchableOpacity>
@@ -180,6 +207,7 @@ export function StationSearchModal({
                           <Text style={styles.stationCode}>{freshStation.shortCode}</Text>
                           {renderLineChips(freshStation)}
                         </View>
+                        {renderExpressRouteBadges(freshStation)}
                       </View>
                     </TouchableOpacity>
                   );
@@ -209,6 +237,7 @@ export function StationSearchModal({
                     <Text style={styles.stationCode}>{item.shortCode}</Text>
                     {renderLineChips(item)}
                   </View>
+                  {renderExpressRouteBadges(item)}
                 </View>
                 <Feather name="chevron-right" size={16} color={Colors.grayBorder} />
               </TouchableOpacity>
@@ -310,6 +339,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   lineChipText: { fontSize: 10, fontWeight: '800', color: Colors.white },
+  expressRouteBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginTop: 6,
+  },
   separator: { height: 1, backgroundColor: Colors.grayBorder, marginLeft: 64 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { fontSize: 14, color: Colors.textTertiary },

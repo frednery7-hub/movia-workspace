@@ -1,5 +1,10 @@
 import { getLineDirectionByStationId } from '@movia/shared-data/metro/line-directions';
 import type { MetroLineId } from '@movia/shared-data/metro/line-directions';
+import {
+  getExpressRouteState,
+  type ExpressRouteHolidayOptions,
+  type ExpressRouteState,
+} from '../data/expressRoute';
 
 export type TripStatus = 'preview' | 'active' | 'arrived' | 'ended';
 
@@ -51,6 +56,7 @@ export type ActiveTripState = {
   transferPoints: TransferPoint[];
   navigationMode: NavigationMode;
   sentNotifications: SentTripNotifications;
+  expressRoute: ExpressRouteState | null;
 };
 
 export type BuildActiveTripStateInput = {
@@ -60,6 +66,8 @@ export type BuildActiveTripStateInput = {
   currentStationIndex: number | null;
   navigationMode: NavigationMode;
   sentNotifications?: Partial<SentTripNotifications>;
+  expressRouteDate?: Date;
+  expressRouteHolidayOptions?: ExpressRouteHolidayOptions;
 };
 
 export const EMPTY_SENT_TRIP_NOTIFICATIONS: SentTripNotifications = {
@@ -123,6 +131,14 @@ export function buildActiveTripState(
       ...EMPTY_SENT_TRIP_NOTIFICATIONS,
       ...input.sentNotifications,
     },
+    expressRoute: currentStation
+      ? getExpressRouteState(
+        currentLine,
+        currentStation.name,
+        input.expressRouteDate,
+        input.expressRouteHolidayOptions,
+      )
+      : null,
   };
 }
 

@@ -4,8 +4,10 @@ import { useLocale } from '../../context/LocaleContext';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChip } from './LineChip';
+import { ExpressRouteBadge } from './ExpressRouteBadge';
 import { Colors, getLineColor } from '../../theme/colors';
 import type { TripStatus } from '../../trip/activeTripState';
+import type { ExpressRouteState } from '../../data/expressRoute';
 
 export interface Station {
   name: string;
@@ -13,6 +15,7 @@ export interface Station {
   line?: '1' | '2' | '3' | '4' | '4A' | '5' | '6';
   direction?: string;
   transfer?: { line: '1' | '2' | '3' | '4' | '4A' | '5' | '6'; name: string; direction?: string };
+  expressRoute?: ExpressRouteState | null;
 }
 
 interface NavigationProgressProps {
@@ -255,6 +258,15 @@ export function NavigationProgress({
                         <View style={[styles.currentBadgeDot, { backgroundColor: stationLineColor }]} />
                         <Text style={styles.youAreHere}>{hasArrived && index === currentIndex ? t('trip.arrived_destination') : t('navigation.you_are_here')}</Text>
                       </View>
+                      {station.expressRoute && (
+                        <View style={styles.timelineExpressBadge}>
+                          <ExpressRouteBadge
+                            type={station.expressRoute.type}
+                            availability={station.expressRoute.availability}
+                            compact
+                          />
+                        </View>
+                      )}
                     </LinearGradient>
                   ) : (
                     <Text style={[styles.stationName, isPassed && styles.stationNamePassed]}>
@@ -263,6 +275,15 @@ export function NavigationProgress({
                   )}
                   {!isCurrent && station.direction && (
                     <Text style={styles.stationDirection}>L{stationLine} · {t('direction')} {station.direction}</Text>
+                  )}
+                  {!isCurrent && station.expressRoute && (
+                    <View style={styles.timelineExpressBadge}>
+                      <ExpressRouteBadge
+                        type={station.expressRoute.type}
+                        availability={station.expressRoute.availability}
+                        compact
+                      />
+                    </View>
                   )}
                   {station.transfer && (
                     <View style={styles.transferCard}>
@@ -467,6 +488,7 @@ const styles = StyleSheet.create({
   },
   stationNamePassed: { color: Colors.grayText, opacity: 0.72, fontWeight: '400' },
   stationDirection: { marginTop: 3, fontSize: 12, fontWeight: '700', color: Colors.textTertiary },
+  timelineExpressBadge: { marginTop: 5 },
   currentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
