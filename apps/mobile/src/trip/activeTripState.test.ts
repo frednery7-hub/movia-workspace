@@ -162,13 +162,13 @@ describe('shouldAutoStartTracking', () => {
     })).toBe(false);
   });
 
-  it('retorna true em preview quando o GPS está próximo de estação da rota', () => {
+  it('retorna true em preview quando o GPS está próximo de estação inicial da rota', () => {
     expect(shouldAutoStartTracking({
       tripStatus: 'preview',
       orderedRoutePath: transferPath,
       userLocation: { latitude: -33.4, longitude: -70.6 },
       nearestRouteStation: transferPath[1],
-      distanceToNearestRouteStationMeters: 120,
+      distanceToNearestRouteStationMeters: 200,
     })).toBe(true);
   });
 
@@ -182,25 +182,27 @@ describe('shouldAutoStartTracking', () => {
     })).toBe(false);
   });
 
-  it('retorna false quando a estação da rota está fora do raio conservador', () => {
+  it('retorna false quando a estação da rota está fora do raio de auto-start', () => {
     expect(shouldAutoStartTracking({
       tripStatus: 'preview',
       orderedRoutePath: transferPath,
       userLocation: { latitude: -33.4, longitude: -70.6 },
       nearestRouteStation: transferPath[1],
-      distanceToNearestRouteStationMeters: 151,
+      distanceToNearestRouteStationMeters: 201,
     })).toBe(false);
   });
 
-  it('retorna true quando movimento compatível é confirmado em preview', () => {
+  it('retorna false quando a estação próxima da rota está fora dos índices iniciais permitidos', () => {
     expect(shouldAutoStartTracking({
       tripStatus: 'preview',
-      orderedRoutePath: transferPath,
+      orderedRoutePath: [
+        ...transferPath,
+        station('st_las_mercedes', 'Las Mercedes', 'L4'),
+      ],
       userLocation: { latitude: -33.4, longitude: -70.6 },
-      nearestRouteStation: null,
-      distanceToNearestRouteStationMeters: null,
-      isMovementCompatibleWithRoute: true,
-    })).toBe(true);
+      nearestRouteStation: station('st_las_mercedes', 'Las Mercedes', 'L4'),
+      distanceToNearestRouteStationMeters: 50,
+    })).toBe(false);
   });
 
   it('retorna false fora de preview mesmo com GPS próximo', () => {
