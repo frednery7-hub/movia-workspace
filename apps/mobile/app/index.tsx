@@ -21,6 +21,7 @@ import { useNetworkState } from '../src/hooks/useNetworkState';
 import { MetroIncident, useMetroIncidents } from '../src/hooks/useMetroIncidents';
 import { useEta } from '../src/hooks/useEta';
 import { useStations, findNearbyStations, findNearestStationWithDistance, NearbyStation, StationResult } from '../src/hooks/useStations';
+import { ENABLE_METRO_INCIDENTS } from '../src/config/featureFlags';
 import { IdentityService } from '../src/security/identity.service';
 import { LocationService } from '../src/location/location.service';
 import { InertialService } from '../src/sensors/InertialService';
@@ -53,7 +54,7 @@ import {
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
 import { Colors, getLineColor } from '../src/theme/colors';
-import { getExpressRouteState } from '../src/data/expressRoute';
+import { getExpressRouteState, getVisibleExpressRouteState } from '../src/data/expressRoute';
 
 const { width, height } = Dimensions.get('window');
 
@@ -241,23 +242,27 @@ export default function HomeScreen() {
   const lines: LineItem[] = (linesData ?? []).map(l => ({
     number: toLineNumber(l.id),
     name:   l.name,
-    status: toIncidentSidebarStatus(metroIncidents?.incidents.find(s => s.lineId === l.id)?.status)
-      ?? toSidebarStatus(networkState?.find(s => s.lineId === l.id)?.status),
+    status: ENABLE_METRO_INCIDENTS
+      ? toIncidentSidebarStatus(metroIncidents?.incidents.find(s => s.lineId === l.id)?.status)
+        ?? toSidebarStatus(networkState?.find(s => s.lineId === l.id)?.status)
+      : 'normal',
   }));
-  const incidentsSourceLabel = translate('alerts.source_metro_site', locale);
-  const incidentsUpdatedLabel = metroIncidents?.updatedAt
+  const incidentsSourceLabel = ENABLE_METRO_INCIDENTS ? translate('alerts.source_metro_site', locale) : undefined;
+  const incidentsUpdatedLabel = ENABLE_METRO_INCIDENTS && metroIncidents?.updatedAt
     ? `${translate('alerts.updated', locale)} ${formatRelativeTime(metroIncidents.updatedAt, locale)}`
     : undefined;
-  const alerts: AlertItem[] = (metroIncidents?.incidents ?? [])
-    .filter(item => item.status !== 'normal')
-    .map(item => ({
-      lineId: item.lineId,
-      type: item.status === 'delay' ? 'delay' : 'alert',
-      text: getIncidentTitle(item, locale),
-      description: getIncidentDescription(item, locale),
-      time: `${translate('alerts.updated', locale)} ${formatRelativeTime(item.updatedAt, locale)}`,
-      sourceLabel: incidentsSourceLabel,
-    }));
+  const alerts: AlertItem[] = ENABLE_METRO_INCIDENTS
+    ? (metroIncidents?.incidents ?? [])
+      .filter(item => item.status !== 'normal')
+      .map(item => ({
+        lineId: item.lineId,
+        type: item.status === 'delay' ? 'delay' : 'alert',
+        text: getIncidentTitle(item, locale),
+        description: getIncidentDescription(item, locale),
+        time: `${translate('alerts.updated', locale)} ${formatRelativeTime(item.updatedAt, locale)}`,
+        sourceLabel: translate('alerts.source_metro_site', locale),
+      }))
+    : [];
 
   const etaPath = etaData?.path ?? [];
   const selectedRouteStationIndex = 0;
@@ -366,6 +371,9 @@ export default function HomeScreen() {
   const stations: Station[] = etaPath.map((p, i) => {
     const transferPoint = transferPointByIndex.get(i);
     const hasConfirmedStation = currentTrackedStationIndex !== null && canShowCurrentStation;
+    const expressRouteState = activeTripState?.currentStationIndex === i
+      ? activeTripState.expressRoute
+      : getExpressRouteState(p.lineId, p.name);
     return {
       id: p.id,
       name:   p.name,
@@ -376,9 +384,7 @@ export default function HomeScreen() {
       direction: p.lineId === activeTripState?.currentLine
         ? activeTripState.directionTerminal ?? undefined
         : undefined,
-      expressRoute: activeTripState?.currentStationIndex === i
-        ? activeTripState.expressRoute
-        : getExpressRouteState(p.lineId, p.name),
+      expressRoute: getVisibleExpressRouteState(expressRouteState),
       transfer: transferPoint
         ? { line: toLineNumber(transferPoint.toLine), name: transferPoint.stationName, direction: transferPoint.directionTerminal ?? undefined }
         : undefined,
@@ -1089,6 +1095,7 @@ export default function HomeScreen() {
         contextLabel={locationMode === 'nearby' ? translate('location.near_santiago_metro', toLocale(language)) : translate('location.plan_trip_short', toLocale(language))}
         incidentsSourceLabel={incidentsSourceLabel}
         incidentsUpdatedLabel={incidentsUpdatedLabel}
+        showIncidentStatus={ENABLE_METRO_INCIDENTS}
       />
 
       {/* NavigationProgress como overlay — mapa continua vivo */}

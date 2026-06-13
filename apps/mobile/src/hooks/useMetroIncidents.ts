@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../config/api';
+import { ENABLE_METRO_INCIDENTS } from '../config/featureFlags';
 
 export type MetroIncidentStatus =
   | 'normal'
@@ -36,9 +37,10 @@ export function useMetroIncidents() {
   return useQuery({
     queryKey: ['metroIncidents'],
     queryFn: fetchMetroIncidents,
+    enabled: ENABLE_METRO_INCIDENTS,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: ENABLE_METRO_INCIDENTS ? 5 * 60 * 1000 : false,
     retry: 1,
   });
 }

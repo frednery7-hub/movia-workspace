@@ -9,7 +9,11 @@ import { NearbyStation, useStations, useStationSearch, StationResult } from '../
 import { useLocale } from '../../context/LocaleContext';
 import { CacheService } from '../../config/cache.service';
 import { Colors, getLineColor } from '../../theme/colors';
-import { getExpressRouteState, type ExpressRouteState } from '../../data/expressRoute';
+import {
+  getExpressRouteState,
+  getVisibleExpressRouteState,
+  type ExpressRouteState,
+} from '../../data/expressRoute';
 import { ExpressRouteBadge } from './ExpressRouteBadge';
 
 type StationLine = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
@@ -97,7 +101,8 @@ export function StationSearchModal({
 
     getStationLines(station).forEach(line => {
       const state = getExpressRouteState(`L${line}`, station.name);
-      if (state) expressRoutes.push({ line, state });
+      const visibleState = getVisibleExpressRouteState(state);
+      if (visibleState) expressRoutes.push({ line, state: visibleState });
     });
 
     if (expressRoutes.length === 0) return null;

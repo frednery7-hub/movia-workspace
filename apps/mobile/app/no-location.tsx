@@ -3,6 +3,7 @@ import { router }                                    from 'expo-router';
 import { ConsentService }                            from '../src/privacy/consent.service';
 import { Feather }                                   from '@expo/vector-icons';
 import { useLocale }                                 from '../src/context/LocaleContext';
+import { ENABLE_METRO_INCIDENTS }                    from '../src/config/featureFlags';
 
 export default function NoLocationScreen() {
   const { t } = useLocale();
@@ -30,7 +31,9 @@ export default function NoLocationScreen() {
         <Text style={styles.infoTitle}>{t('no_location.what_can_do')}</Text>
         <Text style={styles.infoItem}>• {t('no_location.manual_search')}</Text>
         <Text style={styles.infoItem}>• {t('no_location.eta')}</Text>
-        <Text style={styles.infoItem}>• {t('no_location.alerts')}</Text>
+        {ENABLE_METRO_INCIDENTS && (
+          <Text style={styles.infoItem}>• {t('no_location.alerts')}</Text>
+        )}
         <Text style={styles.infoItem}>• {t('no_location.preferences')}</Text>
       </View>
 

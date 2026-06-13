@@ -7,7 +7,7 @@ import { LineChip } from './LineChip';
 import { ExpressRouteBadge } from './ExpressRouteBadge';
 import { Colors, getLineColor } from '../../theme/colors';
 import type { ActiveTripState, TripStatus } from '../../trip/activeTripState';
-import type { ExpressRouteState } from '../../data/expressRoute';
+import { getVisibleExpressRouteState, type ExpressRouteState } from '../../data/expressRoute';
 
 export interface Station {
   id: string;
@@ -234,6 +234,7 @@ export function NavigationProgress({
             const stationLine = station.line ?? currentLine;
             const stationLineColor = getLineColor(stationLine, lineColor);
             const nextLineColor = station.transfer ? getLineColor(station.transfer.line, stationLineColor) : stationLineColor;
+            const visibleExpressRoute = getVisibleExpressRouteState(station.expressRoute);
 
             console.log('[CURRENT_BANNER_DEBUG]', {
               routeId: activeTripState?.routeId,
@@ -308,11 +309,11 @@ export function NavigationProgress({
                         <View style={[styles.currentBadgeDot, { backgroundColor: stationLineColor }]} />
                         <Text style={styles.youAreHere}>{isArrivedStation ? t('trip.arrived_destination') : t('navigation.you_are_here')}</Text>
                       </View>
-                      {station.expressRoute && (
+                      {visibleExpressRoute && (
                         <View style={styles.timelineExpressBadge}>
                           <ExpressRouteBadge
-                            type={station.expressRoute.type}
-                            availability={station.expressRoute.availability}
+                            type={visibleExpressRoute.type}
+                            availability={visibleExpressRoute.availability}
                             compact
                           />
                         </View>
@@ -326,11 +327,11 @@ export function NavigationProgress({
                   {!isCurrent && station.direction && (
                     <Text style={styles.stationDirection}>L{stationLine} · {t('direction')} {station.direction}</Text>
                   )}
-                  {!isCurrent && station.expressRoute && (
+                  {!isCurrent && visibleExpressRoute && (
                     <View style={styles.timelineExpressBadge}>
                       <ExpressRouteBadge
-                        type={station.expressRoute.type}
-                        availability={station.expressRoute.availability}
+                        type={visibleExpressRoute.type}
+                        availability={visibleExpressRoute.availability}
                         compact
                       />
                     </View>
