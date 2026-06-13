@@ -6,10 +6,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { LineChip } from './LineChip';
 import { ExpressRouteBadge } from './ExpressRouteBadge';
 import { Colors, getLineColor } from '../../theme/colors';
-import type { TripStatus } from '../../trip/activeTripState';
+import type { ActiveTripState, TripStatus } from '../../trip/activeTripState';
 import type { ExpressRouteState } from '../../data/expressRoute';
 
 export interface Station {
+  id: string;
   name: string;
   status: 'completed' | 'current' | 'next' | 'upcoming' | 'transfer' | 'arrived';
   line?: '1' | '2' | '3' | '4' | '4A' | '5' | '6';
@@ -29,6 +30,7 @@ interface NavigationProgressProps {
   navigationConfidenceLabel: string;
   navigationConfidenceColor: string;
   tripStatus: TripStatus;
+  activeTripState?: ActiveTripState | null;
   onClose: () => void;
 }
 
@@ -43,7 +45,7 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, activeTripState, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const lineColor = getLineColor(currentLine);
@@ -214,6 +216,26 @@ export function NavigationProgress({
             const stationLine = station.line ?? currentLine;
             const stationLineColor = getLineColor(stationLine, lineColor);
             const nextLineColor = station.transfer ? getLineColor(station.transfer.line, stationLineColor) : stationLineColor;
+
+            console.log('[CURRENT_BANNER_DEBUG]', {
+              routeId: activeTripState?.routeId,
+              tripStatus: activeTripState?.tripStatus,
+              currentStationIndex: activeTripState?.currentStationIndex,
+              currentStationId: activeTripState?.currentStation?.id,
+              currentStationName: activeTripState?.currentStation?.name,
+              currentLine: activeTripState?.currentLine,
+              directionTerminal: activeTripState?.directionTerminal,
+              stationBeingRendered: station.name,
+              stationBeingRenderedId: station.id,
+              renderIndex: index,
+              conditionTripStatusActive: activeTripState?.tripStatus === 'active',
+              conditionIndexMatch: activeTripState?.currentStationIndex === index,
+              conditionIdMatch: activeTripState?.currentStation?.id === station.id,
+              shouldRenderCurrentStationBanner:
+                activeTripState?.tripStatus === 'active' &&
+                activeTripState?.currentStationIndex === index &&
+                activeTripState?.currentStation?.id === station.id,
+            });
 
             return (
               <View key={index} style={styles.stationRow}>

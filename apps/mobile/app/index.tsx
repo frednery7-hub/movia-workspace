@@ -347,6 +347,7 @@ export default function HomeScreen() {
     const transferPoint = transferPointByIndex.get(i);
     const hasConfirmedStation = currentTrackedStationIndex !== null && canShowCurrentStation;
     return {
+      id: p.id,
       name:   p.name,
       line:   toLineNumber(p.lineId),
       status: hasConfirmedStation
@@ -1070,6 +1071,7 @@ export default function HomeScreen() {
           navigationConfidenceLabel={navigationConfidenceLabel}
           navigationConfidenceColor={navigationConfidenceColor}
           tripStatus={tripStatus}
+          activeTripState={activeTripState}
           onClose={handleCloseNavigation}
         />
       )}
