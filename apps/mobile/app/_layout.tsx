@@ -9,7 +9,7 @@ import type { SupportedLocale } from '../src/context/LocaleContext';
 import { ConsentService } from '../src/privacy/consent.service';
 import { QueryProvider } from '../src/providers/QueryProvider';
 import { api } from '../src/config/api';
-import { useAppTheme } from '../src/theme/ThemeContext';
+import { ThemeProvider, useAppTheme } from '../src/theme/ThemeContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -105,7 +105,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
   );
 }
 
-export default function RootLayout() {
+function RootLayoutContent() {
   const theme = useAppTheme();
   const [isReady, setIsReady] = useState(false);
   const [language, setLanguageState] = useState<Language>('ES');
@@ -189,6 +189,14 @@ export default function RootLayout() {
         </QueryProvider>
       </LocaleProvider>
     </LanguageContext.Provider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <RootLayoutContent />
+    </ThemeProvider>
   );
 }
 

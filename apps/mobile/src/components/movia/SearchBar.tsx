@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocale } from '../../context/LocaleContext';
-import { Colors } from '../../theme/colors';
+import { Colors, withAlpha } from '../../theme/colors';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 interface SearchBarProps {
@@ -14,6 +14,7 @@ interface SearchBarProps {
   originName?: string;
   destinationName?: string;
   canSwap?: boolean;
+  routeGradientColors?: [string, string];
 }
 
 export function SearchBar({
@@ -24,16 +25,22 @@ export function SearchBar({
   originName,
   destinationName,
   canSwap = false,
+  routeGradientColors = [Colors.accentPrimary, Colors.actionBlue],
 }: SearchBarProps) {
   const { t } = useLocale();
   const theme = useAppTheme();
+  const surfaceGradient = [
+    withAlpha(routeGradientColors[0], theme.isDark ? 0.24 : 0.13),
+    withAlpha(routeGradientColors[1], theme.isDark ? 0.18 : 0.09),
+  ] as [string, string];
 
   return (
     <LinearGradient
-      colors={theme.colors.routeBarGradient}
+      colors={surfaceGradient}
       style={[
         styles.bar,
         {
+          backgroundColor: theme.colors.surfaceElevated,
           borderColor: theme.colors.border,
           shadowColor: theme.colors.shadow,
         },
@@ -49,14 +56,14 @@ export function SearchBar({
 
       <View style={styles.routeFields}>
         <View style={styles.routeRail}>
-          <View style={[styles.originPin, { backgroundColor: Colors.accentPrimary }]}>
+          <View style={[styles.originPin, { backgroundColor: routeGradientColors[0] }]}>
             <Feather name="map-pin" size={10} color="#fff" />
           </View>
           <LinearGradient
-            colors={[Colors.accentPrimary, Colors.actionBlue]}
+            colors={routeGradientColors}
             style={styles.routeRailLine}
           />
-          <View style={[styles.destinationDot, { backgroundColor: theme.colors.surfaceElevated }]} />
+          <View style={[styles.destinationDot, { backgroundColor: theme.colors.surfaceElevated, borderColor: routeGradientColors[1] }]} />
         </View>
         <View style={styles.routeCopy}>
           <TouchableOpacity style={styles.routeRow} onPress={onOriginClick} activeOpacity={0.75}>

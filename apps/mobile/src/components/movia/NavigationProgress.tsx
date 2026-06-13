@@ -7,7 +7,10 @@ import { LineChip } from './LineChip';
 import { ExpressRouteBadge } from './ExpressRouteBadge';
 import { Colors, getLineColor } from '../../theme/colors';
 import { useAppTheme } from '../../theme/ThemeContext';
-import type { TripStatus } from '../../trip/activeTripState';
+import {
+  CURRENT_STATION_BANNER_RADIUS_METERS,
+  type TripStatus,
+} from '../../trip/activeTripState';
 import { getVisibleExpressRouteState, type ExpressRouteState } from '../../data/expressRoute';
 
 export interface Station {
@@ -32,8 +35,7 @@ interface NavigationProgressProps {
   navigationConfidenceColor: string;
   tripStatus: TripStatus;
   isDetectingAutoStart?: boolean;
-  showManualStartFallback?: boolean;
-  onManualStartFallback?: () => void;
+  currentStationDistanceMeters?: number | null;
   onClose: () => void;
 }
 
@@ -48,17 +50,21 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, isDetectingAutoStart = false, showManualStartFallback = false, onManualStartFallback, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, isDetectingAutoStart = false, currentStationDistanceMeters = null, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const theme = useAppTheme();
   const lineColor = getLineColor(currentLine);
+  const canShowCurrentStationBanner =
+    currentStationDistanceMeters !== null &&
+    currentStationDistanceMeters <= CURRENT_STATION_BANNER_RADIUS_METERS;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.25)).current;
   const sheetHeight = useRef(new Animated.Value(SHEET_HEIGHTS.normal)).current;
   const sheetStateRef = useRef<SheetState>('normal');
   const [sheetState, setSheetStateValue] = useState<SheetState>('normal');
-  const currentIndex = stations.findIndex(station => station.status === 'current' || station.status === 'arrived');
+  const rawCurrentIndex = stations.findIndex(station => station.status === 'current' || station.status === 'arrived');
+  const currentIndex = canShowCurrentStationBanner ? rawCurrentIndex : -1;
   const hasCurrentStation = currentIndex >= 0;
   const currentStation = hasCurrentStation ? stations[currentIndex] : undefined;
   const nextStation = currentIndex >= 0 ? stations[currentIndex + 1] : stations[0];
@@ -205,24 +211,6 @@ export function NavigationProgress({
             {isDetectingAutoStart && (
               <Text style={[styles.autoStartHint, { color: theme.colors.textTertiary }]}>{t('trip.detecting_position')}</Text>
             )}
-            {showManualStartFallback && (
-              <View style={styles.manualFallbackRow}>
-                <Text style={[styles.manualFallbackText, { color: theme.colors.textTertiary }]}>{t('trip.position_not_detected')}</Text>
-                <TouchableOpacity
-                  onPress={onManualStartFallback}
-                  activeOpacity={0.72}
-                  style={[
-                    styles.manualFallbackButton,
-                    {
-                      backgroundColor: theme.colors.surfaceMuted,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.manualFallbackButtonText, { color: theme.colors.textSecondary }]}>{t('trip.start_manually')}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
           <TouchableOpacity
             onPress={toggleSheet}
@@ -257,7 +245,9 @@ export function NavigationProgress({
         )}
         <View style={styles.progressList}>
           {stations.map((station, index) => {
-            const isCurrent = station.status === 'current' || station.status === 'arrived';
+            const isCurrent =
+              (station.status === 'current' || station.status === 'arrived') &&
+              canShowCurrentStationBanner;
             const isArrivedStation = station.status === 'arrived';
             const isPassed = station.status === 'completed';
             const isNext = station.status === 'next';
@@ -438,31 +428,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textTertiary,
     opacity: 0.78,
-  },
-  manualFallbackRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  manualFallbackText: {
-    fontSize: 11,
-    color: Colors.textTertiary,
-    fontWeight: '600',
-  },
-  manualFallbackButton: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.grayBorder,
-    backgroundColor: Colors.graySurface,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  manualFallbackButtonText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Colors.textSecondary,
   },
   expandButton: {
     width: 30, height: 30, borderRadius: 15,

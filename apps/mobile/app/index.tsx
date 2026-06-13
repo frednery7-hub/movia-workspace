@@ -27,8 +27,8 @@ import { LocationService } from '../src/location/location.service';
 import { InertialService } from '../src/sensors/InertialService';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
 import {
-  AUTO_START_FALLBACK_DELAY_MS,
-  HARD_MAX_AUTO_START_RADIUS_METERS,
+  CURRENT_STATION_BANNER_RADIUS_METERS,
+  HARD_MAX_STATION_MATCH_RADIUS_METERS,
   buildActiveTripState,
   EMPTY_SENT_TRIP_NOTIFICATIONS,
   markAtTransferSent,
@@ -53,7 +53,7 @@ import {
   type TripStatus,
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
-import { Colors, getLineColor } from '../src/theme/colors';
+import { Colors, getLineColor, getRouteGradient } from '../src/theme/colors';
 import { useAppTheme } from '../src/theme/ThemeContext';
 import { getExpressRouteState, getVisibleExpressRouteState } from '../src/data/expressRoute';
 
@@ -237,7 +237,7 @@ export default function HomeScreen() {
   const [locationMode, setLocationMode] = useState<'loading' | 'nearby' | 'planning' | 'manual' | 'denied'>('loading');
   const [navigationConfidenceMode, setNavigationConfidenceMode] = useState<NavigationConfidenceMode>('normal');
   const [tripStatus, setTripStatus] = useState<TripStatus>('ended');
-  const [showManualStartFallback, setShowManualStartFallback] = useState(false);
+  const [currentStationDistanceMeters, setCurrentStationDistanceMeters] = useState<number | null>(null);
   const [sentNotifications, setSentNotifications] = useState<SentTripNotifications>(EMPTY_SENT_TRIP_NOTIFICATIONS);
   const [arrivalBanner, setArrivalBanner] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
@@ -333,6 +333,17 @@ export default function HomeScreen() {
   const transferPointByIndex = new Map(
     (activeTripState?.transferPoints ?? []).map((transferPoint) => [transferPoint.index, transferPoint]),
   );
+  const routeGradientCurrentLine = activeTripState?.currentLine
+    ?? orderedRoutePath[0]?.lineId
+    ?? 'L1';
+  const routeGradientNextLine = activeTripState?.nextLine
+    ?? activeTripState?.transferPoints[0]?.toLine
+    ?? null;
+  const routeGradientColors = getRouteGradient({
+    currentLine: routeGradientCurrentLine,
+    nextLine: routeGradientNextLine,
+    hasTransfer: routeGradientNextLine !== null,
+  });
 
   function applyTripStatusTransition(nextStatus: TripStatus) {
     setTripStatus(currentStatus => (
@@ -356,7 +367,6 @@ export default function HomeScreen() {
     activeStationIdRef.current = nextTripState.currentStation?.id ?? null;
     setCurrentTrackedStationIndex(nextTripState.currentStationIndex);
     setVisualFocusedStationIndex(nextTripState.currentStationIndex);
-    setShowManualStartFallback(false);
     setNavigationConfidenceMode(nextTripState.navigationMode);
     applyTripStatusTransition(nextTripState.tripStatus);
 
@@ -369,22 +379,15 @@ export default function HomeScreen() {
     }
   }
 
-  function handleManualStartFallback() {
-    if (!activeTripState || activeTripState.tripStatus !== 'preview' || activeTripState.orderedRoutePath.length === 0) {
-      return;
-    }
-
-    applyStartTripTracking({
-      source: 'manual-fallback',
-      detectedStationIndex: 0,
-    });
-  }
-
   // TODO(active-trip-state): remover estado paralelo
   // Converte path do ETA em Station[] para NavigationProgress
   const stations: Station[] = etaPath.map((p, i) => {
     const transferPoint = transferPointByIndex.get(i);
-    const hasConfirmedStation = currentTrackedStationIndex !== null && canShowCurrentStation;
+    const hasConfirmedStation =
+      currentTrackedStationIndex !== null &&
+      canShowCurrentStation &&
+      currentStationDistanceMeters !== null &&
+      currentStationDistanceMeters <= CURRENT_STATION_BANNER_RADIUS_METERS;
     const expressRouteState = activeTripState?.currentStationIndex === i
       ? activeTripState.expressRoute
       : getExpressRouteState(p.lineId, p.name);
@@ -419,6 +422,19 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!__DEV__ || !activeTripState) return;
 
+    console.log('[CURRENT_BANNER_DEBUG]', {
+      tripStatus: activeTripState.tripStatus,
+      currentStationIndex: activeTripState.currentStationIndex,
+      currentStationName: activeTripState.currentStation?.name ?? null,
+      distanceToNearestRouteStationMeters: currentStationDistanceMeters,
+      shouldShowCurrentStationBanner:
+        activeTripState.tripStatus === 'active' &&
+        activeTripState.currentStationIndex !== null &&
+        activeTripState.currentStation !== null &&
+        currentStationDistanceMeters !== null &&
+        currentStationDistanceMeters <= CURRENT_STATION_BANNER_RADIUS_METERS,
+    });
+
     const mapPolylinePoints = activeTripState.orderedRoutePath.map(station => ({
       latitude: station.latitude,
       longitude: station.longitude,
@@ -445,7 +461,7 @@ export default function HomeScreen() {
       currentStationName: activeTripState.currentStation?.name ?? null,
       nextStationName: activeTripState.nextStation?.name ?? null,
     });
-  }, [activeTripState?.routeId, activeTripState?.currentStationIndex]);
+  }, [activeTripState?.routeId, activeTripState?.currentStationIndex, currentStationDistanceMeters]);
 
   useEffect(() => {
     if (
@@ -619,23 +635,9 @@ export default function HomeScreen() {
     setVisualFocusedStationIndex(0);
     setArrivalBanner(null);
     setNavigationConfidenceMode('normal');
-    setShowManualStartFallback(false);
+    setCurrentStationDistanceMeters(null);
     applyTripStatusTransition(routeKey ? 'preview' : 'ended');
   }, [routeKey]);
-
-  useEffect(() => {
-    if (screen !== 'navigating' || tripStatus !== 'preview' || !routeKey || !activeTripState) {
-      setShowManualStartFallback(false);
-      return undefined;
-    }
-
-    setShowManualStartFallback(false);
-    const timer = setTimeout(() => {
-      setShowManualStartFallback(true);
-    }, AUTO_START_FALLBACK_DELAY_MS);
-
-    return () => clearTimeout(timer);
-  }, [screen, tripStatus, routeKey, activeTripState?.routeId]);
 
   useEffect(() => {
     if (
@@ -666,6 +668,7 @@ export default function HomeScreen() {
     async function syncActiveStation() {
       const loc = await LocationService.getCurrentLocation();
       if (cancelled || !loc.latitude || !loc.longitude || routeStations.length === 0) {
+        setCurrentStationDistanceMeters(null);
         setNavigationConfidenceMode('approximate');
         return;
       }
@@ -675,6 +678,7 @@ export default function HomeScreen() {
       setNavigationConfidenceMode('normal');
 
       const nearest = findNearestStationWithDistance(routeStations, loc.latitude, loc.longitude);
+      setCurrentStationDistanceMeters(nearest?.distanceMeters ?? null);
       const nearestPathIndex = nearest
         ? routeEta.path.findIndex(p => p.id === nearest.station.id)
         : -1;
@@ -701,7 +705,7 @@ export default function HomeScreen() {
         return;
       }
 
-      if (!nearest || nearest.distanceMeters > HARD_MAX_AUTO_START_RADIUS_METERS) {
+      if (!nearest || nearest.distanceMeters > HARD_MAX_STATION_MATCH_RADIUS_METERS) {
         setNavigationConfidenceMode('hybrid');
         return;
       }
@@ -1049,6 +1053,7 @@ export default function HomeScreen() {
           originName={origin?.name}
           destinationName={destination?.name}
           canSwap={!!origin && !!destination}
+          routeGradientColors={routeGradientColors}
         />
       </View>
 
@@ -1131,9 +1136,8 @@ export default function HomeScreen() {
           navigationConfidenceLabel={navigationConfidenceLabel}
           navigationConfidenceColor={navigationConfidenceColor}
           tripStatus={tripStatus}
-          isDetectingAutoStart={activeTripState?.tripStatus === 'preview' && !showManualStartFallback}
-          showManualStartFallback={activeTripState?.tripStatus === 'preview' && showManualStartFallback}
-          onManualStartFallback={handleManualStartFallback}
+          isDetectingAutoStart={activeTripState?.tripStatus === 'preview'}
+          currentStationDistanceMeters={currentStationDistanceMeters}
           onClose={handleCloseNavigation}
         />
       )}

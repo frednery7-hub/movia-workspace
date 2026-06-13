@@ -59,7 +59,7 @@ export type ActiveTripState = {
   expressRoute: ExpressRouteState | null;
 };
 
-export type StartTripTrackingSource = 'auto-gps' | 'manual-fallback';
+export type StartTripTrackingSource = 'auto-gps';
 
 export type BuildActiveTripStateInput = {
   routeId: string;
@@ -81,9 +81,9 @@ export const EMPTY_SENT_TRIP_NOTIFICATIONS: SentTripNotifications = {
 };
 
 export const TRIP_RECOVERY_WINDOW_MS = 10 * 60 * 1000;
-export const AUTO_START_RADIUS_METERS = 200;
-export const HARD_MAX_AUTO_START_RADIUS_METERS = 300;
-export const AUTO_START_FALLBACK_DELAY_MS = 8000;
+export const CURRENT_STATION_BANNER_RADIUS_METERS = 120;
+export const HARD_MAX_STATION_MATCH_RADIUS_METERS = 200;
+export const AUTO_START_RADIUS_METERS = CURRENT_STATION_BANNER_RADIUS_METERS;
 export const AUTO_START_ALLOWED_INDEX_RANGE = [0, 1, 2] as const;
 
 export type GeoLocation = {
@@ -215,7 +215,7 @@ export function startTripTracking(params: {
     routeId: params.state.routeId,
     orderedRoutePath: params.state.orderedRoutePath,
     currentStationIndex,
-    navigationMode: params.source === 'manual-fallback' ? 'hybrid' : 'normal',
+    navigationMode: 'normal',
     sentNotifications: params.state.sentNotifications,
     tripStatus: transitionedState.tripStatus,
   });

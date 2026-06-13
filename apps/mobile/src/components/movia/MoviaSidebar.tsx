@@ -17,7 +17,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { LineChip } from "./LineChip";
 import { StatusBadge } from "./StatusBadge";
 import { FareBanner } from "./FareBanner";
-import { Colors, useAppTheme } from "../../theme/colors";
+import { Colors } from "../../theme/colors";
+import { useAppTheme } from "../../theme/ThemeContext";
 import { useTariffStatus } from "../../hooks/useTariffStatus";
 
 const SIDEBAR_WIDTH = Dimensions.get("window").width * 0.85;

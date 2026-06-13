@@ -15,7 +15,8 @@ import { IdentityService } from "../src/security/identity.service";
 import { ConsentService } from "../src/privacy/consent.service";
 import { api } from "../src/config/api";
 import { t as translate, SupportedLocale } from "../src/i18n";
-import { useAppTheme } from "../src/theme/colors";
+import { useThemeController } from "../src/theme/ThemeContext";
+import type { AppThemeMode } from "../src/theme/colors";
 
 type Language = "ES" | "PT" | "EN";
 
@@ -27,7 +28,7 @@ const localeMap: Record<Language, SupportedLocale> = {
 
 export default function SettingsScreen() {
   const { language, setLanguage } = useLanguage();
-  const theme = useAppTheme();
+  const { theme, themeMode, setThemeMode } = useThemeController();
   const locale = localeMap[language];
   const t = (key: string) => translate(key, locale);
   const [loading, setLoading] = useState<string | null>(null);
@@ -124,6 +125,12 @@ export default function SettingsScreen() {
     );
   }
 
+  const themeOptions: Array<{ mode: AppThemeMode; label: string }> = [
+    { mode: "system", label: t("settings.theme.system") },
+    { mode: "light", label: t("settings.theme.light") },
+    { mode: "dark", label: t("settings.theme.dark") },
+  ];
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -182,6 +189,39 @@ export default function SettingsScreen() {
             {item.code !== "EN" && <View style={[styles.divider, { backgroundColor: theme.colors.borderSubtle }]} />}
             </View>
           ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionLabel, { color: theme.colors.textTertiary }]}>{t("settings.appearance")}</Text>
+        <View style={[styles.languageGroup, { backgroundColor: theme.colors.surfaceElevated }]}>
+          {themeOptions.map((item, index) => {
+            const isActive = themeMode === item.mode;
+            return (
+              <View key={item.mode}>
+                <TouchableOpacity
+                  style={styles.languageItem}
+                  onPress={() => setThemeMode(item.mode)}
+                  activeOpacity={0.7}
+                >
+                  <Feather
+                    name={item.mode === "system" ? "smartphone" : item.mode === "light" ? "sun" : "moon"}
+                    size={18}
+                    color={isActive ? "#1A73E8" : theme.colors.iconMuted}
+                  />
+                  <View style={styles.itemText}>
+                    <Text style={[styles.itemTitle, { color: theme.colors.textPrimary }]}>{item.label}</Text>
+                  </View>
+                  <Text style={[styles.itemArrow, { color: isActive ? "#1A73E8" : theme.colors.textTertiary }]}>
+                    {isActive ? "✓" : "›"}
+                  </Text>
+                </TouchableOpacity>
+                {index < themeOptions.length - 1 && (
+                  <View style={[styles.divider, { backgroundColor: theme.colors.borderSubtle }]} />
+                )}
+              </View>
+            );
+          })}
         </View>
       </View>
 

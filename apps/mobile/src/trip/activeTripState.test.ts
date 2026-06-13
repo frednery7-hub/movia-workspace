@@ -199,20 +199,6 @@ describe('startTripTracking', () => {
     });
   });
 
-  it('source manual-fallback retorna active usando índice 0', () => {
-    const nextState = startTripTracking({
-      state: buildState(null, transferPath, 'preview'),
-      source: 'manual-fallback',
-      detectedStationIndex: 0,
-    });
-
-    expect(nextState.tripStatus).toBe('active');
-    expect(nextState.currentStationIndex).toBe(0);
-    expect(nextState.currentStation).toMatchObject({
-      id: 'st_los_leones',
-      lineId: 'L1',
-    });
-  });
 });
 
 describe('shouldAutoStartTracking', () => {
@@ -232,7 +218,7 @@ describe('shouldAutoStartTracking', () => {
       orderedRoutePath: transferPath,
       userLocation: { latitude: -33.4, longitude: -70.6 },
       nearestRouteStation: transferPath[0],
-      distanceToNearestRouteStationMeters: 200,
+      distanceToNearestRouteStationMeters: 120,
     })).toBe(true);
   });
 
@@ -242,7 +228,7 @@ describe('shouldAutoStartTracking', () => {
       orderedRoutePath: l1OnlyPath,
       userLocation: { latitude: -33.4, longitude: -70.6 },
       nearestRouteStation: l1OnlyPath[2],
-      distanceToNearestRouteStationMeters: 200,
+      distanceToNearestRouteStationMeters: 120,
     })).toBe(true);
   });
 
@@ -262,7 +248,7 @@ describe('shouldAutoStartTracking', () => {
       orderedRoutePath: transferPath,
       userLocation: { latitude: -33.4, longitude: -70.6 },
       nearestRouteStation: transferPath[1],
-      distanceToNearestRouteStationMeters: 201,
+      distanceToNearestRouteStationMeters: 121,
     })).toBe(false);
   });
 

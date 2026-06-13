@@ -81,7 +81,6 @@ export type AppTheme = {
     overlayTop: string;
     overlayBottom: string;
     modalBackdrop: string;
-    routeBarGradient: [string, string];
     headerGradient: [string, string];
   };
 };
@@ -109,7 +108,6 @@ const APP_THEMES: Record<AppColorScheme, AppTheme> = {
       overlayTop: 'rgba(240,242,245,0.4)',
       overlayBottom: 'rgba(240,242,245,0.6)',
       modalBackdrop: 'rgba(17, 24, 39, 0.42)',
-      routeBarGradient: ['rgba(255,255,255,0.98)', 'rgba(248,250,252,0.96)'],
       headerGradient: ['#1a1a2e', '#232340'],
     },
   },
@@ -135,7 +133,6 @@ const APP_THEMES: Record<AppColorScheme, AppTheme> = {
       overlayTop: 'rgba(11,16,32,0.54)',
       overlayBottom: 'rgba(11,16,32,0.72)',
       modalBackdrop: 'rgba(2, 6, 23, 0.68)',
-      routeBarGradient: ['rgba(23,32,51,0.98)', 'rgba(17,24,39,0.96)'],
       headerGradient: ['#111827', '#1F2937'],
     },
   },
