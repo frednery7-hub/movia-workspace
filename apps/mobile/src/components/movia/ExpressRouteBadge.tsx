@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocale } from '../../context/LocaleContext';
-import { Colors } from '../../theme/colors';
+import { Colors, useAppTheme } from '../../theme/colors';
 import type {
   ExpressRouteAvailability,
   ExpressRouteType,
@@ -27,6 +27,7 @@ export function ExpressRouteBadge({
   compact = false,
 }: ExpressRouteBadgeProps) {
   const { t } = useLocale();
+  const theme = useAppTheme();
   const [detailsVisible, setDetailsVisible] = useState(false);
   const { label, badgeStyle, textStyle, icon } = useMemo(
     () => getBadgePresentation(type, availability, t),
@@ -60,36 +61,42 @@ export function ExpressRouteBadge({
       >
         <TouchableOpacity
           activeOpacity={1}
-          style={styles.modalBackdrop}
+          style={[styles.modalBackdrop, { backgroundColor: theme.colors.modalBackdrop }]}
           onPress={() => setDetailsVisible(false)}
         >
-          <TouchableOpacity activeOpacity={1} style={styles.modalCard}>
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme.colors.surfaceElevated },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('expressRoute.label')}</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>{t('expressRoute.label')}</Text>
               <TouchableOpacity
                 onPress={() => setDetailsVisible(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Feather name="x" size={18} color={Colors.textSecondary} />
+                <Feather name="x" size={18} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.legendRow}>
               <View style={[styles.legendDot, styles.redDot]} />
-              <Text style={styles.legendText}>{t('expressRoute.red')}</Text>
+              <Text style={[styles.legendText, { color: theme.colors.textPrimary }]}>{t('expressRoute.red')}</Text>
             </View>
             <View style={styles.legendRow}>
               <View style={[styles.legendDot, styles.greenDot]} />
-              <Text style={styles.legendText}>{t('expressRoute.green')}</Text>
+              <Text style={[styles.legendText, { color: theme.colors.textPrimary }]}>{t('expressRoute.green')}</Text>
             </View>
             <View style={styles.legendRow}>
               <ExpressRouteDot type="common" availability="active" />
-              <Text style={styles.legendText}>{t('expressRoute.common')}</Text>
+              <Text style={[styles.legendText, { color: theme.colors.textPrimary }]}>{t('expressRoute.common')}</Text>
             </View>
 
-            <Text style={styles.scheduleText}>{t('expressRoute.scheduleInfo')}</Text>
-            <Text style={styles.noteText}>{t('expressRoute.operationNote')}</Text>
-            <Text style={styles.linesText}>L2 · L4 · L5</Text>
+            <Text style={[styles.scheduleText, { color: theme.colors.textPrimary }]}>{t('expressRoute.scheduleInfo')}</Text>
+            <Text style={[styles.noteText, { color: theme.colors.textSecondary }]}>{t('expressRoute.operationNote')}</Text>
+            <Text style={[styles.linesText, { color: theme.colors.textTertiary }]}>L2 · L4 · L5</Text>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>

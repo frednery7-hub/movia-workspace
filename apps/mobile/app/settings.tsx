@@ -15,6 +15,7 @@ import { IdentityService } from "../src/security/identity.service";
 import { ConsentService } from "../src/privacy/consent.service";
 import { api } from "../src/config/api";
 import { t as translate, SupportedLocale } from "../src/i18n";
+import { useAppTheme } from "../src/theme/colors";
 
 type Language = "ES" | "PT" | "EN";
 
@@ -26,6 +27,7 @@ const localeMap: Record<Language, SupportedLocale> = {
 
 export default function SettingsScreen() {
   const { language, setLanguage } = useLanguage();
+  const theme = useAppTheme();
   const locale = localeMap[language];
   const t = (key: string) => translate(key, locale);
   const [loading, setLoading] = useState<string | null>(null);
@@ -123,26 +125,29 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={styles.content}
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="chevron-left" size={25} color="#1a1a2e" />
+          <Feather name="chevron-left" size={25} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>{t("settings.title")}</Text>
+        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>{t("settings.title")}</Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t("settings.profile")}</Text>
-        <View style={styles.item}>
-          <Feather name="user" size={19} color="#5A5A5A" />
+        <Text style={[styles.sectionLabel, { color: theme.colors.textTertiary }]}>{t("settings.profile")}</Text>
+        <View style={[styles.item, { backgroundColor: theme.colors.surfaceElevated }]}>
+          <Feather name="user" size={19} color={theme.colors.iconMuted} />
           <View style={styles.itemText}>
-            <Text style={styles.itemTitle}>{t("settings.name")}</Text>
+            <Text style={[styles.itemTitle, { color: theme.colors.textPrimary }]}>{t("settings.name")}</Text>
             <TextInput
               value={profileName}
               onChangeText={handleNameChange}
               placeholder={t("settings.name_placeholder")}
-              placeholderTextColor="#9CA3AF"
-              style={styles.nameInput}
+              placeholderTextColor={theme.colors.textTertiary}
+              style={[styles.nameInput, { color: theme.colors.textPrimary }]}
               returnKeyType="done"
             />
           </View>
@@ -150,8 +155,8 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t("settings.language")}</Text>
-        <View style={styles.languageGroup}>
+        <Text style={[styles.sectionLabel, { color: theme.colors.textTertiary }]}>{t("settings.language")}</Text>
+        <View style={[styles.languageGroup, { backgroundColor: theme.colors.surfaceElevated }]}>
           {[
             { code: "ES" as const, label: "Español", flag: "🇨🇱", switchKey: "settings.switch_to_spanish" },
             { code: "PT" as const, label: "Português", flag: "🇧🇷", switchKey: "settings.switch_to_portuguese" },
@@ -165,53 +170,53 @@ export default function SettingsScreen() {
             >
               <Text style={styles.languageFlag}>{item.flag}</Text>
               <View style={styles.itemText}>
-                <Text style={styles.itemTitle}>{item.label}</Text>
-                <Text style={styles.itemDesc}>
+                <Text style={[styles.itemTitle, { color: theme.colors.textPrimary }]}>{item.label}</Text>
+                <Text style={[styles.itemDesc, { color: theme.colors.textTertiary }]}>
                   {language === item.code
                     ? t("settings.current_language")
                     : t(item.switchKey)}
                 </Text>
               </View>
-              <Text style={styles.itemArrow}>{language === item.code ? "✓" : "›"}</Text>
+              <Text style={[styles.itemArrow, { color: theme.colors.textTertiary }]}>{language === item.code ? "✓" : "›"}</Text>
             </TouchableOpacity>
-            {item.code !== "EN" && <View style={styles.divider} />}
+            {item.code !== "EN" && <View style={[styles.divider, { backgroundColor: theme.colors.borderSubtle }]} />}
             </View>
           ))}
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t("settings.privacy")}</Text>
+        <Text style={[styles.sectionLabel, { color: theme.colors.textTertiary }]}>{t("settings.privacy")}</Text>
         <TouchableOpacity
-          style={styles.item}
+          style={[styles.item, { backgroundColor: theme.colors.surfaceElevated }]}
           onPress={handleExportData}
           activeOpacity={0.7}
           disabled={loading === "export"}
         >
-          <Feather name="download" size={19} color="#5A5A5A" />
+          <Feather name="download" size={19} color={theme.colors.iconMuted} />
           <View style={styles.itemText}>
-            <Text style={styles.itemTitle}>{t("settings.export")}</Text>
-            <Text style={styles.itemDesc}>{t("settings.export_desc")}</Text>
+            <Text style={[styles.itemTitle, { color: theme.colors.textPrimary }]}>{t("settings.export")}</Text>
+            <Text style={[styles.itemDesc, { color: theme.colors.textTertiary }]}>{t("settings.export_desc")}</Text>
           </View>
-          <Text style={styles.itemArrow}>›</Text>
+          <Text style={[styles.itemArrow, { color: theme.colors.textTertiary }]}>›</Text>
         </TouchableOpacity>
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: theme.colors.borderSubtle }]} />
         <TouchableOpacity
-          style={styles.item}
+          style={[styles.item, { backgroundColor: theme.colors.surfaceElevated }]}
           onPress={handleRevokeConsent}
           activeOpacity={0.7}
           disabled={loading === "consent"}
         >
-          <Feather name="shield" size={19} color="#5A5A5A" />
+          <Feather name="shield" size={19} color={theme.colors.iconMuted} />
           <View style={styles.itemText}>
-            <Text style={styles.itemTitle}>{t("settings.revoke")}</Text>
-            <Text style={styles.itemDesc}>{t("settings.revoke_desc")}</Text>
+            <Text style={[styles.itemTitle, { color: theme.colors.textPrimary }]}>{t("settings.revoke")}</Text>
+            <Text style={[styles.itemDesc, { color: theme.colors.textTertiary }]}>{t("settings.revoke_desc")}</Text>
           </View>
-          <Text style={styles.itemArrow}>›</Text>
+          <Text style={[styles.itemArrow, { color: theme.colors.textTertiary }]}>›</Text>
         </TouchableOpacity>
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: theme.colors.borderSubtle }]} />
         <TouchableOpacity
-          style={styles.item}
+          style={[styles.item, { backgroundColor: theme.colors.surfaceElevated }]}
           onPress={handleDeleteData}
           activeOpacity={0.7}
           disabled={loading === "delete"}
@@ -221,16 +226,16 @@ export default function SettingsScreen() {
             <Text style={[styles.itemTitle, { color: "#E31837" }]}>
               {t("settings.delete")}
             </Text>
-            <Text style={styles.itemDesc}>{t("settings.delete_desc")}</Text>
+            <Text style={[styles.itemDesc, { color: theme.colors.textTertiary }]}>{t("settings.delete_desc")}</Text>
           </View>
-          <Text style={styles.itemArrow}>›</Text>
+          <Text style={[styles.itemArrow, { color: theme.colors.textTertiary }]}>›</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t("settings.session")}</Text>
+        <Text style={[styles.sectionLabel, { color: theme.colors.textTertiary }]}>{t("settings.session")}</Text>
         <TouchableOpacity
-          style={styles.item}
+          style={[styles.item, { backgroundColor: theme.colors.surfaceElevated }]}
           onPress={handleLogout}
           activeOpacity={0.7}
           disabled={loading === "logout"}
@@ -240,19 +245,19 @@ export default function SettingsScreen() {
             <Text style={[styles.itemTitle, { color: "#E31837" }]}>
               {t("settings.logout")}
             </Text>
-            <Text style={styles.itemDesc}>{t("settings.logout_desc")}</Text>
+            <Text style={[styles.itemDesc, { color: theme.colors.textTertiary }]}>{t("settings.logout_desc")}</Text>
           </View>
-          <Text style={styles.itemArrow}>›</Text>
+          <Text style={[styles.itemArrow, { color: theme.colors.textTertiary }]}>›</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t("settings.about")}</Text>
-        <View style={styles.item}>
-          <Feather name="info" size={19} color="#5A5A5A" />
+        <Text style={[styles.sectionLabel, { color: theme.colors.textTertiary }]}>{t("settings.about")}</Text>
+        <View style={[styles.item, { backgroundColor: theme.colors.surfaceElevated }]}>
+          <Feather name="info" size={19} color={theme.colors.iconMuted} />
           <View style={styles.itemText}>
-            <Text style={styles.itemTitle}>Movia</Text>
-            <Text style={styles.itemDesc}>{t("settings.version")}</Text>
+            <Text style={[styles.itemTitle, { color: theme.colors.textPrimary }]}>Movia</Text>
+            <Text style={[styles.itemDesc, { color: theme.colors.textTertiary }]}>{t("settings.version")}</Text>
           </View>
         </View>
       </View>

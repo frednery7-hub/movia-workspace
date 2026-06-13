@@ -9,6 +9,7 @@ import {
   shouldNotifyDestinationArrival,
   shouldNotifyOneBeforeDestination,
   shouldNotifyOneBeforeTransfer,
+  startTripTracking,
   transitionTripStatus,
   type ActiveTripState,
   type RouteStation,
@@ -151,6 +152,69 @@ describe('transitionTripStatus', () => {
   });
 });
 
+describe('startTripTracking', () => {
+  it('source auto-gps retorna estado com tripStatus active', () => {
+    const nextState = startTripTracking({
+      state: buildState(null, transferPath, 'preview'),
+      source: 'auto-gps',
+      detectedStationIndex: 1,
+    });
+
+    expect(nextState.tripStatus).toBe('active');
+  });
+
+  it('source auto-gps define currentStationIndex como detectedStationIndex', () => {
+    const nextState = startTripTracking({
+      state: buildState(null, transferPath, 'preview'),
+      source: 'auto-gps',
+      detectedStationIndex: 1,
+    });
+
+    expect(nextState.currentStationIndex).toBe(1);
+  });
+
+  it('source auto-gps deriva currentStation corretamente', () => {
+    const nextState = startTripTracking({
+      state: buildState(null, transferPath, 'preview'),
+      source: 'auto-gps',
+      detectedStationIndex: 1,
+    });
+
+    expect(nextState.currentStation).toMatchObject({
+      id: 'st_tobalaba',
+      lineId: 'L1',
+    });
+  });
+
+  it('source auto-gps deriva nextStation corretamente', () => {
+    const nextState = startTripTracking({
+      state: buildState(null, transferPath, 'preview'),
+      source: 'auto-gps',
+      detectedStationIndex: 1,
+    });
+
+    expect(nextState.nextStation).toMatchObject({
+      id: 'st_tobalaba',
+      lineId: 'L4',
+    });
+  });
+
+  it('source manual-fallback retorna active usando índice 0', () => {
+    const nextState = startTripTracking({
+      state: buildState(null, transferPath, 'preview'),
+      source: 'manual-fallback',
+      detectedStationIndex: 0,
+    });
+
+    expect(nextState.tripStatus).toBe('active');
+    expect(nextState.currentStationIndex).toBe(0);
+    expect(nextState.currentStation).toMatchObject({
+      id: 'st_los_leones',
+      lineId: 'L1',
+    });
+  });
+});
+
 describe('shouldAutoStartTracking', () => {
   it('retorna false se a rota está apenas calculada sem localização', () => {
     expect(shouldAutoStartTracking({
@@ -167,7 +231,17 @@ describe('shouldAutoStartTracking', () => {
       tripStatus: 'preview',
       orderedRoutePath: transferPath,
       userLocation: { latitude: -33.4, longitude: -70.6 },
-      nearestRouteStation: transferPath[1],
+      nearestRouteStation: transferPath[0],
+      distanceToNearestRouteStationMeters: 200,
+    })).toBe(true);
+  });
+
+  it('retorna true em preview quando o GPS está próximo do índice 2 da rota', () => {
+    expect(shouldAutoStartTracking({
+      tripStatus: 'preview',
+      orderedRoutePath: l1OnlyPath,
+      userLocation: { latitude: -33.4, longitude: -70.6 },
+      nearestRouteStation: l1OnlyPath[2],
       distanceToNearestRouteStationMeters: 200,
     })).toBe(true);
   });
@@ -192,15 +266,12 @@ describe('shouldAutoStartTracking', () => {
     })).toBe(false);
   });
 
-  it('retorna false quando a estação próxima da rota está fora dos índices iniciais permitidos', () => {
+  it('retorna false quando a estação próxima da rota está no índice 3', () => {
     expect(shouldAutoStartTracking({
       tripStatus: 'preview',
-      orderedRoutePath: [
-        ...transferPath,
-        station('st_las_mercedes', 'Las Mercedes', 'L4'),
-      ],
+      orderedRoutePath: transferPath,
       userLocation: { latitude: -33.4, longitude: -70.6 },
-      nearestRouteStation: station('st_las_mercedes', 'Las Mercedes', 'L4'),
+      nearestRouteStation: transferPath[3],
       distanceToNearestRouteStationMeters: 50,
     })).toBe(false);
   });

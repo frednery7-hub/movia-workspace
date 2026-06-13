@@ -59,6 +59,8 @@ export type ActiveTripState = {
   expressRoute: ExpressRouteState | null;
 };
 
+export type StartTripTrackingSource = 'auto-gps' | 'manual-fallback';
+
 export type BuildActiveTripStateInput = {
   routeId: string;
   orderedRoutePath: RouteStation[];
@@ -193,6 +195,30 @@ function canTransitionTripStatus(
     case 'ended':
       return false;
   }
+}
+
+export function startTripTracking(params: {
+  state: ActiveTripState;
+  source: StartTripTrackingSource;
+  detectedStationIndex: number;
+}): ActiveTripState {
+  const transitionedState = transitionTripStatus(params.state, 'active');
+  if (transitionedState.tripStatus !== 'active') return params.state;
+
+  const currentStationIndex = normalizeCurrentStationIndex(
+    params.detectedStationIndex,
+    params.state.orderedRoutePath.length,
+  );
+  if (currentStationIndex === null) return params.state;
+
+  return buildActiveTripState({
+    routeId: params.state.routeId,
+    orderedRoutePath: params.state.orderedRoutePath,
+    currentStationIndex,
+    navigationMode: params.source === 'manual-fallback' ? 'hybrid' : 'normal',
+    sentNotifications: params.state.sentNotifications,
+    tripStatus: transitionedState.tripStatus,
+  });
 }
 
 export function shouldAutoStartTracking(params: {

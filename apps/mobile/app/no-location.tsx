@@ -4,9 +4,11 @@ import { ConsentService }                            from '../src/privacy/consen
 import { Feather }                                   from '@expo/vector-icons';
 import { useLocale }                                 from '../src/context/LocaleContext';
 import { ENABLE_METRO_INCIDENTS }                    from '../src/config/featureFlags';
+import { useAppTheme }                               from '../src/theme/colors';
 
 export default function NoLocationScreen() {
   const { t } = useLocale();
+  const theme = useAppTheme();
 
   async function handleContinue() {
     router.replace({ pathname: '/', params: { selectOrigin: '1' } });
@@ -18,23 +20,29 @@ export default function NoLocationScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Feather name="map-pin" size={44} color="#1A73E8" style={styles.icon} />
 
-      <Text style={styles.title}>{t('no_location.title')}</Text>
+      <Text style={[styles.title, { color: theme.colors.textPrimary }]}>{t('no_location.title')}</Text>
 
-      <Text style={styles.description}>
+      <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
         {t('no_location.description')}
       </Text>
 
-      <View style={styles.infoBox}>
-        <Text style={styles.infoTitle}>{t('no_location.what_can_do')}</Text>
-        <Text style={styles.infoItem}>• {t('no_location.manual_search')}</Text>
-        <Text style={styles.infoItem}>• {t('no_location.eta')}</Text>
+      <View style={[
+        styles.infoBox,
+        {
+          backgroundColor: theme.colors.surfaceElevated,
+          borderColor: theme.colors.border,
+        },
+      ]}>
+        <Text style={[styles.infoTitle, { color: theme.colors.textPrimary }]}>{t('no_location.what_can_do')}</Text>
+        <Text style={[styles.infoItem, { color: theme.colors.textSecondary }]}>• {t('no_location.manual_search')}</Text>
+        <Text style={[styles.infoItem, { color: theme.colors.textSecondary }]}>• {t('no_location.eta')}</Text>
         {ENABLE_METRO_INCIDENTS && (
-          <Text style={styles.infoItem}>• {t('no_location.alerts')}</Text>
+          <Text style={[styles.infoItem, { color: theme.colors.textSecondary }]}>• {t('no_location.alerts')}</Text>
         )}
-        <Text style={styles.infoItem}>• {t('no_location.preferences')}</Text>
+        <Text style={[styles.infoItem, { color: theme.colors.textSecondary }]}>• {t('no_location.preferences')}</Text>
       </View>
 
       <TouchableOpacity style={styles.btnPrimary} onPress={handleContinue} activeOpacity={0.8}>

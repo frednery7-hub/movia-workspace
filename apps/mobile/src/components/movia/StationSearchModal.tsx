@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NearbyStation, useStations, useStationSearch, StationResult } from '../../hooks/useStations';
 import { useLocale } from '../../context/LocaleContext';
 import { CacheService } from '../../config/cache.service';
-import { Colors, getLineColor } from '../../theme/colors';
+import { Colors, getLineColor, useAppTheme } from '../../theme/colors';
 import {
   getExpressRouteState,
   getVisibleExpressRouteState,
@@ -45,6 +45,7 @@ export function StationSearchModal({
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const { t } = useLocale();
+  const theme = useAppTheme();
   const modalTitle = t(titleKey ?? 'where_to');
   const selectedHint = selectedStationHintKey ? t(selectedStationHintKey) : undefined;
   const [recentStations, setRecentStations] = useState<StationResult[]>([]);
@@ -127,20 +128,29 @@ export function StationSearchModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
+      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.surface }]}>
+        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn}>
-            <Feather name="arrow-left" size={22} color={Colors.textPrimary} />
+            <Feather name="arrow-left" size={22} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>{modalTitle}</Text>
+          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>{modalTitle}</Text>
         </View>
 
-        <View style={[styles.inputWrapper, selectedStation && !query.trim() && styles.inputWrapperSelected]}>
-          <Feather name="search" size={18} color={Colors.textTertiary} />
+        <View style={[
+          styles.inputWrapper,
+          selectedStation && !query.trim() && styles.inputWrapperSelected,
+          {
+            backgroundColor: selectedStation && !query.trim()
+              ? theme.colors.selectedSurface
+              : theme.colors.inputSurface,
+            borderColor: selectedStation && !query.trim() ? Colors.actionBlue : 'transparent',
+          },
+        ]}>
+          <Feather name="search" size={18} color={theme.colors.textTertiary} />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: theme.colors.textPrimary }]}
             placeholder={selectedStation && !query.trim() ? selectedStation.name : t("search.placeholder")}
-            placeholderTextColor={selectedStation && !query.trim() ? Colors.textPrimary : Colors.textTertiary}
+            placeholderTextColor={selectedStation && !query.trim() ? theme.colors.textPrimary : theme.colors.textTertiary}
             value={query}
             onChangeText={setQuery}
             autoFocus
@@ -148,41 +158,49 @@ export function StationSearchModal({
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery('')}>
-              <Feather name="x" size={16} color={Colors.textTertiary} />
+              <Feather name="x" size={16} color={theme.colors.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
         {selectedStation && !query.trim() && selectedHint && (
           <View style={styles.selectedOriginHint}>
             <Feather name="check-circle" size={14} color="#1A73E8" />
-            <Text style={styles.selectedOriginText}>{selectedHint}</Text>
+            <Text style={[styles.selectedOriginText, { color: theme.colors.textSecondary }]}>{selectedHint}</Text>
           </View>
         )}
 
         {isLoading ? (
           <View style={styles.loading}>
             <ActivityIndicator color={Colors.accentPrimary} />
-            <Text style={styles.loadingText}>{t("search.loading")}</Text>
+            <Text style={[styles.loadingText, { color: theme.colors.textTertiary }]}>{t("search.loading")}</Text>
           </View>
         ) : (
           <>
             {!query.trim() && nearbyStations.length > 0 && (
               <>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{t('search.nearby')}</Text>
+                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t('search.nearby')}</Text>
                 </View>
                 {nearbyStations.slice(0, 3).map(({ station, distanceMeters }) => {
                   const freshStation = withFreshStationData(station);
                   const isSelected = selectedStation?.id === freshStation.id;
                   return (
-                    <TouchableOpacity key={`nearby-${freshStation.id}`} style={[styles.stationItem, isSelected && styles.stationItemSelected]} onPress={() => handleSelect(freshStation)} activeOpacity={0.7}>
+                    <TouchableOpacity
+                      key={`nearby-${freshStation.id}`}
+                      style={[
+                        styles.stationItem,
+                        isSelected && [styles.stationItemSelected, { backgroundColor: theme.colors.selectedSurface }],
+                      ]}
+                      onPress={() => handleSelect(freshStation)}
+                      activeOpacity={0.7}
+                    >
                       <View style={styles.nearbyIcon}>
                         <Feather name={isSelected ? "check" : "navigation"} size={14} color="#1A73E8" />
                       </View>
                       <View style={styles.stationInfo}>
-                        <Text style={styles.stationName}>{freshStation.name}</Text>
+                        <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{freshStation.name}</Text>
                         <View style={styles.stationMeta}>
-                          <Text style={styles.stationCode}>{distanceMeters} m</Text>
+                          <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>{distanceMeters} m</Text>
                           {renderLineChips(freshStation)}
                         </View>
                         {renderExpressRouteBadges(freshStation)}
@@ -195,8 +213,8 @@ export function StationSearchModal({
             )}
             {!query.trim() && recentStations.length > 0 && (
               <>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{t("search.recent")}</Text>
+                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("search.recent")}</Text>
                   <TouchableOpacity onPress={handleClearHistory} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Text style={styles.clearText}>{t('search.clear')}</Text>
                   </TouchableOpacity>
@@ -205,11 +223,11 @@ export function StationSearchModal({
                   const freshStation = withFreshStationData(station);
                   return (
                     <TouchableOpacity key={freshStation.id} style={styles.stationItem} onPress={() => handleSelect(freshStation)} activeOpacity={0.7}>
-                      <Feather name="clock" size={16} color={Colors.textTertiary} />
+                      <Feather name="clock" size={16} color={theme.colors.textTertiary} />
                       <View style={styles.stationInfo}>
-                        <Text style={styles.stationName}>{freshStation.name}</Text>
+                        <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{freshStation.name}</Text>
                         <View style={styles.stationMeta}>
-                          <Text style={styles.stationCode}>{freshStation.shortCode}</Text>
+                          <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>{freshStation.shortCode}</Text>
                           {renderLineChips(freshStation)}
                         </View>
                         {renderExpressRouteBadges(freshStation)}
@@ -220,36 +238,38 @@ export function StationSearchModal({
               </>
             )}
             {!query.trim() && (nearbyStations.length > 0 || recentStations.length > 0) && (
-              <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("search.all_stations")}</Text></View>
+              <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("search.all_stations")}</Text>
+              </View>
             )}
           <FlatList
             data={filtered}
             keyExtractor={item => item.id}
             keyboardShouldPersistTaps="handled"
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />}
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.stationItem}
                 onPress={() => handleSelect(item)}
                 activeOpacity={0.7}
               >
-                <View style={styles.stationIcon}>
+                <View style={[styles.stationIcon, { backgroundColor: `${Colors.accentPrimary}22` }]}>
                   <Feather name="map-pin" size={14} color={Colors.accentPrimary} />
                 </View>
                 <View style={styles.stationInfo}>
-                  <Text style={styles.stationName}>{item.name}</Text>
+                  <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
                   <View style={styles.stationMeta}>
-                    <Text style={styles.stationCode}>{item.shortCode}</Text>
+                    <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>{item.shortCode}</Text>
                     {renderLineChips(item)}
                   </View>
                   {renderExpressRouteBadges(item)}
                 </View>
-                <Feather name="chevron-right" size={16} color={Colors.grayBorder} />
+                <Feather name="chevron-right" size={16} color={theme.colors.border} />
               </TouchableOpacity>
             )}
             ListEmptyComponent={
               <View style={styles.empty}>
-                <Text style={styles.emptyText}>{t("search.empty")}</Text>
+                <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>{t("search.empty")}</Text>
                 <Text style={styles.emptyAction}>{t('search.view_lines_map')}</Text>
               </View>
             }

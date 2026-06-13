@@ -17,7 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { LineChip } from "./LineChip";
 import { StatusBadge } from "./StatusBadge";
 import { FareBanner } from "./FareBanner";
-import { Colors } from "../../theme/colors";
+import { Colors, useAppTheme } from "../../theme/colors";
 import { useTariffStatus } from "../../hooks/useTariffStatus";
 
 const SIDEBAR_WIDTH = Dimensions.get("window").width * 0.85;
@@ -116,6 +116,7 @@ export function MoviaSidebar({
 }: MoviaSidebarProps) {
   const tariff = useTariffStatus();
   const { t } = useLocale();
+  const theme = useAppTheme();
   const [incidentFilter, setIncidentFilter] = useState<IncidentLineFilter>("ALL");
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
@@ -167,9 +168,16 @@ export function MoviaSidebar({
       </TouchableWithoutFeedback>
 
       <Animated.View
-        style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}
+        style={[
+          styles.sidebar,
+          {
+            backgroundColor: theme.colors.background,
+            shadowColor: theme.colors.shadow,
+            transform: [{ translateX: slideAnim }],
+          },
+        ]}
       >
-        <LinearGradient colors={["#1a1a2e", "#232340"]} style={styles.header}>
+        <LinearGradient colors={theme.colors.headerGradient} style={styles.header}>
           <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
             <Feather name="x" size={19} color="rgba(255,255,255,0.72)" />
           </TouchableOpacity>
@@ -197,21 +205,24 @@ export function MoviaSidebar({
           timeRangeKey={tariff.timeRangeKey}
         />
 
-        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionTitle}>{t("lines")}</Text>
+        <ScrollView
+          style={[styles.scroll, { backgroundColor: theme.colors.background }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("lines")}</Text>
           {isLoading ? (
             [1, 2, 3, 4, 5, 6, 7].map((i) => <LineSkeleton key={i} />)
           ) : lines.length === 0 ? (
-            <Text style={styles.empty}>{t('lines.empty')}</Text>
+            <Text style={[styles.empty, { color: theme.colors.textTertiary }]}>{t('lines.empty')}</Text>
           ) : (
             lines.map((line) => (
               <TouchableOpacity
                 key={line.number}
-                style={styles.lineRow}
+                style={[styles.lineRow, { borderBottomColor: theme.colors.borderSubtle }]}
                 activeOpacity={0.7}
               >
                 <LineChip line={line.number} />
-                <Text style={styles.lineName}>{line.name}</Text>
+                <Text style={[styles.lineName, { color: theme.colors.textPrimary }]}>{line.name}</Text>
                 {showIncidentStatus && <StatusBadge status={line.status} />}
               </TouchableOpacity>
             ))
@@ -219,7 +230,7 @@ export function MoviaSidebar({
 
           {showIncidentStatus && (
             <>
-              <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
+              <Text style={[styles.sectionTitle, { marginTop: 24, color: theme.colors.textTertiary }]}>
                 {t("alerts")}
               </Text>
               <ScrollView
@@ -235,12 +246,17 @@ export function MoviaSidebar({
                       onPress={() => setIncidentFilter(filter)}
                       style={[
                         styles.filterChip,
+                        {
+                          backgroundColor: theme.colors.surfaceElevated,
+                          borderColor: theme.colors.border,
+                        },
                         incidentFilter === filter && styles.filterChipActive,
                       ]}
                     >
                       <Text
                         style={[
                           styles.filterText,
+                          { color: theme.colors.textSecondary },
                           incidentFilter === filter && styles.filterTextActive,
                         ]}
                       >
@@ -252,16 +268,22 @@ export function MoviaSidebar({
               </ScrollView>
 
               {filteredAlerts.length === 0 && (
-                <View style={styles.alertEmpty}>
-                  <Text style={styles.alertEmptyTitle}>
+                <View style={[
+                  styles.alertEmpty,
+                  {
+                    backgroundColor: theme.colors.surfaceElevated,
+                    borderColor: theme.colors.borderSubtle,
+                  },
+                ]}>
+                  <Text style={[styles.alertEmptyTitle, { color: theme.colors.textPrimary }]}>
                     {incidentFilter === "ALL" ? t("alerts.empty_all_title") : `${t("alerts.empty_line_title")} ${incidentFilter}`}
                   </Text>
-                  <Text style={styles.alertEmptyText}>{t("alerts.empty_body")}</Text>
+                  <Text style={[styles.alertEmptyText, { color: theme.colors.textSecondary }]}>{t("alerts.empty_body")}</Text>
                   {!!incidentsSourceLabel && (
-                    <Text style={styles.alertMeta}>{incidentsSourceLabel}</Text>
+                    <Text style={[styles.alertMeta, { color: theme.colors.textTertiary }]}>{incidentsSourceLabel}</Text>
                   )}
                   {!!incidentsUpdatedLabel && (
-                    <Text style={styles.alertMeta}>{incidentsUpdatedLabel}</Text>
+                    <Text style={[styles.alertMeta, { color: theme.colors.textTertiary }]}>{incidentsUpdatedLabel}</Text>
                   )}
                 </View>
               )}
@@ -269,21 +291,21 @@ export function MoviaSidebar({
               {filteredAlerts.map((alert, i) => (
                 <TouchableOpacity
                   key={`${alert.lineId}-${i}-${alert.text}`}
-                  style={styles.alertRow}
+                  style={[styles.alertRow, { borderBottomColor: theme.colors.borderSubtle }]}
                   activeOpacity={0.7}
                 >
                   <StatusBadge status={alert.type} />
                   <Text style={styles.alertLine}>{alert.lineId}</Text>
-                  <Text style={styles.alertText} numberOfLines={2}>
+                  <Text style={[styles.alertText, { color: theme.colors.textPrimary }]} numberOfLines={2}>
                     {alert.text}
                   </Text>
                   {!!alert.description && (
-                    <Text style={styles.alertDescription} numberOfLines={3}>
+                    <Text style={[styles.alertDescription, { color: theme.colors.textSecondary }]} numberOfLines={3}>
                       {alert.description}
                     </Text>
                   )}
-                  <Text style={styles.alertMeta}>{alert.sourceLabel}</Text>
-                  <Text style={styles.alertTime}>{alert.time}</Text>
+                  <Text style={[styles.alertMeta, { color: theme.colors.textTertiary }]}>{alert.sourceLabel}</Text>
+                  <Text style={[styles.alertTime, { color: theme.colors.textTertiary }]}>{alert.time}</Text>
                 </TouchableOpacity>
               ))}
             </>
@@ -293,15 +315,17 @@ export function MoviaSidebar({
             {LANGUAGES.map((lang) => (
               <TouchableOpacity
                 key={lang.code}
-                style={[
-                  styles.langBtn,
-                  currentLanguage === lang.code && styles.langBtnActive,
-                ]}
+                  style={[
+                    styles.langBtn,
+                    { backgroundColor: theme.colors.surfaceMuted },
+                    currentLanguage === lang.code && styles.langBtnActive,
+                  ]}
                 onPress={() => onLanguageChange?.(lang.code)}
               >
                 <Text
                   style={[
                     styles.langText,
+                    { color: theme.colors.textSecondary },
                     currentLanguage === lang.code && styles.langTextActive,
                   ]}
                 >
@@ -312,15 +336,15 @@ export function MoviaSidebar({
           </View>
 
           <TouchableOpacity
-            style={styles.settingsRow}
+            style={[styles.settingsRow, { borderTopColor: theme.colors.borderSubtle }]}
             activeOpacity={0.7}
             onPress={() => {
               onClose();
               router.push("/settings");
             }}
           >
-            <Feather name="settings" size={20} color="#5A5A5A" />
-            <Text style={styles.settingsText}>{t("settings")}</Text>
+            <Feather name="settings" size={20} color={theme.colors.iconMuted} />
+            <Text style={[styles.settingsText, { color: theme.colors.textPrimary }]}>{t("settings")}</Text>
           </TouchableOpacity>
         </ScrollView>
       </Animated.View>
