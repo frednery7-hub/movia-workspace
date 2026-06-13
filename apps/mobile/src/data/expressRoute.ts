@@ -181,6 +181,12 @@ export function getExpressRouteState(
   };
 }
 
+export function getVisibleExpressRouteState(
+  state: ExpressRouteState | null | undefined,
+): ExpressRouteState | null {
+  return state?.availability === 'active' ? state : null;
+}
+
 function isExpressRouteLine(lineId: string): lineId is MetroExpressLine {
   return lineId === 'L2' || lineId === 'L4' || lineId === 'L5';
 }

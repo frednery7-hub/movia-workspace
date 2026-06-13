@@ -2,6 +2,7 @@ import {
   getExpressRouteAvailability,
   getExpressRouteState,
   getExpressRouteType,
+  getVisibleExpressRouteState,
 } from './expressRoute';
 import { getExpressRouteBadgeLabel } from './expressRouteDisplay';
 
@@ -104,6 +105,29 @@ describe('getExpressRouteState', () => {
 
   it('retorna null para linha sem Ruta Expresa, então a UI não mostra badge', () => {
     expect(getExpressRouteState('L1', 'Universidad de Chile', new Date('2026-06-15T07:00:00'))).toBeNull();
+  });
+});
+
+describe('getVisibleExpressRouteState', () => {
+  it('mantem Ruta Expresa visivel no fluxo principal quando esta ativa', () => {
+    const state = getExpressRouteState('L5', 'Pedrero', new Date('2026-06-15T07:00:00'));
+
+    expect(getVisibleExpressRouteState(state)).toEqual({
+      type: 'green',
+      availability: 'active',
+    });
+  });
+
+  it('oculta Ruta Expresa fora de horario no fluxo principal', () => {
+    const state = getExpressRouteState('L2', 'Dorsal', new Date('2026-06-15T12:00:00'));
+
+    expect(getVisibleExpressRouteState(state)).toBeNull();
+  });
+
+  it('oculta Ruta Expresa com horario desconhecido no fluxo principal', () => {
+    const state = getExpressRouteState('L4', 'Tobalaba', new Date('2026-06-15T07:00:00'), { isHoliday: null });
+
+    expect(getVisibleExpressRouteState(state)).toBeNull();
   });
 });
 

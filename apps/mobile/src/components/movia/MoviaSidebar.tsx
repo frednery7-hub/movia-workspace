@@ -52,6 +52,7 @@ interface MoviaSidebarProps {
   contextLabel?: string;
   incidentsSourceLabel?: string;
   incidentsUpdatedLabel?: string;
+  showIncidentStatus?: boolean;
 }
 
 const LANGUAGES = [
@@ -111,6 +112,7 @@ export function MoviaSidebar({
   contextLabel,
   incidentsSourceLabel,
   incidentsUpdatedLabel,
+  showIncidentStatus = true,
 }: MoviaSidebarProps) {
   const tariff = useTariffStatus();
   const { t } = useLocale();
@@ -210,78 +212,82 @@ export function MoviaSidebar({
               >
                 <LineChip line={line.number} />
                 <Text style={styles.lineName}>{line.name}</Text>
-                <StatusBadge status={line.status} />
+                {showIncidentStatus && <StatusBadge status={line.status} />}
               </TouchableOpacity>
             ))
           )}
 
-          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
-            {t("alerts")}
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filters}
-            contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
-          >
-            {INCIDENT_FILTERS.map(
-              filter => (
-                <TouchableOpacity
-                  key={filter}
-                  onPress={() => setIncidentFilter(filter)}
-                  style={[
-                    styles.filterChip,
-                    incidentFilter === filter && styles.filterChipActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.filterText,
-                      incidentFilter === filter && styles.filterTextActive,
-                    ]}
-                  >
-                    {filter === "ALL" ? t("filter.all") : filter}
+          {showIncidentStatus && (
+            <>
+              <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
+                {t("alerts")}
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filters}
+                contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
+              >
+                {INCIDENT_FILTERS.map(
+                  filter => (
+                    <TouchableOpacity
+                      key={filter}
+                      onPress={() => setIncidentFilter(filter)}
+                      style={[
+                        styles.filterChip,
+                        incidentFilter === filter && styles.filterChipActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.filterText,
+                          incidentFilter === filter && styles.filterTextActive,
+                        ]}
+                      >
+                        {filter === "ALL" ? t("filter.all") : filter}
+                      </Text>
+                    </TouchableOpacity>
+                  ),
+                )}
+              </ScrollView>
+
+              {filteredAlerts.length === 0 && (
+                <View style={styles.alertEmpty}>
+                  <Text style={styles.alertEmptyTitle}>
+                    {incidentFilter === "ALL" ? t("alerts.empty_all_title") : `${t("alerts.empty_line_title")} ${incidentFilter}`}
                   </Text>
+                  <Text style={styles.alertEmptyText}>{t("alerts.empty_body")}</Text>
+                  {!!incidentsSourceLabel && (
+                    <Text style={styles.alertMeta}>{incidentsSourceLabel}</Text>
+                  )}
+                  {!!incidentsUpdatedLabel && (
+                    <Text style={styles.alertMeta}>{incidentsUpdatedLabel}</Text>
+                  )}
+                </View>
+              )}
+
+              {filteredAlerts.map((alert, i) => (
+                <TouchableOpacity
+                  key={`${alert.lineId}-${i}-${alert.text}`}
+                  style={styles.alertRow}
+                  activeOpacity={0.7}
+                >
+                  <StatusBadge status={alert.type} />
+                  <Text style={styles.alertLine}>{alert.lineId}</Text>
+                  <Text style={styles.alertText} numberOfLines={2}>
+                    {alert.text}
+                  </Text>
+                  {!!alert.description && (
+                    <Text style={styles.alertDescription} numberOfLines={3}>
+                      {alert.description}
+                    </Text>
+                  )}
+                  <Text style={styles.alertMeta}>{alert.sourceLabel}</Text>
+                  <Text style={styles.alertTime}>{alert.time}</Text>
                 </TouchableOpacity>
-              ),
-            )}
-          </ScrollView>
-
-          {filteredAlerts.length === 0 && (
-            <View style={styles.alertEmpty}>
-              <Text style={styles.alertEmptyTitle}>
-                {incidentFilter === "ALL" ? t("alerts.empty_all_title") : `${t("alerts.empty_line_title")} ${incidentFilter}`}
-              </Text>
-              <Text style={styles.alertEmptyText}>{t("alerts.empty_body")}</Text>
-              {!!incidentsSourceLabel && (
-                <Text style={styles.alertMeta}>{incidentsSourceLabel}</Text>
-              )}
-              {!!incidentsUpdatedLabel && (
-                <Text style={styles.alertMeta}>{incidentsUpdatedLabel}</Text>
-              )}
-            </View>
+              ))}
+            </>
           )}
-
-          {filteredAlerts.map((alert, i) => (
-            <TouchableOpacity
-              key={`${alert.lineId}-${i}-${alert.text}`}
-              style={styles.alertRow}
-              activeOpacity={0.7}
-            >
-              <StatusBadge status={alert.type} />
-              <Text style={styles.alertLine}>{alert.lineId}</Text>
-              <Text style={styles.alertText} numberOfLines={2}>
-                {alert.text}
-              </Text>
-              {!!alert.description && (
-                <Text style={styles.alertDescription} numberOfLines={3}>
-                  {alert.description}
-                </Text>
-              )}
-              <Text style={styles.alertMeta}>{alert.sourceLabel}</Text>
-              <Text style={styles.alertTime}>{alert.time}</Text>
-            </TouchableOpacity>
-          ))}
 
           <View style={styles.langSection}>
             {LANGUAGES.map((lang) => (
