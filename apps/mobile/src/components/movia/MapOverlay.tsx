@@ -1,17 +1,20 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAppTheme } from '../../theme/colors';
 
 export function MapOverlay() {
+  const theme = useAppTheme();
+
   return (
     <>
       <LinearGradient
-        colors={['rgba(240,242,245,0.4)', 'transparent']}
+        colors={[theme.colors.overlayTop, 'transparent']}
         style={styles.top}
         pointerEvents="none"
       />
       <LinearGradient
-        colors={['transparent', 'rgba(240,242,245,0.6)']}
+        colors={['transparent', theme.colors.overlayBottom]}
         style={styles.bottom}
         pointerEvents="none"
       />

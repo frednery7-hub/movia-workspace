@@ -1,6 +1,6 @@
 import { useEffect, useState, createContext, useContext } from 'react';
 import { Slot, router } from 'expo-router';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { StatusBar, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { IdentityService } from '../src/security/identity.service';
@@ -9,6 +9,7 @@ import type { SupportedLocale } from '../src/context/LocaleContext';
 import { ConsentService } from '../src/privacy/consent.service';
 import { QueryProvider } from '../src/providers/QueryProvider';
 import { api } from '../src/config/api';
+import { useAppTheme } from '../src/theme/colors';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -90,11 +91,13 @@ _g.__moviRefreshId = api.interceptors.response.use(
 );
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  const theme = useAppTheme();
+
   return (
-    <View style={styles.errorContainer} accessibilityRole="alert">
+    <View style={[styles.errorContainer, { backgroundColor: theme.colors.background }]} accessibilityRole="alert">
       <Text style={styles.errorIcon}>⚠️</Text>
-      <Text style={styles.errorTitle}>Algo salió mal</Text>
-      <Text style={styles.errorMessage}>{error.message}</Text>
+      <Text style={[styles.errorTitle, { color: theme.colors.textPrimary }]}>Algo salió mal</Text>
+      <Text style={[styles.errorMessage, { color: theme.colors.textSecondary }]}>{error.message}</Text>
       <TouchableOpacity style={styles.retryBtn} onPress={retry}>
         <Text style={styles.retryText}>Intentar nuevamente</Text>
       </TouchableOpacity>
@@ -103,6 +106,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
 }
 
 export default function RootLayout() {
+  const theme = useAppTheme();
   const [isReady, setIsReady] = useState(false);
   const [language, setLanguageState] = useState<Language>('ES');
   const [bootError, setBootError] = useState<string | null>(null);
@@ -156,10 +160,10 @@ export default function RootLayout() {
 
   if (bootError) {
     return (
-      <View style={styles.errorContainer}>
+      <View style={[styles.errorContainer, { backgroundColor: theme.colors.background }]}>
         <Text style={styles.errorIcon}>⚠️</Text>
-        <Text style={styles.errorTitle}>Error de conexión</Text>
-        <Text style={styles.errorMessage}>{bootError}</Text>
+        <Text style={[styles.errorTitle, { color: theme.colors.textPrimary }]}>Error de conexión</Text>
+        <Text style={[styles.errorMessage, { color: theme.colors.textSecondary }]}>{bootError}</Text>
       </View>
     );
   }
@@ -176,6 +180,10 @@ export default function RootLayout() {
       <LocaleProvider locale={localeMap[language]}>
         <QueryProvider>
           <GestureHandlerRootView style={{ flex: 1 }}>
+            <StatusBar
+              barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+              backgroundColor={theme.colors.background}
+            />
             <Slot />
           </GestureHandlerRootView>
         </QueryProvider>

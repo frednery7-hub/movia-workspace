@@ -5,8 +5,8 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChip } from './LineChip';
 import { ExpressRouteBadge } from './ExpressRouteBadge';
-import { Colors, getLineColor } from '../../theme/colors';
-import type { ActiveTripState, TripStatus } from '../../trip/activeTripState';
+import { Colors, getLineColor, useAppTheme } from '../../theme/colors';
+import type { TripStatus } from '../../trip/activeTripState';
 import { getVisibleExpressRouteState, type ExpressRouteState } from '../../data/expressRoute';
 
 export interface Station {
@@ -30,7 +30,6 @@ interface NavigationProgressProps {
   navigationConfidenceLabel: string;
   navigationConfidenceColor: string;
   tripStatus: TripStatus;
-  activeTripState?: ActiveTripState | null;
   isDetectingAutoStart?: boolean;
   showManualStartFallback?: boolean;
   onManualStartFallback?: () => void;
@@ -48,9 +47,10 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, activeTripState, isDetectingAutoStart = false, showManualStartFallback = false, onManualStartFallback, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, isDetectingAutoStart = false, showManualStartFallback = false, onManualStartFallback, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
+  const theme = useAppTheme();
   const lineColor = getLineColor(currentLine);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.25)).current;
@@ -130,9 +130,13 @@ export function NavigationProgress({
   return (
     <Animated.View style={[
       styles.container,
+      {
+        backgroundColor: theme.colors.surface,
+        shadowColor: theme.colors.shadow,
+      },
       { height: sheetHeight },
     ]}>
-      <View style={styles.dragSurface} {...panResponder.panHandlers}>
+      <View style={[styles.dragSurface, { backgroundColor: theme.colors.surface }]} {...panResponder.panHandlers}>
       {/* Handle de arrasto */}
       <TouchableOpacity
         onPress={toggleSheet}
@@ -140,9 +144,9 @@ export function NavigationProgress({
         style={styles.dragHandle}
         accessibilityLabel={isExpanded ? t('navigation.collapse') : t('navigation.expand')}
       >
-        <View style={styles.handleBar} />
+        <View style={[styles.handleBar, { backgroundColor: theme.colors.dragHandle }]} />
       </TouchableOpacity>
-      <LinearGradient colors={['#1a1a2e', '#232340']} style={styles.header}>
+      <LinearGradient colors={theme.colors.headerGradient} style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.origin}>{origin}</Text>
           <Text style={styles.arrow}> → </Text>
@@ -154,12 +158,22 @@ export function NavigationProgress({
       </LinearGradient>
 
       {isCompact ? (
-        <TouchableOpacity style={styles.compactSummary} onPress={toggleSheet} activeOpacity={0.86}>
+        <TouchableOpacity
+          style={[
+            styles.compactSummary,
+            {
+              backgroundColor: theme.colors.surfaceElevated,
+              borderColor: theme.colors.border,
+            },
+          ]}
+          onPress={toggleSheet}
+          activeOpacity={0.86}
+        >
           <View style={styles.compactCopy}>
-            <Text style={styles.compactEta} numberOfLines={1}>
+            <Text style={[styles.compactEta, { color: theme.colors.textPrimary }]} numberOfLines={1}>
               {hasArrived ? t('trip.completed') : estimatedTime}
             </Text>
-            <Text style={styles.compactUpdated} numberOfLines={2}>
+            <Text style={[styles.compactUpdated, { color: theme.colors.textTertiary }]} numberOfLines={2}>
               {hasArrived ? `${t('trip.arrived_destination')}\n${destination}` : currentDirection ? `L${currentLine} · ${t('direction')} ${currentDirection}` : navigationConfidenceLabel}
               {!hasArrived && (nextStation ? `\n${t('navigation.next')}: ${nextStation.name}` : `\n${t('eta.arrives')} ${arrivalTime}`)}
             </Text>
@@ -167,51 +181,68 @@ export function NavigationProgress({
           <Feather name="chevron-up" size={18} color={Colors.textTertiary} />
         </TouchableOpacity>
       ) : (
-        <View style={styles.summaryCard}>
+        <View style={[
+          styles.summaryCard,
+          {
+            backgroundColor: theme.colors.surfaceElevated,
+            borderColor: theme.colors.borderSubtle,
+            shadowColor: theme.colors.shadow,
+          },
+        ]}>
           <View>
-            <Text style={styles.eta}>{hasArrived ? t('trip.completed') : estimatedTime}</Text>
-            <Text style={styles.arrival}>{hasArrived ? `${t('trip.arrived_to')} ${destination}` : `${t('eta.arrives')} ${arrivalTime} · ${stations.length} ${t('eta.stations')}`}</Text>
+            <Text style={[styles.eta, { color: theme.colors.textPrimary }]}>{hasArrived ? t('trip.completed') : estimatedTime}</Text>
+            <Text style={[styles.arrival, { color: theme.colors.textSecondary }]}>{hasArrived ? `${t('trip.arrived_to')} ${destination}` : `${t('eta.arrives')} ${arrivalTime} · ${stations.length} ${t('eta.stations')}`}</Text>
             <View style={styles.statusRow}>
               <View style={[styles.statusDot, { backgroundColor: navigationConfidenceColor }]} />
-              <Text style={styles.updated}>
+              <Text style={[styles.updated, { color: theme.colors.textTertiary }]}>
                 {navigationConfidenceLabel} · {t('navigation.updated_now')}
               </Text>
             </View>
             {currentDirection && (
-              <Text style={styles.directionText}>L{currentLine} · {t('direction')} {currentDirection}</Text>
+              <Text style={[styles.directionText, { color: theme.colors.textPrimary }]}>L{currentLine} · {t('direction')} {currentDirection}</Text>
             )}
             {isDetectingAutoStart && (
-              <Text style={styles.autoStartHint}>{t('trip.detecting_position')}</Text>
+              <Text style={[styles.autoStartHint, { color: theme.colors.textTertiary }]}>{t('trip.detecting_position')}</Text>
             )}
             {showManualStartFallback && (
               <View style={styles.manualFallbackRow}>
-                <Text style={styles.manualFallbackText}>{t('trip.position_not_detected')}</Text>
+                <Text style={[styles.manualFallbackText, { color: theme.colors.textTertiary }]}>{t('trip.position_not_detected')}</Text>
                 <TouchableOpacity
                   onPress={onManualStartFallback}
                   activeOpacity={0.72}
-                  style={styles.manualFallbackButton}
+                  style={[
+                    styles.manualFallbackButton,
+                    {
+                      backgroundColor: theme.colors.surfaceMuted,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
                 >
-                  <Text style={styles.manualFallbackButtonText}>{t('trip.start_manually')}</Text>
+                  <Text style={[styles.manualFallbackButtonText, { color: theme.colors.textSecondary }]}>{t('trip.start_manually')}</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
-          <TouchableOpacity onPress={toggleSheet} style={styles.expandButton} activeOpacity={0.8}>
+          <TouchableOpacity
+            onPress={toggleSheet}
+            style={[styles.expandButton, { backgroundColor: theme.isDark ? '#10243E' : '#EEF6FF' }]}
+            activeOpacity={0.8}
+          >
             <Feather name={isExpanded ? 'minimize-2' : 'maximize-2'} size={18} color={Colors.actionBlue} />
           </TouchableOpacity>
         </View>
       )}
 
       {!isCompact && !isExpanded && (
-        <View style={styles.nextPanel}>
+        <View style={[styles.nextPanel, { backgroundColor: theme.colors.surfaceMuted }]}>
           <View style={styles.nextColumn}>
-            <Text style={styles.nextLabel}>{hasArrived ? t('trip.completed') : isPreview ? t('trip.preview') : hasCurrentStation ? t('navigation.you_are_here') : navigationConfidenceLabel}</Text>
-            <Text style={styles.nextStationName} numberOfLines={1}>{hasCurrentStation ? currentStation?.name : origin}</Text>
+            <Text style={[styles.nextLabel, { color: theme.colors.textTertiary }]}>{hasArrived ? t('trip.completed') : isPreview ? t('trip.preview') : hasCurrentStation ? t('navigation.you_are_here') : navigationConfidenceLabel}</Text>
+            <Text style={[styles.nextStationName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{hasCurrentStation ? currentStation?.name : origin}</Text>
           </View>
           {!hasArrived && (
             <View style={styles.nextColumn}>
-              <Text style={styles.nextLabel}>{t('navigation.next')}</Text>
-              <Text style={styles.nextStationName} numberOfLines={1}>{nextStation?.name ?? destination}</Text>
+              <Text style={[styles.nextLabel, { color: theme.colors.textTertiary }]}>{t('navigation.next')}</Text>
+              <Text style={[styles.nextStationName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{nextStation?.name ?? destination}</Text>
             </View>
           )}
         </View>
@@ -221,7 +252,7 @@ export function NavigationProgress({
       {!isCompact && (
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {isExpanded && (
-          <Text style={styles.fullTimelineTitle}>{t('navigation.full_timeline')}</Text>
+          <Text style={[styles.fullTimelineTitle, { color: theme.colors.textTertiary }]}>{t('navigation.full_timeline')}</Text>
         )}
         <View style={styles.progressList}>
           {stations.map((station, index) => {
@@ -240,14 +271,16 @@ export function NavigationProgress({
               <View key={index} style={styles.stationRow}>
                 <View style={styles.trackColumn}>
                   <View style={[
-                    styles.dot,
-                    isCurrent && styles.dotCurrent,
-                    isPassed && styles.dotPassed,
-                    isNext && styles.dotNext,
-                    isFuture && styles.dotFuture,
-                    isCurrent && { borderColor: stationLineColor, shadowColor: stationLineColor },
-                    isNext && { borderColor: stationLineColor },
-                    isPassed && { backgroundColor: stationLineColor },
+                      styles.dot,
+                      isCurrent && styles.dotCurrent,
+                      isPassed && styles.dotPassed,
+                      isNext && styles.dotNext,
+                      isFuture && styles.dotFuture,
+                      (isCurrent || isNext || isFuture) && { backgroundColor: theme.colors.surface },
+                      isFuture && { borderColor: theme.colors.border },
+                      isCurrent && { borderColor: stationLineColor, shadowColor: stationLineColor },
+                      isNext && { borderColor: stationLineColor },
+                      isPassed && { backgroundColor: stationLineColor },
                     station.transfer && !isPassed && !isCurrent && { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: nextLineColor, backgroundColor: stationLineColor },
                   ]} />
                   {!isLast && station.transfer ? (
@@ -256,7 +289,7 @@ export function NavigationProgress({
                     <View style={[
                       styles.track,
                       (isPassed || isCurrent) && { backgroundColor: stationLineColor },
-                      isFuture && styles.trackDashed,
+                      isFuture && [styles.trackDashed, { borderLeftColor: theme.colors.border }],
                     ]} />
                   )}
                 </View>
@@ -264,7 +297,7 @@ export function NavigationProgress({
                 <Animated.View style={styles.stationInfo}>
                   {isCurrent ? (
                     <LinearGradient
-                      colors={['#FFFFFF', `${stationLineColor}18`]}
+                      colors={[theme.colors.surfaceElevated, `${stationLineColor}${theme.isDark ? '24' : '18'}`]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={[styles.currentStationCard, { borderLeftColor: stationLineColor, shadowColor: stationLineColor }]}
@@ -285,9 +318,9 @@ export function NavigationProgress({
                         </View>
                         <Text style={[styles.stationNameCurrent, { color: stationLineColor }]}>{station.name}</Text>
                       </View>
-                      <View style={styles.currentBadge}>
+                      <View style={[styles.currentBadge, { backgroundColor: theme.isDark ? 'rgba(15,23,42,0.74)' : 'rgba(255,255,255,0.72)' }]}>
                         <View style={[styles.currentBadgeDot, { backgroundColor: stationLineColor }]} />
-                        <Text style={styles.youAreHere}>{isArrivedStation ? t('trip.arrived_destination') : t('navigation.you_are_here')}</Text>
+                        <Text style={[styles.youAreHere, { color: theme.colors.textPrimary }]}>{isArrivedStation ? t('trip.arrived_destination') : t('navigation.you_are_here')}</Text>
                       </View>
                       {visibleExpressRoute && (
                         <View style={styles.timelineExpressBadge}>
@@ -300,12 +333,16 @@ export function NavigationProgress({
                       )}
                     </LinearGradient>
                   ) : (
-                    <Text style={[styles.stationName, isPassed && styles.stationNamePassed]}>
+                    <Text style={[
+                      styles.stationName,
+                      { color: theme.colors.textPrimary },
+                      isPassed && [styles.stationNamePassed, { color: theme.colors.textTertiary }],
+                    ]}>
                       {station.name}
                     </Text>
                   )}
                   {!isCurrent && station.direction && (
-                    <Text style={styles.stationDirection}>L{stationLine} · {t('direction')} {station.direction}</Text>
+                    <Text style={[styles.stationDirection, { color: theme.colors.textTertiary }]}>L{stationLine} · {t('direction')} {station.direction}</Text>
                   )}
                   {!isCurrent && visibleExpressRoute && (
                     <View style={styles.timelineExpressBadge}>
@@ -317,22 +354,28 @@ export function NavigationProgress({
                     </View>
                   )}
                   {station.transfer && (
-                    <View style={styles.transferCard}>
+                    <View style={[
+                      styles.transferCard,
+                      {
+                        backgroundColor: theme.colors.surfaceElevated,
+                        borderColor: theme.colors.borderSubtle,
+                      },
+                    ]}>
                       <LinearGradient colors={[stationLineColor, nextLineColor]} style={styles.transferAccent} />
                       <View style={[styles.transferIcon, { backgroundColor: getLineColor(station.transfer.line, stationLineColor) }]}>
                         <Feather name="repeat" size={14} color="#fff" />
                       </View>
                       <View style={styles.transferTextGroup}>
-                        <Text style={styles.transferTitle}>{t('navigation.transfer_here')}</Text>
+                        <Text style={[styles.transferTitle, { color: theme.colors.textPrimary }]}>{t('navigation.transfer_here')}</Text>
                         <View style={styles.transferLineRow}>
-                          <Text style={styles.transferName}>{t('navigation.take_line')}</Text>
+                          <Text style={[styles.transferName, { color: theme.colors.textSecondary }]}>{t('navigation.take_line')}</Text>
                           <LinearGradient colors={[stationLineColor, nextLineColor]} style={styles.transferPill}>
                             <Text style={styles.transferPillText}>L{stationLine} → L{station.transfer.line}</Text>
                           </LinearGradient>
                           <LineChip line={station.transfer.line} variant="compact" />
                         </View>
                         {station.transfer.direction && (
-                          <Text style={styles.transferDirection}>{t('direction')} {station.transfer.direction}</Text>
+                          <Text style={[styles.transferDirection, { color: theme.colors.textPrimary }]}>{t('direction')} {station.transfer.direction}</Text>
                         )}
                       </View>
                     </View>

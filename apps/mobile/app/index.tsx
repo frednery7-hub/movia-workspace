@@ -53,7 +53,7 @@ import {
   type TripStatus,
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
-import { Colors, getLineColor } from '../src/theme/colors';
+import { Colors, getLineColor, useAppTheme } from '../src/theme/colors';
 import { getExpressRouteState, getVisibleExpressRouteState } from '../src/data/expressRoute';
 
 const { width, height } = Dimensions.get('window');
@@ -73,6 +73,18 @@ const HAS_GOOGLE_MAPS_KEY = Boolean(
   process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
 );
 const DEBUG_GPS = __DEV__ && process.env.EXPO_PUBLIC_DEBUG_GPS === '1';
+
+const DARK_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#172033' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#CBD5E1' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0B1020' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1F2937' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#12301F' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#273449' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#243049' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0F2742' }] },
+];
 
 type AppScreen = 'map' | 'searching' | 'navigating';
 type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
@@ -204,6 +216,7 @@ function getDestinationArrivalMessage(stationName: string, locale: SupportedLoca
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useAppTheme();
   const mapRef = useRef<MapView>(null);
   const inertialRef = useRef(new InertialService());
 
@@ -979,12 +992,13 @@ export default function HomeScreen() {
 
 
   return (
-    <View style={styles.container} {...panResponder.panHandlers}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]} {...panResponder.panHandlers}>
       {HAS_GOOGLE_MAPS_KEY ? (
         <MapView
           ref={mapRef}
           style={styles.map}
           initialRegion={region}
+          customMapStyle={theme.isDark ? DARK_MAP_STYLE : []}
           showsUserLocation
           showsMyLocationButton={false}
           followsUserLocation
@@ -1021,7 +1035,7 @@ export default function HomeScreen() {
           )}
         </MapView>
       ) : (
-        <View style={[styles.map, styles.mapFallback]} />
+        <View style={[styles.map, styles.mapFallback, { backgroundColor: theme.colors.mapFallback }]} />
       )}
       <MapOverlay />
 
@@ -1038,11 +1052,19 @@ export default function HomeScreen() {
       </View>
 
       {locationMode !== 'nearby' && locationMode !== 'manual' && (
-        <View style={[styles.contextBanner, { top: insets.top + 116 }]}>
-          <Text style={styles.contextTitle}>
+        <View style={[
+          styles.contextBanner,
+          {
+            top: insets.top + 116,
+            backgroundColor: theme.isDark ? 'rgba(23,32,51,0.96)' : 'rgba(255,255,255,0.96)',
+            borderColor: theme.colors.border,
+            shadowColor: theme.colors.shadow,
+          },
+        ]}>
+          <Text style={[styles.contextTitle, { color: theme.colors.textPrimary }]}>
             {locationMode === 'loading' ? translate('location.detecting', toLocale(language)) : translate('location.plan_santiago', toLocale(language))}
           </Text>
-          <Text style={styles.contextText}>
+          <Text style={[styles.contextText, { color: theme.colors.textSecondary }]}>
             {locationMode === 'denied'
               ? translate('location.enable_for_nearby', toLocale(language))
               : translate('location.choose_origin', toLocale(language))}
@@ -1062,7 +1084,15 @@ export default function HomeScreen() {
         activeOpacity={0.82}
         disabled={locating}
         onPress={handleLocateUser}
-        style={[styles.locationButton, { top: insets.top + (locationMode === 'planning' || locationMode === 'denied' || locationMode === 'loading' ? 176 : 116) }, locating && styles.locationButtonDisabled]}
+        style={[
+          styles.locationButton,
+          {
+            top: insets.top + (locationMode === 'planning' || locationMode === 'denied' || locationMode === 'loading' ? 176 : 116),
+            backgroundColor: theme.colors.surfaceElevated,
+            shadowColor: theme.colors.shadow,
+          },
+          locating && styles.locationButtonDisabled,
+        ]}
       >
         {locating ? (
           <ActivityIndicator color="#1A73E8" />
@@ -1100,7 +1130,6 @@ export default function HomeScreen() {
           navigationConfidenceLabel={navigationConfidenceLabel}
           navigationConfidenceColor={navigationConfidenceColor}
           tripStatus={tripStatus}
-          activeTripState={activeTripState}
           isDetectingAutoStart={activeTripState?.tripStatus === 'preview' && !showManualStartFallback}
           showManualStartFallback={activeTripState?.tripStatus === 'preview' && showManualStartFallback}
           onManualStartFallback={handleManualStartFallback}
