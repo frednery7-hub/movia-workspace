@@ -236,26 +236,6 @@ export function NavigationProgress({
             const nextLineColor = station.transfer ? getLineColor(station.transfer.line, stationLineColor) : stationLineColor;
             const visibleExpressRoute = getVisibleExpressRouteState(station.expressRoute);
 
-            console.log('[CURRENT_BANNER_DEBUG]', {
-              routeId: activeTripState?.routeId,
-              tripStatus: activeTripState?.tripStatus,
-              currentStationIndex: activeTripState?.currentStationIndex,
-              currentStationId: activeTripState?.currentStation?.id,
-              currentStationName: activeTripState?.currentStation?.name,
-              currentLine: activeTripState?.currentLine,
-              directionTerminal: activeTripState?.directionTerminal,
-              stationBeingRendered: station.name,
-              stationBeingRenderedId: station.id,
-              renderIndex: index,
-              conditionTripStatusActive: activeTripState?.tripStatus === 'active',
-              conditionIndexMatch: activeTripState?.currentStationIndex === index,
-              conditionIdMatch: activeTripState?.currentStation?.id === station.id,
-              shouldRenderCurrentStationBanner:
-                activeTripState?.tripStatus === 'active' &&
-                activeTripState?.currentStationIndex === index &&
-                activeTripState?.currentStation?.id === station.id,
-            });
-
             return (
               <View key={index} style={styles.stationRow}>
                 <View style={styles.trackColumn}>

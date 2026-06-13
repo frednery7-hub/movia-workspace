@@ -405,17 +405,6 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!__DEV__ || !activeTripState) return;
 
-    console.log('[CURRENT_BANNER_DEBUG]', {
-      tripStatus: activeTripState.tripStatus,
-      currentStationIndex: activeTripState.currentStationIndex,
-      currentStation: activeTripState.currentStation?.name ?? null,
-      currentLine: activeTripState.currentLine,
-      shouldShowCurrentStationBanner:
-        activeTripState.tripStatus === 'active' &&
-        activeTripState.currentStationIndex !== null &&
-        activeTripState.currentStation !== null,
-    });
-
     const mapPolylinePoints = activeTripState.orderedRoutePath.map(station => ({
       latitude: station.latitude,
       longitude: station.longitude,
