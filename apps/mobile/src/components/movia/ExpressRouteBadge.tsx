@@ -8,7 +8,8 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocale } from '../../context/LocaleContext';
-import { Colors, useAppTheme } from '../../theme/colors';
+import { Colors } from '../../theme/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import type {
   ExpressRouteAvailability,
   ExpressRouteType,

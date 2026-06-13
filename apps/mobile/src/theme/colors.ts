@@ -1,5 +1,4 @@
 import type { MetroLineId } from '@movia/shared-data/metro/line-directions';
-import { useColorScheme } from 'react-native';
 
 export const Colors = {
   line1: '#E53935', line2: '#FBC02D', line3: '#6D4C41',
@@ -58,6 +57,7 @@ export const FareColors: Record<string, string> = {
 };
 
 export type AppColorScheme = 'light' | 'dark';
+export type AppThemeMode = 'system' | 'light' | 'dark';
 
 export type AppTheme = {
   colorScheme: AppColorScheme;
@@ -145,7 +145,33 @@ export function getAppTheme(colorScheme: AppColorScheme): AppTheme {
   return APP_THEMES[colorScheme];
 }
 
-export function useAppTheme(): AppTheme {
-  const colorScheme = useColorScheme();
-  return APP_THEMES[colorScheme === 'dark' ? 'dark' : 'light'];
+export function getRouteGradient(params: {
+  currentLine: MetroLineId;
+  nextLine?: MetroLineId | null;
+  hasTransfer: boolean;
+}): [string, string] {
+  const current = LINE_THEME[params.currentLine].color;
+  if (params.hasTransfer && params.nextLine) {
+    return [current, LINE_THEME[params.nextLine].color];
+  }
+
+  return [adjustTone(current, -0.12), adjustTone(current, 0.08)];
+}
+
+export function withAlpha(hexColor: string, alpha: number): string {
+  const normalized = hexColor.replace('#', '');
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  const alphaHex = Math.round(clampedAlpha * 255).toString(16).padStart(2, '0');
+  return `#${normalized}${alphaHex}`;
+}
+
+function adjustTone(hexColor: string, amount: number): string {
+  const normalized = hexColor.replace('#', '');
+  const channels = [0, 2, 4].map(position => parseInt(normalized.slice(position, position + 2), 16));
+  const adjusted = channels.map(channel => {
+    if (amount < 0) return Math.round(channel * (1 + amount));
+    return Math.round(channel + (255 - channel) * amount);
+  });
+
+  return `#${adjusted.map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
 }

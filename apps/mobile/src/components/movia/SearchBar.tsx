@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocale } from '../../context/LocaleContext';
-import { Colors, useAppTheme } from '../../theme/colors';
+import { Colors } from '../../theme/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 interface SearchBarProps {
   onMenuClick: () => void;

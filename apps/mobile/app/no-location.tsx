@@ -4,7 +4,7 @@ import { ConsentService }                            from '../src/privacy/consen
 import { Feather }                                   from '@expo/vector-icons';
 import { useLocale }                                 from '../src/context/LocaleContext';
 import { ENABLE_METRO_INCIDENTS }                    from '../src/config/featureFlags';
-import { useAppTheme }                               from '../src/theme/colors';
+import { useAppTheme } from '../src/theme/ThemeContext';
 
 export default function NoLocationScreen() {
   const { t } = useLocale();

@@ -53,7 +53,8 @@ import {
   type TripStatus,
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
-import { Colors, getLineColor, useAppTheme } from '../src/theme/colors';
+import { Colors, getLineColor } from '../src/theme/colors';
+import { useAppTheme } from '../src/theme/ThemeContext';
 import { getExpressRouteState, getVisibleExpressRouteState } from '../src/data/expressRoute';
 
 const { width, height } = Dimensions.get('window');

@@ -8,7 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NearbyStation, useStations, useStationSearch, StationResult } from '../../hooks/useStations';
 import { useLocale } from '../../context/LocaleContext';
 import { CacheService } from '../../config/cache.service';
-import { Colors, getLineColor, useAppTheme } from '../../theme/colors';
+import { Colors, getLineColor } from '../../theme/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import {
   getExpressRouteState,
   getVisibleExpressRouteState,

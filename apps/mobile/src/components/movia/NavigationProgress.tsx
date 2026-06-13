@@ -5,7 +5,8 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LineChip } from './LineChip';
 import { ExpressRouteBadge } from './ExpressRouteBadge';
-import { Colors, getLineColor, useAppTheme } from '../../theme/colors';
+import { Colors, getLineColor } from '../../theme/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 import type { TripStatus } from '../../trip/activeTripState';
 import { getVisibleExpressRouteState, type ExpressRouteState } from '../../data/expressRoute';
 

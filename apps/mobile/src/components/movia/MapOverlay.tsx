@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAppTheme } from '../../theme/colors';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 export function MapOverlay() {
   const theme = useAppTheme();

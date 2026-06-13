@@ -9,7 +9,7 @@ import type { SupportedLocale } from '../src/context/LocaleContext';
 import { ConsentService } from '../src/privacy/consent.service';
 import { QueryProvider } from '../src/providers/QueryProvider';
 import { api } from '../src/config/api';
-import { useAppTheme } from '../src/theme/colors';
+import { useAppTheme } from '../src/theme/ThemeContext';
 
 SplashScreen.preventAutoHideAsync();
 
