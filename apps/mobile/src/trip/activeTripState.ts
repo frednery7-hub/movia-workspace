@@ -59,6 +59,8 @@ export type ActiveTripState = {
   expressRoute: ExpressRouteState | null;
 };
 
+export type StartTripTrackingSource = 'auto-gps' | 'manual-fallback';
+
 export type BuildActiveTripStateInput = {
   routeId: string;
   orderedRoutePath: RouteStation[];
@@ -79,7 +81,10 @@ export const EMPTY_SENT_TRIP_NOTIFICATIONS: SentTripNotifications = {
 };
 
 export const TRIP_RECOVERY_WINDOW_MS = 10 * 60 * 1000;
-export const AUTO_TRACKING_STATION_RADIUS_METERS = 150;
+export const AUTO_START_RADIUS_METERS = 200;
+export const HARD_MAX_AUTO_START_RADIUS_METERS = 300;
+export const AUTO_START_FALLBACK_DELAY_MS = 8000;
+export const AUTO_START_ALLOWED_INDEX_RANGE = [0, 1, 2] as const;
 
 export type GeoLocation = {
   latitude: number;
@@ -192,6 +197,30 @@ function canTransitionTripStatus(
   }
 }
 
+export function startTripTracking(params: {
+  state: ActiveTripState;
+  source: StartTripTrackingSource;
+  detectedStationIndex: number;
+}): ActiveTripState {
+  const transitionedState = transitionTripStatus(params.state, 'active');
+  if (transitionedState.tripStatus !== 'active') return params.state;
+
+  const currentStationIndex = normalizeCurrentStationIndex(
+    params.detectedStationIndex,
+    params.state.orderedRoutePath.length,
+  );
+  if (currentStationIndex === null) return params.state;
+
+  return buildActiveTripState({
+    routeId: params.state.routeId,
+    orderedRoutePath: params.state.orderedRoutePath,
+    currentStationIndex,
+    navigationMode: params.source === 'manual-fallback' ? 'hybrid' : 'normal',
+    sentNotifications: params.state.sentNotifications,
+    tripStatus: transitionedState.tripStatus,
+  });
+}
+
 export function shouldAutoStartTracking(params: {
   tripStatus: TripStatus;
   orderedRoutePath: RouteStation[];
@@ -204,17 +233,23 @@ export function shouldAutoStartTracking(params: {
   if (!params.userLocation) return false;
   if (params.orderedRoutePath.length === 0) return false;
 
+  const nearestRouteStationIndex = params.nearestRouteStation
+    ? params.orderedRoutePath.findIndex(
+      station => station.id === params.nearestRouteStation?.id,
+    )
+    : -1;
+
   if (
     params.nearestRouteStation &&
     params.distanceToNearestRouteStationMeters !== null &&
-    params.distanceToNearestRouteStationMeters <= AUTO_TRACKING_STATION_RADIUS_METERS
+    params.distanceToNearestRouteStationMeters <= AUTO_START_RADIUS_METERS
   ) {
-    return params.orderedRoutePath.some(
-      station => station.id === params.nearestRouteStation?.id,
+    return AUTO_START_ALLOWED_INDEX_RANGE.includes(
+      nearestRouteStationIndex as typeof AUTO_START_ALLOWED_INDEX_RANGE[number],
     );
   }
 
-  return params.isMovementCompatibleWithRoute === true;
+  return false;
 }
 
 export function shouldNotifyStationArrival(state: ActiveTripState): boolean {

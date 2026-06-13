@@ -31,6 +31,9 @@ interface NavigationProgressProps {
   navigationConfidenceColor: string;
   tripStatus: TripStatus;
   activeTripState?: ActiveTripState | null;
+  isDetectingAutoStart?: boolean;
+  showManualStartFallback?: boolean;
+  onManualStartFallback?: () => void;
   onClose: () => void;
 }
 
@@ -45,7 +48,7 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, activeTripState, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, activeTripState, isDetectingAutoStart = false, showManualStartFallback = false, onManualStartFallback, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const lineColor = getLineColor(currentLine);
@@ -176,6 +179,21 @@ export function NavigationProgress({
             </View>
             {currentDirection && (
               <Text style={styles.directionText}>L{currentLine} · {t('direction')} {currentDirection}</Text>
+            )}
+            {isDetectingAutoStart && (
+              <Text style={styles.autoStartHint}>{t('trip.detecting_position')}</Text>
+            )}
+            {showManualStartFallback && (
+              <View style={styles.manualFallbackRow}>
+                <Text style={styles.manualFallbackText}>{t('trip.position_not_detected')}</Text>
+                <TouchableOpacity
+                  onPress={onManualStartFallback}
+                  activeOpacity={0.72}
+                  style={styles.manualFallbackButton}
+                >
+                  <Text style={styles.manualFallbackButtonText}>{t('trip.start_manually')}</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
           <TouchableOpacity onPress={toggleSheet} style={styles.expandButton} activeOpacity={0.8}>
@@ -389,6 +407,38 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   directionText: { fontSize: 12, color: Colors.textPrimary, marginTop: 3, fontWeight: '800' },
+  autoStartHint: {
+    marginTop: 5,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textTertiary,
+    opacity: 0.78,
+  },
+  manualFallbackRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  manualFallbackText: {
+    fontSize: 11,
+    color: Colors.textTertiary,
+    fontWeight: '600',
+  },
+  manualFallbackButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.grayBorder,
+    backgroundColor: Colors.graySurface,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  manualFallbackButtonText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+  },
   expandButton: {
     width: 30, height: 30, borderRadius: 15,
     alignItems: 'center', justifyContent: 'center',

@@ -26,7 +26,8 @@ import { LocationService } from '../src/location/location.service';
 import { InertialService } from '../src/sensors/InertialService';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
 import {
-  AUTO_TRACKING_STATION_RADIUS_METERS,
+  AUTO_START_FALLBACK_DELAY_MS,
+  HARD_MAX_AUTO_START_RADIUS_METERS,
   buildActiveTripState,
   EMPTY_SENT_TRIP_NOTIFICATIONS,
   markAtTransferSent,
@@ -41,11 +42,13 @@ import {
   shouldNotifyStationArrival,
   shouldAutoStartTracking,
   shouldTransitionToArrived,
+  startTripTracking,
   transitionTripStatus,
   type ActiveTripState,
   type NavigationMode,
   type RouteStation,
   type SentTripNotifications,
+  type StartTripTrackingSource,
   type TripStatus,
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
@@ -219,6 +222,7 @@ export default function HomeScreen() {
   const [locationMode, setLocationMode] = useState<'loading' | 'nearby' | 'planning' | 'manual' | 'denied'>('loading');
   const [navigationConfidenceMode, setNavigationConfidenceMode] = useState<NavigationConfidenceMode>('normal');
   const [tripStatus, setTripStatus] = useState<TripStatus>('ended');
+  const [showManualStartFallback, setShowManualStartFallback] = useState(false);
   const [sentNotifications, setSentNotifications] = useState<SentTripNotifications>(EMPTY_SENT_TRIP_NOTIFICATIONS);
   const [arrivalBanner, setArrivalBanner] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
@@ -317,28 +321,44 @@ export default function HomeScreen() {
     ));
   }
 
-  function startTripTracking(params: {
-    currentStationIndex: number;
-    source: 'gps-nearest-station' | 'gps-route-station' | 'hybrid-progress';
+  function applyStartTripTracking(params: {
+    source: StartTripTrackingSource;
+    detectedStationIndex: number;
   }) {
-    const nextStationIndex = Math.max(
-      0,
-      Math.min(params.currentStationIndex, Math.max(orderedRoutePath.length - 1, 0)),
-    );
+    if (!activeTripState) return;
 
-    activeStationIdRef.current = orderedRoutePath[nextStationIndex]?.id ?? null;
-    setCurrentTrackedStationIndex(nextStationIndex);
-    setVisualFocusedStationIndex(nextStationIndex);
-    setNavigationConfidenceMode(params.source === 'hybrid-progress' ? 'hybrid' : 'normal');
-    applyTripStatusTransition('active');
+    const nextTripState = startTripTracking({
+      state: activeTripState,
+      source: params.source,
+      detectedStationIndex: params.detectedStationIndex,
+    });
+    if (nextTripState.tripStatus !== 'active' || nextTripState.currentStationIndex === null) return;
+
+    activeStationIdRef.current = nextTripState.currentStation?.id ?? null;
+    setCurrentTrackedStationIndex(nextTripState.currentStationIndex);
+    setVisualFocusedStationIndex(nextTripState.currentStationIndex);
+    setShowManualStartFallback(false);
+    setNavigationConfidenceMode(nextTripState.navigationMode);
+    applyTripStatusTransition(nextTripState.tripStatus);
 
     if (__DEV__) {
       console.log('[START_TRIP_TRACKING]', {
         source: params.source,
-        currentStationIndex: nextStationIndex,
-        currentStation: orderedRoutePath[nextStationIndex]?.name ?? null,
+        currentStationIndex: nextTripState.currentStationIndex,
+        currentStation: nextTripState.currentStation?.name ?? null,
       });
     }
+  }
+
+  function handleManualStartFallback() {
+    if (!activeTripState || activeTripState.tripStatus !== 'preview' || activeTripState.orderedRoutePath.length === 0) {
+      return;
+    }
+
+    applyStartTripTracking({
+      source: 'manual-fallback',
+      detectedStationIndex: 0,
+    });
   }
 
   // TODO(active-trip-state): remover estado paralelo
@@ -590,8 +610,23 @@ export default function HomeScreen() {
     setVisualFocusedStationIndex(0);
     setArrivalBanner(null);
     setNavigationConfidenceMode('normal');
+    setShowManualStartFallback(false);
     applyTripStatusTransition(routeKey ? 'preview' : 'ended');
   }, [routeKey]);
+
+  useEffect(() => {
+    if (screen !== 'navigating' || tripStatus !== 'preview' || !routeKey || !activeTripState) {
+      setShowManualStartFallback(false);
+      return undefined;
+    }
+
+    setShowManualStartFallback(false);
+    const timer = setTimeout(() => {
+      setShowManualStartFallback(true);
+    }, AUTO_START_FALLBACK_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [screen, tripStatus, routeKey, activeTripState?.routeId]);
 
   useEffect(() => {
     if (
@@ -646,11 +681,9 @@ export default function HomeScreen() {
       });
 
       if (shouldStartTracking && nearestPathIndex >= 0) {
-        startTripTracking({
-          currentStationIndex: nearestPathIndex,
-          source: originSource === 'gps-nearest-station'
-            ? 'gps-nearest-station'
-            : 'gps-route-station',
+        applyStartTripTracking({
+          source: 'auto-gps',
+          detectedStationIndex: nearestPathIndex,
         });
         return;
       }
@@ -659,7 +692,7 @@ export default function HomeScreen() {
         return;
       }
 
-      if (!nearest || nearest.distanceMeters > AUTO_TRACKING_STATION_RADIUS_METERS) {
+      if (!nearest || nearest.distanceMeters > HARD_MAX_AUTO_START_RADIUS_METERS) {
         setNavigationConfidenceMode('hybrid');
         return;
       }
@@ -738,7 +771,7 @@ export default function HomeScreen() {
     }
 
     syncActiveStation();
-    const timer = setInterval(syncActiveStation, 20_000);
+    const timer = setInterval(syncActiveStation, tripStatus === 'preview' ? 3000 : 20_000);
 
     return () => {
       cancelled = true;
@@ -1072,6 +1105,9 @@ export default function HomeScreen() {
           navigationConfidenceColor={navigationConfidenceColor}
           tripStatus={tripStatus}
           activeTripState={activeTripState}
+          isDetectingAutoStart={activeTripState?.tripStatus === 'preview' && !showManualStartFallback}
+          showManualStartFallback={activeTripState?.tripStatus === 'preview' && showManualStartFallback}
+          onManualStartFallback={handleManualStartFallback}
           onClose={handleCloseNavigation}
         />
       )}
