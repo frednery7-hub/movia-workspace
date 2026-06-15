@@ -14,13 +14,22 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+  const httpServer = app.getHttpAdapter().getInstance() as {
+    set?: (setting: string, value: unknown) => void;
+  };
+  httpServer.set?.('trust proxy', 1);
 
   const isProd = process.env.NODE_ENV === 'production';
+  const isRestrictedCorsEnv =
+    process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
 
   app.use(
     helmet({
       contentSecurityPolicy: true,
       crossOriginEmbedderPolicy: true,
+      hsts: isProd
+        ? { maxAge: 31_536_000, includeSubDomains: true, preload: true }
+        : false,
       referrerPolicy: { policy: 'no-referrer' },
       permittedCrossDomainPolicies: { permittedPolicies: 'none' },
     }),
@@ -45,9 +54,16 @@ async function bootstrap() {
     .map((o) => o.trim())
     .filter(Boolean);
 
-  if (isProd && allowedOrigins.length === 0) {
+  if (isRestrictedCorsEnv && allowedOrigins.length === 0) {
     console.error(
-      'FATAL: ALLOWED_ORIGINS nao definido em producao. Servidor abortado.',
+      'FATAL: ALLOWED_ORIGINS nao definido em staging/producao. Servidor abortado.',
+    );
+    process.exit(1);
+  }
+
+  if (isRestrictedCorsEnv && allowedOrigins.includes('*')) {
+    console.error(
+      'FATAL: ALLOWED_ORIGINS nao pode usar wildcard em staging/producao.',
     );
     process.exit(1);
   }
@@ -55,7 +71,7 @@ async function bootstrap() {
   app.enableCors({
     origin:
       allowedOrigins.length > 0
-        ? allowedOrigins.includes('*')
+        ? !isRestrictedCorsEnv && allowedOrigins.includes('*')
           ? true
           : allowedOrigins
         : 'http://localhost:8081',

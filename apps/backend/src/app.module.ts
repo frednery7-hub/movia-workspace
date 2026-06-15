@@ -50,7 +50,12 @@ import { MetroIncidentsModule } from './metro-incidents/metro-incidents.module';
         }),
       }),
     }),
-    ThrottlerModule.forRoot([{ ttl: 900000, limit: 100 }]),
+    ThrottlerModule.forRoot([
+      { name: 'default', ttl: 900_000, limit: 100 },
+      { name: 'authSession', ttl: 60_000, limit: 5 },
+      { name: 'geoLocation', ttl: 60_000, limit: 20 },
+      { name: 'eta', ttl: 60_000, limit: 60 },
+    ]),
     PrismaModule,
     AuthModule,
     LinesModule,

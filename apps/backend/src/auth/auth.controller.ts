@@ -15,7 +15,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
-  @Throttle({ session: { ttl: 60_000, limit: 5 } })
+  @Throttle({ authSession: { ttl: 60_000, limit: 5 } })
   @Post('session')
   async session(@Body() dto: CreateSessionDto): Promise<SessionTokens> {
     return this.authService.generateToken(dto.deviceId, dto.language);

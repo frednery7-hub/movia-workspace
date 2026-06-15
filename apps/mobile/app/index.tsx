@@ -14,7 +14,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MoviaSidebar, AlertItem, LineItem } from '../src/components/movia/MoviaSidebar';
 import { SearchBar } from '../src/components/movia/SearchBar';
 import { MapOverlay } from '../src/components/movia/MapOverlay';
-import { StationSearchModal } from '../src/components/movia/StationSearchModal';
+import {
+  StationSearchModal,
+  type SearchHistoryItem,
+  type StationSearchSelectionOptions,
+} from '../src/components/movia/StationSearchModal';
 import { NavigationProgress, Station } from '../src/components/movia/NavigationProgress';
 import { useLines } from '../src/hooks/useLines';
 import { useNetworkState } from '../src/hooks/useNetworkState';
@@ -56,6 +60,9 @@ import { t as translate, SupportedLocale } from '../src/i18n';
 import { Colors, getLineColor, getRouteGradient } from '../src/theme/colors';
 import { useAppTheme } from '../src/theme/ThemeContext';
 import { getExpressRouteState, getVisibleExpressRouteState } from '../src/data/expressRoute';
+import type { PointOfInterest, ResolvedPoiDestination } from '../src/poi/types';
+import { normalizeStationId } from '../src/poi/search/normalizeStationId';
+import { resolvePoiDestination } from '../src/poi/search/resolvePoiDestination';
 
 const { width, height } = Dimensions.get('window');
 
@@ -233,6 +240,7 @@ export default function HomeScreen() {
   const [origin, setOrigin]           = useState<StationResult | null>(null);
   const [originSource, setOriginSource] = useState<OriginSource>('empty');
   const [destination, setDestination] = useState<StationResult | null>(null);
+  const [destinationDisplayName, setDestinationDisplayName] = useState<string | null>(null);
   const [userLat, setUserLat]         = useState<number | null>(null);
   const [userLon, setUserLon]         = useState<number | null>(null);
   const [locating, setLocating]       = useState(false);
@@ -883,6 +891,53 @@ export default function HomeScreen() {
     }
   }
 
+  function findStationForResolvedPoi(resolvedDestination: ResolvedPoiDestination): StationResult | null {
+    const normalizedStationId = normalizeStationId(resolvedDestination.routeDestinationStationId);
+    const normalizedStationName = normalizeStationId(resolvedDestination.routeDestinationStationName);
+
+    return (stationsData ?? []).find(station =>
+      normalizeStationId(station.id) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationName,
+    ) ?? null;
+  }
+
+  function buildHistoryItem(
+    station: StationResult,
+    poiDestination?: ResolvedPoiDestination,
+  ): SearchHistoryItem {
+    if (!poiDestination) {
+      return {
+        ...station,
+        itemType: 'station',
+        timestamp: Date.now(),
+      };
+    }
+
+    return {
+      ...station,
+      itemType: 'poi',
+      displayName: poiDestination.displayName,
+      poiId: poiDestination.poi.id,
+      routeStationName: poiDestination.routeDestinationStationName,
+      routeLineIds: poiDestination.lineIds,
+      timestamp: Date.now(),
+    };
+  }
+
+  function getHistoryKey(item: SearchHistoryItem): string {
+    return item.itemType === 'poi' && item.poiId ? `poi:${item.poiId}` : `station:${item.id}`;
+  }
+
+  function saveRouteHistory(entry: SearchHistoryItem) {
+    CacheService.get<SearchHistoryItem[]>('route_history').then((hist: SearchHistoryItem[] | null) => {
+      const history: SearchHistoryItem[] = hist ?? [];
+      const entryKey = getHistoryKey(entry);
+      const updated = [entry, ...history.filter(item => getHistoryKey(item) !== entryKey)].slice(0, 3);
+      CacheService.set('route_history', updated, 30 * 24 * 60 * 60 * 1000);
+    });
+  }
+
   async function handleLocateUser() {
     if (locating) return;
 
@@ -967,16 +1022,15 @@ export default function HomeScreen() {
     if (etaData && screen === 'searching') setScreen('navigating');
   }, [etaData]);
 
-  function handleDestinationSelect(station: StationResult) {
+  function handleDestinationSelect(
+    station: StationResult,
+    options?: StationSearchSelectionOptions,
+  ) {
+    const poiDestination = options?.poiDestination;
     setDestination(station);
+    setDestinationDisplayName(poiDestination?.displayName ?? null);
     setCurrentTrackedStationIndex(null);
-    // Salva no histórico sempre
-      CacheService.get<StationResult[]>('route_history').then((hist: StationResult[] | null) => {
-        const history: StationResult[] = hist ?? [];
-        const entry = { ...station, timestamp: Date.now() };
-        const updated = [entry, ...history.filter((h: StationResult) => h.id !== station.id)].slice(0, 3);
-        CacheService.set('route_history', updated, 30 * 24 * 60 * 60 * 1000);
-      });
+    saveRouteHistory(buildHistoryItem(station, poiDestination));
     if (origin) {
       setScreen('navigating');
     } else {
@@ -990,6 +1044,7 @@ export default function HomeScreen() {
     setOrigin(destination);
     setOriginSource('manual');
     setDestination(origin);
+    setDestinationDisplayName(null);
     setCurrentTrackedStationIndex(null);
     setScreen('navigating');
   }
@@ -997,8 +1052,18 @@ export default function HomeScreen() {
   function handleCloseNavigation() {
     if (routeKey) TripNotificationService.endActiveTrip(routeKey).catch(() => undefined);
     setDestination(null);
+    setDestinationDisplayName(null);
     applyTripStatusTransition('ended');
     setScreen('map');
+  }
+
+  function handleSidebarPoiDestinationSelect(poi: PointOfInterest) {
+    const resolvedDestination = resolvePoiDestination(poi);
+    const station = findStationForResolvedPoi(resolvedDestination);
+    if (!station) return;
+
+    setSidebarOpen(false);
+    handleDestinationSelect(station, { poiDestination: resolvedDestination });
   }
 
 
@@ -1040,7 +1105,7 @@ export default function HomeScreen() {
           {destination && (
             <Marker
               coordinate={{ latitude: destination.latitude, longitude: destination.longitude }}
-              title={`Destino: ${destination.name}`}
+              title={`Destino: ${destinationDisplayName ?? destination.name}`}
               pinColor="#1A73E8"
             />
           )}
@@ -1057,7 +1122,7 @@ export default function HomeScreen() {
           onDestinationClick={() => setScreen('searching')}
           onSwapRoute={handleSwapRoute}
           originName={origin?.name}
-          destinationName={destination?.name}
+          destinationName={destinationDisplayName ?? destination?.name}
           canSwap={!!origin && !!destination}
           routeGradientColors={routeGradientColors}
         />
@@ -1127,13 +1192,14 @@ export default function HomeScreen() {
         incidentsSourceLabel={incidentsSourceLabel}
         incidentsUpdatedLabel={incidentsUpdatedLabel}
         showIncidentStatus={ENABLE_METRO_INCIDENTS}
+        onSelectPoiDestination={handleSidebarPoiDestinationSelect}
       />
 
       {/* NavigationProgress como overlay — mapa continua vivo */}
       {screen === 'navigating' && destination && (
         <NavigationProgress
           origin={origin?.name ?? 'Origen'}
-          destination={destination.name}
+          destination={destinationDisplayName ?? destination.name}
           estimatedTime={etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : etaLoading ? '...' : '--'}
           arrivalTime={etaData ? formatArrival(etaData.arrivalTime) : '--:--'}
           stations={stations}
@@ -1155,6 +1221,7 @@ export default function HomeScreen() {
         nearbyStations={nearbyStations}
         selectedStation={origin}
         selectedStationHintKey={originSource === 'gps-nearest-station' ? 'search.nearest_station' : undefined}
+        enablePoiSearch={false}
       />
       <StationSearchModal
         visible={screen === 'searching'}

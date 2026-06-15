@@ -12,6 +12,13 @@ import { Request, Response } from 'express';
 import * as Sentry from '@sentry/nestjs';
 import { MetricsService } from '../observability/metrics/metrics.service';
 
+type RequestWithUser = Request & {
+  user?: {
+    sub?: string;
+    deviceId?: string;
+  };
+};
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   constructor(
@@ -22,7 +29,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<RequestWithUser>();
     const correlationId = request.headers['x-correlation-id'] as
       | string
       | undefined;
@@ -43,6 +50,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       correlationId,
       method: request.method,
       url: request.url,
+      route: (request.route as { path?: string } | undefined)?.path,
+      ip: request.ip,
+      deviceId:
+        request.user?.deviceId ?? request.headers['x-device-id'] ?? undefined,
+      userId: request.user?.sub,
+      userAgent: request.headers['user-agent'],
+      timestamp: new Date().toISOString(),
       statusCode: status,
       error: exception instanceof Error ? exception.message : String(exception),
       ...(isDev && exception instanceof Error
@@ -59,6 +73,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     } else if (status === 403) {
       this.metrics.authFailuresTotal.labels('forbidden').inc();
       this.logger.warn('security_event', logPayload);
+    } else if (status === 429) {
+      this.logger.warn('rate_limit_event', logPayload);
+    } else if (status === 400 && isSensitiveRoute(request.url)) {
+      this.logger.warn('sensitive_bad_request', logPayload);
     } else {
       this.logger.warn('http_exception', logPayload);
     }
@@ -70,4 +88,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
     });
   }
+}
+
+function isSensitiveRoute(url: string): boolean {
+  return (
+    url.includes('/auth/') || url.includes('/geo/') || url.includes('/eta/')
+  );
 }
