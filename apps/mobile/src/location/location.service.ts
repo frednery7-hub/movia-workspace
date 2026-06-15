@@ -1,4 +1,9 @@
 import * as ExpoLocation from 'expo-location';
+import {
+  getCachedLocation,
+  isCachedLocationFresh,
+  setCachedLocation,
+} from './locationMemoryCache';
 
 export type LocationPermissionStatus = 'granted' | 'denied' | 'undetermined';
 
@@ -7,6 +12,7 @@ export interface LocationResult {
   latitude?: number;
   longitude?: number;
   accuracy?: number;
+  fromCache?: boolean;
 }
 
 export class LocationService {
@@ -21,24 +27,42 @@ export class LocationService {
     return status as LocationPermissionStatus;
   }
 
-  static async getCurrentLocation(): Promise<LocationResult> {
+  static async getCurrentLocation(options: { forceRefresh?: boolean } = {}): Promise<LocationResult> {
     const status = await this.getPermissionStatus();
 
     if (status !== 'granted') {
       return { status };
     }
 
+    const cached = getCachedLocation();
+    if (!options.forceRefresh && cached && isCachedLocationFresh(cached)) {
+      return {
+        status:    'granted',
+        latitude:  cached.latitude,
+        longitude: cached.longitude,
+        accuracy:  cached.accuracy ?? undefined,
+        fromCache: true,
+      };
+    }
+
     try {
       const location = await ExpoLocation.getCurrentPositionAsync({
         accuracy: ExpoLocation.Accuracy.Balanced,
       });
-
-      return {
-        status:    'granted',
+      const result = {
+        status:    'granted' as const,
         latitude:  location.coords.latitude,
         longitude: location.coords.longitude,
         accuracy:  location.coords.accuracy ?? undefined,
       };
+      setCachedLocation({
+        latitude:  result.latitude,
+        longitude: result.longitude,
+        accuracy:  result.accuracy ?? null,
+        timestamp: Date.now(),
+      });
+
+      return result;
     } catch {
       return { status: 'denied' };
     }

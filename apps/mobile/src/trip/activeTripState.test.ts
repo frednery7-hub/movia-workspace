@@ -218,7 +218,7 @@ describe('shouldAutoStartTracking', () => {
       orderedRoutePath: transferPath,
       userLocation: { latitude: -33.4, longitude: -70.6 },
       nearestRouteStation: transferPath[0],
-      distanceToNearestRouteStationMeters: 120,
+      distanceToNearestRouteStationMeters: 200,
     })).toBe(true);
   });
 
@@ -248,7 +248,7 @@ describe('shouldAutoStartTracking', () => {
       orderedRoutePath: transferPath,
       userLocation: { latitude: -33.4, longitude: -70.6 },
       nearestRouteStation: transferPath[1],
-      distanceToNearestRouteStationMeters: 121,
+      distanceToNearestRouteStationMeters: 201,
     })).toBe(false);
   });
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, createContext, useContext } from 'react';
-import { Slot, router } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -184,7 +184,12 @@ function RootLayoutContent() {
               barStyle={theme.isDark ? 'light-content' : 'dark-content'}
               backgroundColor={theme.colors.background}
             />
-            <Slot />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="settings" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="consent" />
+              <Stack.Screen name="no-location" />
+            </Stack>
           </GestureHandlerRootView>
         </QueryProvider>
       </LocaleProvider>

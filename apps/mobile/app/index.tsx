@@ -99,6 +99,11 @@ function toLineNumber(id?: string): LineNumber {
   return lineNumber && VALID_LINE_NUMBERS.includes(lineNumber) ? lineNumber : '1';
 }
 
+function getPrimaryStationLine(station?: StationResult | null) {
+  const lineId = station?.lines?.find(isMetroLineId);
+  return lineId ?? null;
+}
+
 function toLocale(language: string): SupportedLocale {
   if (language === 'PT') return 'pt-BR';
   if (language === 'EN') return 'en-US';
@@ -335,6 +340,7 @@ export default function HomeScreen() {
   );
   const routeGradientCurrentLine = activeTripState?.currentLine
     ?? orderedRoutePath[0]?.lineId
+    ?? getPrimaryStationLine(origin)
     ?? 'L1';
   const routeGradientNextLine = activeTripState?.nextLine
     ?? activeTripState?.transferPoints[0]?.toLine
