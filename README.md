@@ -310,6 +310,12 @@ You may view the code for evaluation, but you are not allowed to copy, modify, d
 
 See the "LICENSE" (LICENSE) file for details.
 
+## License
+
+This project is source-available for portfolio and technical evaluation purposes only. It is not open source. Copying, modifying, compiling, distributing, hosting, selling, or reusing the code requires prior written permission from the author.
+
+See [LICENSE](./LICENSE).
+
 ---
 
 Author
