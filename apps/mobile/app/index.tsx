@@ -14,7 +14,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MoviaSidebar, AlertItem, LineItem } from '../src/components/movia/MoviaSidebar';
 import { SearchBar } from '../src/components/movia/SearchBar';
 import { MapOverlay } from '../src/components/movia/MapOverlay';
-import { StationSearchModal } from '../src/components/movia/StationSearchModal';
+import {
+  StationSearchModal,
+  type SearchHistoryItem,
+  type StationSearchSelectionOptions,
+} from '../src/components/movia/StationSearchModal';
 import { NavigationProgress, Station } from '../src/components/movia/NavigationProgress';
 import { useLines } from '../src/hooks/useLines';
 import { useNetworkState } from '../src/hooks/useNetworkState';
@@ -28,18 +32,13 @@ import { InertialService } from '../src/sensors/InertialService';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
 import {
   CURRENT_STATION_BANNER_RADIUS_METERS,
+  AUTO_DETECT_MAX_DURATION_MS,
   HARD_MAX_STATION_MATCH_RADIUS_METERS,
   buildActiveTripState,
   EMPTY_SENT_TRIP_NOTIFICATIONS,
-  markAtTransferSent,
-  markDestinationArrivalSent,
   markOneBeforeDestinationSent,
-  markOneBeforeTransferSent,
   markStationArrivalSent,
-  shouldNotifyAtTransfer,
-  shouldNotifyDestinationArrival,
   shouldNotifyOneBeforeDestination,
-  shouldNotifyOneBeforeTransfer,
   shouldNotifyStationArrival,
   shouldAutoStartTracking,
   shouldTransitionToArrived,
@@ -56,6 +55,9 @@ import { t as translate, SupportedLocale } from '../src/i18n';
 import { Colors, getLineColor, getRouteGradient } from '../src/theme/colors';
 import { useAppTheme } from '../src/theme/ThemeContext';
 import { getExpressRouteState, getVisibleExpressRouteState } from '../src/data/expressRoute';
+import type { PointOfInterest, ResolvedPoiDestination } from '../src/poi/types';
+import { normalizeStationId } from '../src/poi/search/normalizeStationId';
+import { resolvePoiDestination } from '../src/poi/search/resolvePoiDestination';
 
 const { width, height } = Dimensions.get('window');
 
@@ -141,10 +143,6 @@ function formatRelativeTime(iso: string, locale: SupportedLocale): string {
   return minutes <= 1 ? 'hace 1 min' : `hace ${minutes} min`;
 }
 
-function toLineLabel(id?: string): string {
-  return `L${toLineNumber(id)}`;
-}
-
 function toIncidentSidebarStatus(status?: MetroIncident['status']): LineItem['status'] | null {
   switch (status) {
     case 'normal':
@@ -220,6 +218,17 @@ function getDestinationArrivalMessage(stationName: string, locale: SupportedLoca
   return `Llegaste a tu destino ${stationName}`;
 }
 
+async function getLocationWithTimeout(timeoutMs: number) {
+  return Promise.race([
+    LocationService.getCurrentLocation(),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('LOCATION_DETECTION_TIMEOUT'));
+      }, timeoutMs);
+    }),
+  ]);
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const theme = useAppTheme();
@@ -233,6 +242,7 @@ export default function HomeScreen() {
   const [origin, setOrigin]           = useState<StationResult | null>(null);
   const [originSource, setOriginSource] = useState<OriginSource>('empty');
   const [destination, setDestination] = useState<StationResult | null>(null);
+  const [destinationDisplayName, setDestinationDisplayName] = useState<string | null>(null);
   const [userLat, setUserLat]         = useState<number | null>(null);
   const [userLon, setUserLon]         = useState<number | null>(null);
   const [locating, setLocating]       = useState(false);
@@ -376,13 +386,6 @@ export default function HomeScreen() {
     setNavigationConfidenceMode(nextTripState.navigationMode);
     applyTripStatusTransition(nextTripState.tripStatus);
 
-    if (__DEV__) {
-      console.log('[START_TRIP_TRACKING]', {
-        source: params.source,
-        currentStationIndex: nextTripState.currentStationIndex,
-        currentStation: nextTripState.currentStation?.name ?? null,
-      });
-    }
   }
 
   // TODO(active-trip-state): remover estado paralelo
@@ -426,50 +429,6 @@ export default function HomeScreen() {
     : routeCoordinates.slice(Math.max(currentPathIndex, 0));
 
   useEffect(() => {
-    if (!__DEV__ || !activeTripState) return;
-
-    console.log('[CURRENT_BANNER_DEBUG]', {
-      tripStatus: activeTripState.tripStatus,
-      currentStationIndex: activeTripState.currentStationIndex,
-      currentStationName: activeTripState.currentStation?.name ?? null,
-      distanceToNearestRouteStationMeters: currentStationDistanceMeters,
-      shouldShowCurrentStationBanner:
-        activeTripState.tripStatus === 'active' &&
-        activeTripState.currentStationIndex !== null &&
-        activeTripState.currentStation !== null &&
-        currentStationDistanceMeters !== null &&
-        currentStationDistanceMeters <= CURRENT_STATION_BANNER_RADIUS_METERS,
-    });
-
-    const mapPolylinePoints = activeTripState.orderedRoutePath.map(station => ({
-      latitude: station.latitude,
-      longitude: station.longitude,
-      stationName: station.name,
-      lineId: station.lineId,
-    }));
-
-    console.log('[ROUTE_PATH_ORDER]', activeTripState.orderedRoutePath.map(s => ({
-      name: s.name,
-      lineId: s.lineId,
-      lat: s.latitude,
-      lng: s.longitude,
-    })));
-    console.log('[MAP_POLYLINE_POINTS]', mapPolylinePoints.map(p => ({
-      name: p.stationName,
-      lineId: p.lineId,
-      lat: p.latitude,
-      lng: p.longitude,
-    })));
-    console.log('[CURRENT_ROUTE_STATE]', {
-      origin: activeTripState.originStation.name,
-      destination: activeTripState.destinationStation.name,
-      currentStationIndex: activeTripState.currentStationIndex,
-      currentStationName: activeTripState.currentStation?.name ?? null,
-      nextStationName: activeTripState.nextStation?.name ?? null,
-    });
-  }, [activeTripState?.routeId, activeTripState?.currentStationIndex, currentStationDistanceMeters]);
-
-  useEffect(() => {
     if (
       !activeTripState ||
       screen !== 'navigating' ||
@@ -494,76 +453,12 @@ export default function HomeScreen() {
       applyTripStatusTransition('arrived');
     }
     const timer = setTimeout(() => setArrivalBanner(null), 4500);
-    const shouldNotifyDestination = isDestination && shouldNotifyDestinationArrival(activeTripState);
-    if (shouldNotifyDestination) {
-      TripNotificationService.notifyNextStation(
-        translate('notification.destination.title', locale),
-        arrivalMessage,
-      )
-        .catch(() => undefined)
-        .finally(() => {
-          let nextTripState = markStationArrivalSent(activeTripState, arrivedStation.id);
-          nextTripState = markDestinationArrivalSent(nextTripState);
-          // Marcação em finally garante execução independente de sucesso ou falha.
-          // Sem retry automático dentro da mesma viagem.
-          // Trade-off aceito: notificação pode ser perdida, nunca duplicada.
-          setSentNotifications(nextTripState.sentNotifications);
-        });
-    } else {
-      setSentNotifications(
-        markStationArrivalSent(activeTripState, arrivedStation.id).sentNotifications,
-      );
-    }
+    setSentNotifications(
+      markStationArrivalSent(activeTripState, arrivedStation.id).sentNotifications,
+    );
 
     return () => clearTimeout(timer);
   }, [activeTripState?.routeId, activeTripState?.currentStationIndex, sentNotificationsKey, screen, locale, tripStatus]);
-
-  useEffect(() => {
-    if (!activeTripState || screen !== 'navigating' || activeTripState.tripStatus === 'preview' || activeTripState.tripStatus === 'ended') return;
-    if (activeTripState.currentStationIndex === null) return;
-
-    const lineNumber = toLineNumber(activeTripState.currentLine);
-    const lineColor = getLineColor(activeTripState.currentLine);
-    const directionText = activeTripState.directionTerminal
-      ? `L${lineNumber} · ${translate('direction', locale)} ${activeTripState.directionTerminal}`
-      : `L${lineNumber}`;
-    const nextText = activeTripState.nextStation
-      ? `${translate('navigation.next', locale)}: ${activeTripState.nextStation.name}`
-      : activeTripState.destinationStation.name;
-
-    let title = `${etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : '--'} · ${nextText}`;
-    let body = `${directionText}\n${navigationConfidenceLabel}`;
-
-    const activeTransferPoint = activeTripState.transferPoints.find(
-      transferPoint => transferPoint.index === activeTripState.currentStationIndex,
-    );
-
-    if (activeTripState.tripStatus === 'arrived') {
-      title = translate('trip.completed', locale);
-      body = getDestinationArrivalMessage(activeTripState.destinationStation.name, locale);
-    } else if (activeTransferPoint) {
-      title = translate('notification.transfer.prepare_title', locale);
-      body = `${translate('notification.transfer.prepare_body', locale)} ${activeTransferPoint.stationName}. ${directionText}`;
-    }
-
-    TripNotificationService.updateActiveTrip({
-      routeId: activeTripState.routeId,
-      title,
-      body,
-      lineColor,
-      tripStatus: activeTripState.tripStatus,
-    }).catch(() => undefined);
-  }, [
-    activeTripState?.routeId,
-    activeTripState?.currentStationIndex,
-    activeTripState?.currentLine,
-    activeTripState?.directionTerminal,
-    activeTripState?.tripStatus,
-    screen,
-    etaData?.timing.totalEstimatedSeconds,
-    navigationConfidenceLabel,
-    locale,
-  ]);
 
   function applyGpsOrigin(
     loc: { latitude: number; longitude: number },
@@ -663,7 +558,6 @@ export default function HomeScreen() {
     const routeActiveTripState = activeTripState;
     const routeEta = etaData;
     const routeDestination = destination;
-    const routeTransferPoints = routeActiveTripState.transferPoints;
     const routePath = routeActiveTripState.orderedRoutePath;
     const routeNavigationMode = routeActiveTripState.navigationMode;
     const routeSentNotifications = routeActiveTripState.sentNotifications;
@@ -672,7 +566,21 @@ export default function HomeScreen() {
       .filter((s): s is StationResult => !!s);
 
     async function syncActiveStation() {
-      const loc = await LocationService.getCurrentLocation();
+      let loc;
+      try {
+        loc = tripStatus === 'preview'
+          ? await getLocationWithTimeout(AUTO_DETECT_MAX_DURATION_MS)
+          : await LocationService.getCurrentLocation();
+      } catch {
+        if (!cancelled) {
+          setCurrentStationDistanceMeters(null);
+          if (tripStatus === 'active') {
+            setNavigationConfidenceMode('approximate');
+          }
+        }
+        return;
+      }
+
       if (cancelled || !loc.latitude || !loc.longitude || routeStations.length === 0) {
         setCurrentStationDistanceMeters(null);
         setNavigationConfidenceMode('approximate');
@@ -747,50 +655,16 @@ export default function HomeScreen() {
           setSentNotifications(notificationTripState.sentNotifications);
         }
       }
-
-      for (const transferPoint of routeTransferPoints) {
-        const nextLine = toLineNumber(transferPoint.toLine);
-        const directionText = transferPoint.directionTerminal
-          ? ` · ${translate('direction', locale)} ${transferPoint.directionTerminal}`
-          : '';
-        if (shouldNotifyOneBeforeTransfer(notificationTripState, transferPoint)) {
-          try {
-            await TripNotificationService.notifyNextStation(
-              translate('notification.transfer.prepare_title', locale),
-              `${translate('notification.transfer.prepare_body', locale)} ${transferPoint.stationName}. ${toLineLabel(transferPoint.toLine)}${directionText}`,
-            );
-          } catch {
-            // Falha de notificação não dispara retry automático nesta viagem.
-          } finally {
-            notificationTripState = markOneBeforeTransferSent(notificationTripState, transferPoint.stationId);
-            // Marcação em finally garante execução independente de sucesso ou falha.
-            // Sem retry automático dentro da mesma viagem.
-            // Trade-off aceito: notificação pode ser perdida, nunca duplicada.
-            setSentNotifications(notificationTripState.sentNotifications);
-          }
-        }
-
-        if (shouldNotifyAtTransfer(notificationTripState, transferPoint)) {
-          try {
-            await TripNotificationService.notifyNextStation(
-              translate('notification.transfer.now_title', locale),
-              `${translate('notification.transfer.now_body', locale)} ${nextLine}${directionText}.`,
-            );
-          } catch {
-            // Falha de notificação não dispara retry automático nesta viagem.
-          } finally {
-            notificationTripState = markAtTransferSent(notificationTripState, transferPoint.stationId);
-            // Marcação em finally garante execução independente de sucesso ou falha.
-            // Sem retry automático dentro da mesma viagem.
-            // Trade-off aceito: notificação pode ser perdida, nunca duplicada.
-            setSentNotifications(notificationTripState.sentNotifications);
-          }
-        }
-      }
     }
 
     syncActiveStation();
-    const timer = setInterval(syncActiveStation, tripStatus === 'preview' ? 3000 : 20_000);
+    if (tripStatus !== 'active') {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const timer = setInterval(syncActiveStation, 20_000);
 
     return () => {
       cancelled = true;
@@ -883,6 +757,53 @@ export default function HomeScreen() {
     }
   }
 
+  function findStationForResolvedPoi(resolvedDestination: ResolvedPoiDestination): StationResult | null {
+    const normalizedStationId = normalizeStationId(resolvedDestination.routeDestinationStationId);
+    const normalizedStationName = normalizeStationId(resolvedDestination.routeDestinationStationName);
+
+    return (stationsData ?? []).find(station =>
+      normalizeStationId(station.id) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationName,
+    ) ?? null;
+  }
+
+  function buildHistoryItem(
+    station: StationResult,
+    poiDestination?: ResolvedPoiDestination,
+  ): SearchHistoryItem {
+    if (!poiDestination) {
+      return {
+        ...station,
+        itemType: 'station',
+        timestamp: Date.now(),
+      };
+    }
+
+    return {
+      ...station,
+      itemType: 'poi',
+      displayName: poiDestination.displayName,
+      poiId: poiDestination.poi.id,
+      routeStationName: poiDestination.routeDestinationStationName,
+      routeLineIds: poiDestination.lineIds,
+      timestamp: Date.now(),
+    };
+  }
+
+  function getHistoryKey(item: SearchHistoryItem): string {
+    return item.itemType === 'poi' && item.poiId ? `poi:${item.poiId}` : `station:${item.id}`;
+  }
+
+  function saveRouteHistory(entry: SearchHistoryItem) {
+    CacheService.get<SearchHistoryItem[]>('route_history').then((hist: SearchHistoryItem[] | null) => {
+      const history: SearchHistoryItem[] = hist ?? [];
+      const entryKey = getHistoryKey(entry);
+      const updated = [entry, ...history.filter(item => getHistoryKey(item) !== entryKey)].slice(0, 3);
+      CacheService.set('route_history', updated, 30 * 24 * 60 * 60 * 1000);
+    });
+  }
+
   async function handleLocateUser() {
     if (locating) return;
 
@@ -967,16 +888,15 @@ export default function HomeScreen() {
     if (etaData && screen === 'searching') setScreen('navigating');
   }, [etaData]);
 
-  function handleDestinationSelect(station: StationResult) {
+  function handleDestinationSelect(
+    station: StationResult,
+    options?: StationSearchSelectionOptions,
+  ) {
+    const poiDestination = options?.poiDestination;
     setDestination(station);
+    setDestinationDisplayName(poiDestination?.displayName ?? null);
     setCurrentTrackedStationIndex(null);
-    // Salva no histórico sempre
-      CacheService.get<StationResult[]>('route_history').then((hist: StationResult[] | null) => {
-        const history: StationResult[] = hist ?? [];
-        const entry = { ...station, timestamp: Date.now() };
-        const updated = [entry, ...history.filter((h: StationResult) => h.id !== station.id)].slice(0, 3);
-        CacheService.set('route_history', updated, 30 * 24 * 60 * 60 * 1000);
-      });
+    saveRouteHistory(buildHistoryItem(station, poiDestination));
     if (origin) {
       setScreen('navigating');
     } else {
@@ -990,6 +910,7 @@ export default function HomeScreen() {
     setOrigin(destination);
     setOriginSource('manual');
     setDestination(origin);
+    setDestinationDisplayName(null);
     setCurrentTrackedStationIndex(null);
     setScreen('navigating');
   }
@@ -997,8 +918,18 @@ export default function HomeScreen() {
   function handleCloseNavigation() {
     if (routeKey) TripNotificationService.endActiveTrip(routeKey).catch(() => undefined);
     setDestination(null);
+    setDestinationDisplayName(null);
     applyTripStatusTransition('ended');
     setScreen('map');
+  }
+
+  function handleSidebarPoiDestinationSelect(poi: PointOfInterest) {
+    const resolvedDestination = resolvePoiDestination(poi);
+    const station = findStationForResolvedPoi(resolvedDestination);
+    if (!station) return;
+
+    setSidebarOpen(false);
+    handleDestinationSelect(station, { poiDestination: resolvedDestination });
   }
 
 
@@ -1040,7 +971,7 @@ export default function HomeScreen() {
           {destination && (
             <Marker
               coordinate={{ latitude: destination.latitude, longitude: destination.longitude }}
-              title={`Destino: ${destination.name}`}
+              title={`Destino: ${destinationDisplayName ?? destination.name}`}
               pinColor="#1A73E8"
             />
           )}
@@ -1057,7 +988,7 @@ export default function HomeScreen() {
           onDestinationClick={() => setScreen('searching')}
           onSwapRoute={handleSwapRoute}
           originName={origin?.name}
-          destinationName={destination?.name}
+          destinationName={destinationDisplayName ?? destination?.name}
           canSwap={!!origin && !!destination}
           routeGradientColors={routeGradientColors}
         />
@@ -1127,13 +1058,14 @@ export default function HomeScreen() {
         incidentsSourceLabel={incidentsSourceLabel}
         incidentsUpdatedLabel={incidentsUpdatedLabel}
         showIncidentStatus={ENABLE_METRO_INCIDENTS}
+        onSelectPoiDestination={handleSidebarPoiDestinationSelect}
       />
 
       {/* NavigationProgress como overlay — mapa continua vivo */}
       {screen === 'navigating' && destination && (
         <NavigationProgress
           origin={origin?.name ?? 'Origen'}
-          destination={destination.name}
+          destination={destinationDisplayName ?? destination.name}
           estimatedTime={etaData ? formatMinutes(etaData.timing.totalEstimatedSeconds) : etaLoading ? '...' : '--'}
           arrivalTime={etaData ? formatArrival(etaData.arrivalTime) : '--:--'}
           stations={stations}
@@ -1142,7 +1074,6 @@ export default function HomeScreen() {
           navigationConfidenceLabel={navigationConfidenceLabel}
           navigationConfidenceColor={navigationConfidenceColor}
           tripStatus={tripStatus}
-          isDetectingAutoStart={activeTripState?.tripStatus === 'preview'}
           currentStationDistanceMeters={currentStationDistanceMeters}
           onClose={handleCloseNavigation}
         />
@@ -1155,6 +1086,7 @@ export default function HomeScreen() {
         nearbyStations={nearbyStations}
         selectedStation={origin}
         selectedStationHintKey={originSource === 'gps-nearest-station' ? 'search.nearest_station' : undefined}
+        enablePoiSearch={false}
       />
       <StationSearchModal
         visible={screen === 'searching'}

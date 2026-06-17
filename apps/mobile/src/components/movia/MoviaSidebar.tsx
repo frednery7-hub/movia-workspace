@@ -14,12 +14,25 @@ import { useLocale } from "../../context/LocaleContext";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import {
+  LINE_DIRECTIONS,
+  LINE_STATION_ORDER,
+  type MetroLineId,
+} from "@movia/shared-data/metro/line-directions";
+import { STATIONS } from "@movia/shared-data/network/stations";
 import { LineChip } from "./LineChip";
 import { StatusBadge } from "./StatusBadge";
 import { FareBanner } from "./FareBanner";
-import { Colors } from "../../theme/colors";
+import { ExpressRouteBadge } from "./ExpressRouteBadge";
+import { getExpressRouteState, getVisibleExpressRouteState } from "../../data/expressRoute";
+import { Colors, getLineColor } from "../../theme/colors";
 import { useAppTheme } from "../../theme/ThemeContext";
 import { useTariffStatus } from "../../hooks/useTariffStatus";
+import type { PointOfInterest } from "../../poi/types";
+import { getAccessesForStation } from "../../poi/search/getAccessesForStation";
+import { getPoisForLine } from "../../poi/search/getPoisForLine";
+import { getPoisForStation } from "../../poi/search/getPoisForStation";
+import { openGoogleMapsQuery } from "../../poi/search/openGoogleMapsQuery";
 
 const SIDEBAR_WIDTH = Dimensions.get("window").width * 0.85;
 
@@ -54,6 +67,7 @@ interface MoviaSidebarProps {
   incidentsSourceLabel?: string;
   incidentsUpdatedLabel?: string;
   showIncidentStatus?: boolean;
+  onSelectPoiDestination?: (poi: PointOfInterest) => void;
 }
 
 const LANGUAGES = [
@@ -63,11 +77,33 @@ const LANGUAGES = [
 ];
 
 const INCIDENT_FILTERS: IncidentLineFilter[] = ["ALL", "L1", "L2", "L3", "L4", "L4A", "L5", "L6"];
+const METRO_LINE_IDS: MetroLineId[] = ["L1", "L2", "L3", "L4", "L4A", "L5", "L6"];
+const STATION_BY_ID = new Map(STATIONS.map(station => [station.id, station]));
 
 function getInitials(name?: string | null) {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "M";
   return `${parts[0][0] ?? "M"}${parts[1]?.[0] ?? ""}`.toUpperCase();
+}
+
+function toMetroLineId(lineNumber: LineItem["number"]): MetroLineId {
+  return `L${lineNumber}` as MetroLineId;
+}
+
+function getStationLineIds(stationId: string): MetroLineId[] {
+  return METRO_LINE_IDS.filter(lineId => LINE_STATION_ORDER[lineId].includes(stationId));
+}
+
+function formatLineIds(lineIds: MetroLineId[]) {
+  return lineIds.join("/");
+}
+
+function getPrimaryPoiStation(poi: PointOfInterest) {
+  return poi.recommendedStations.find(station => station.isPrimary) ?? poi.recommendedStations[0];
+}
+
+function formatPoiStations(poi: PointOfInterest) {
+  return poi.recommendedStations.map(station => station.stationName).join(" / ");
 }
 
 function LineSkeleton() {
@@ -114,11 +150,15 @@ export function MoviaSidebar({
   incidentsSourceLabel,
   incidentsUpdatedLabel,
   showIncidentStatus = true,
+  onSelectPoiDestination,
 }: MoviaSidebarProps) {
   const tariff = useTariffStatus();
   const { t } = useLocale();
   const theme = useAppTheme();
   const [incidentFilter, setIncidentFilter] = useState<IncidentLineFilter>("ALL");
+  const [selectedLineId, setSelectedLineId] = useState<MetroLineId | null>(null);
+  const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const headerContext = `${locationLabel ?? "Santiago, CL"} · ${contextLabel ?? t("location.plan_santiago")}`;
@@ -126,6 +166,14 @@ export function MoviaSidebar({
     () => incidentFilter === "ALL" ? alerts : alerts.filter(alert => alert.lineId === incidentFilter),
     [alerts, incidentFilter],
   );
+  const selectedLineStations = useMemo(() => {
+    if (!selectedLineId) return [];
+
+    return LINE_STATION_ORDER[selectedLineId]
+      .map(stationId => STATION_BY_ID.get(stationId))
+      .filter((station): station is typeof STATIONS[number] => Boolean(station));
+  }, [selectedLineId]);
+  const selectedStation = selectedStationId ? STATION_BY_ID.get(selectedStationId) ?? null : null;
 
   useEffect(() => {
     if (isOpen) {
@@ -156,6 +204,345 @@ export function MoviaSidebar({
       ]).start();
     }
   }, [isOpen]);
+
+  function handleBackFromDetail() {
+    if (selectedStationId) {
+      setSelectedStationId(null);
+      setExpandedSections({});
+      return;
+    }
+
+    if (selectedLineId) {
+      setSelectedLineId(null);
+      setExpandedSections({});
+    }
+  }
+
+  function toggleSection(sectionId: string) {
+    setExpandedSections(current => ({
+      ...current,
+      [sectionId]: !current[sectionId],
+    }));
+  }
+
+  function renderBackHeader(title: string, subtitle?: string) {
+    return (
+      <View style={[styles.detailHeader, { borderBottomColor: theme.colors.borderSubtle }]}>
+        <TouchableOpacity onPress={handleBackFromDetail} style={styles.detailBackButton}>
+          <Feather name="arrow-left" size={18} color={theme.colors.iconMuted} />
+        </TouchableOpacity>
+        <View style={styles.detailHeaderText}>
+          <Text style={[styles.detailTitle, { color: theme.colors.textPrimary }]} numberOfLines={1}>{title}</Text>
+          {!!subtitle && (
+            <Text style={[styles.detailSubtitle, { color: theme.colors.textTertiary }]} numberOfLines={1}>{subtitle}</Text>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  function renderPoiRow(poi: PointOfInterest, compact = false, contextLineId?: MetroLineId | null) {
+    const primaryStation = getPrimaryPoiStation(poi);
+    const lineLabel = formatLineIds(primaryStation.lineIds);
+    const lineColor = contextLineId ?? primaryStation.lineIds[0];
+
+    return (
+      <TouchableOpacity
+        key={poi.id}
+        style={[
+          styles.poiRow,
+          {
+            backgroundColor: theme.colors.surfaceElevated,
+            borderColor: theme.colors.borderSubtle,
+            borderLeftColor: getLineColor(lineColor),
+          },
+        ]}
+        activeOpacity={0.74}
+        onPress={() => {
+          onSelectPoiDestination?.(poi);
+          onClose();
+        }}
+      >
+        <View style={[styles.poiDot, { backgroundColor: getLineColor(lineColor) }]} />
+        <View style={styles.poiTextBlock}>
+          <Text style={[styles.poiName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{poi.name}</Text>
+          <Text style={[styles.poiMeta, { color: theme.colors.textTertiary }]} numberOfLines={compact ? 1 : 2}>
+            {t("search.recommendedStation")}: {formatPoiStations(poi)} · {lineLabel}
+          </Text>
+          {!compact && (
+            <Text style={[styles.poiSummary, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+              {poi.lastMile.summary}
+            </Text>
+          )}
+        </View>
+        <Feather name="chevron-right" size={16} color={theme.colors.border} />
+      </TouchableOpacity>
+    );
+  }
+
+  function renderAccordion(sectionId: string, title: string, children: React.ReactNode) {
+    const expanded = expandedSections[sectionId] === true;
+
+    return (
+      <View style={[styles.accordion, { borderColor: theme.colors.borderSubtle, backgroundColor: theme.colors.surfaceElevated }]}>
+        <TouchableOpacity
+          style={styles.accordionHeader}
+          activeOpacity={0.76}
+          onPress={() => toggleSection(sectionId)}
+        >
+          <Text style={[styles.accordionTitle, { color: theme.colors.textPrimary }]}>{title}</Text>
+          <Feather name={expanded ? "minus" : "plus"} size={16} color={theme.colors.iconMuted} />
+        </TouchableOpacity>
+        {expanded && <View style={styles.accordionBody}>{children}</View>}
+      </View>
+    );
+  }
+
+  function renderStationDetail() {
+    if (!selectedStation) return null;
+
+    const stationLineIds = getStationLineIds(selectedStation.id);
+    const stationPois = getPoisForStation(selectedStation.id);
+    const stationAccesses = getAccessesForStation(selectedStation.id);
+    const stationExpressRoutes = stationLineIds
+      .map(lineId => ({
+        lineId,
+        state: getVisibleExpressRouteState(getExpressRouteState(lineId, selectedStation.name)),
+      }))
+      .filter((item): item is { lineId: MetroLineId; state: NonNullable<ReturnType<typeof getExpressRouteState>> } =>
+        item.state !== null,
+      );
+
+    return (
+      <>
+        {renderBackHeader(
+          `${t("station.details")} ${selectedStation.name}`,
+          stationLineIds.length > 0 ? formatLineIds(stationLineIds) : undefined,
+        )}
+        <View style={styles.detailContent}>
+          {renderAccordion("accesses", t("station.accesses"), (
+            stationAccesses.length > 0 ? (
+              stationAccesses.map(access => (
+                <View key={access.id} style={styles.accessRow}>
+                  <Text style={[styles.accessName, { color: theme.colors.textPrimary }]}>{access.name}</Text>
+                  <Text style={[styles.accessAddress, { color: theme.colors.textSecondary }]}>{access.address}</Text>
+                  {!!access.reference && (
+                    <Text style={[styles.accessReference, { color: theme.colors.textTertiary }]}>{access.reference}</Text>
+                  )}
+                  <TouchableOpacity onPress={() => openGoogleMapsQuery(access.googleMapsQuery)} style={styles.mapsButton}>
+                    <Feather name="external-link" size={13} color={Colors.actionBlue} />
+                    <Text style={styles.mapsButtonText}>{t("search.openInMaps")}</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.emptyInline, { color: theme.colors.textTertiary }]}>{t("station.accesses.empty")}</Text>
+            )
+          ))}
+
+          {renderAccordion("pois", t("poi.nearbyPlaces"), (
+            stationPois.length > 0 ? stationPois.map(poi => renderPoiRow(poi, true)) : (
+              <Text style={[styles.emptyInline, { color: theme.colors.textTertiary }]}>{t("poi.nearbyPlaces.empty")}</Text>
+            )
+          ))}
+
+          {renderAccordion("connections", t("station.connections"), (
+            stationLineIds.length > 1 ? (
+              <View style={styles.connectionChips}>
+                {stationLineIds.map(lineId => (
+                  <View key={lineId} style={[styles.connectionChip, { backgroundColor: getLineColor(lineId) }]}>
+                    <Text style={styles.connectionChipText}>{lineId}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={[styles.emptyInline, { color: theme.colors.textTertiary }]}>{t("station.connections.empty")}</Text>
+            )
+          ))}
+
+          {stationExpressRoutes.length > 0 && renderAccordion("express", t("expressRoute.label"), (
+            <View style={styles.expressRouteRows}>
+              {stationExpressRoutes.map(({ lineId, state }) => (
+                <View key={`${lineId}-${state.type}`} style={styles.expressRouteRow}>
+                  <View style={[styles.stationLineDot, { backgroundColor: getLineColor(lineId) }]} />
+                  <Text style={[styles.expressRouteLine, { color: theme.colors.textSecondary }]}>{lineId}</Text>
+                  <ExpressRouteBadge
+                    type={state.type}
+                    availability={state.availability}
+                    compact
+                  />
+                  {state.type !== "common" && (
+                    <Text style={[styles.expressRouteHint, { color: theme.colors.textTertiary }]}>
+                      {t("expressRoute.takeTrain")} {state.type === "red" ? t("expressRoute.red") : t("expressRoute.green")}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </>
+    );
+  }
+
+  function renderLineDetail() {
+    if (!selectedLineId) return null;
+
+    const terminals = LINE_DIRECTIONS[selectedLineId];
+    const linePois = getPoisForLine(selectedLineId);
+
+    return (
+      <>
+        {renderBackHeader(
+          `${t("lines")} ${selectedLineId.replace("L", "")}`,
+          `${terminals.terminalA} ↔ ${terminals.terminalB}`,
+        )}
+        <View style={styles.detailContent}>
+          {renderAccordion("line-pois", t("poi.nearbyPlaces"), (
+            linePois.length > 0 ? linePois.map(poi => renderPoiRow(poi, true, selectedLineId)) : (
+              <Text style={[styles.emptyInline, { color: theme.colors.textTertiary }]}>{t("poi.nearbyPlaces.empty")}</Text>
+            )
+          ))}
+
+          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("search.all_stations")}</Text>
+          {selectedLineStations.map(station => (
+            <TouchableOpacity
+              key={`${selectedLineId}-${station.id}`}
+              style={[styles.stationRow, { borderBottomColor: theme.colors.borderSubtle }]}
+              activeOpacity={0.72}
+              onPress={() => {
+                setSelectedStationId(station.id);
+                setExpandedSections({});
+              }}
+            >
+              <View style={[styles.stationLineDot, { backgroundColor: getLineColor(selectedLineId) }]} />
+              <View style={styles.stationRowText}>
+                <Text style={[styles.stationRowName, { color: theme.colors.textPrimary }]}>{station.name}</Text>
+                <Text style={[styles.stationRowMeta, { color: theme.colors.textTertiary }]}>{station.shortCode}</Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={theme.colors.border} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </>
+    );
+  }
+
+  function renderSidebarContent() {
+    if (selectedStationId) return renderStationDetail();
+    if (selectedLineId) return renderLineDetail();
+
+    return (
+      <>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("lines")}</Text>
+        {isLoading ? (
+          [1, 2, 3, 4, 5, 6, 7].map((i) => <LineSkeleton key={i} />)
+        ) : lines.length === 0 ? (
+          <Text style={[styles.empty, { color: theme.colors.textTertiary }]}>{t('lines.empty')}</Text>
+        ) : (
+          lines.map((line) => (
+            <TouchableOpacity
+              key={line.number}
+              style={[styles.lineRow, { borderBottomColor: theme.colors.borderSubtle }]}
+              activeOpacity={0.7}
+              onPress={() => {
+                setSelectedLineId(toMetroLineId(line.number));
+                setExpandedSections({});
+              }}
+            >
+              <LineChip line={line.number} />
+              <Text style={[styles.lineName, { color: theme.colors.textPrimary }]}>{line.name}</Text>
+              {showIncidentStatus && <StatusBadge status={line.status} />}
+              <Feather name="chevron-right" size={16} color={theme.colors.border} />
+            </TouchableOpacity>
+          ))
+        )}
+
+        {showIncidentStatus && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: 24, color: theme.colors.textTertiary }]}>
+              {t("alerts")}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filters}
+              contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
+            >
+              {INCIDENT_FILTERS.map(
+                filter => (
+                  <TouchableOpacity
+                    key={filter}
+                    onPress={() => setIncidentFilter(filter)}
+                    style={[
+                      styles.filterChip,
+                      {
+                        backgroundColor: theme.colors.surfaceElevated,
+                        borderColor: theme.colors.border,
+                      },
+                      incidentFilter === filter && styles.filterChipActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterText,
+                        { color: theme.colors.textSecondary },
+                        incidentFilter === filter && styles.filterTextActive,
+                      ]}
+                    >
+                      {filter === "ALL" ? t("filter.all") : filter}
+                    </Text>
+                  </TouchableOpacity>
+                ),
+              )}
+            </ScrollView>
+
+            {filteredAlerts.length === 0 && (
+              <View style={[
+                styles.alertEmpty,
+                {
+                  backgroundColor: theme.colors.surfaceElevated,
+                  borderColor: theme.colors.borderSubtle,
+                },
+              ]}>
+                <Text style={[styles.alertEmptyTitle, { color: theme.colors.textPrimary }]}>
+                  {incidentFilter === "ALL" ? t("alerts.empty_all_title") : `${t("alerts.empty_line_title")} ${incidentFilter}`}
+                </Text>
+                <Text style={[styles.alertEmptyText, { color: theme.colors.textSecondary }]}>{t("alerts.empty_body")}</Text>
+                {!!incidentsSourceLabel && (
+                  <Text style={[styles.alertMeta, { color: theme.colors.textTertiary }]}>{incidentsSourceLabel}</Text>
+                )}
+                {!!incidentsUpdatedLabel && (
+                  <Text style={[styles.alertMeta, { color: theme.colors.textTertiary }]}>{incidentsUpdatedLabel}</Text>
+                )}
+              </View>
+            )}
+
+            {filteredAlerts.map((alert, i) => (
+              <TouchableOpacity
+                key={`${alert.lineId}-${i}-${alert.text}`}
+                style={[styles.alertRow, { borderBottomColor: theme.colors.borderSubtle }]}
+                activeOpacity={0.7}
+              >
+                <StatusBadge status={alert.type} />
+                <Text style={styles.alertLine}>{alert.lineId}</Text>
+                <Text style={[styles.alertText, { color: theme.colors.textPrimary }]} numberOfLines={2}>
+                  {alert.text}
+                </Text>
+                {!!alert.description && (
+                  <Text style={[styles.alertDescription, { color: theme.colors.textSecondary }]} numberOfLines={3}>
+                    {alert.description}
+                  </Text>
+                )}
+                <Text style={[styles.alertMeta, { color: theme.colors.textTertiary }]}>{alert.sourceLabel}</Text>
+                <Text style={[styles.alertTime, { color: theme.colors.textTertiary }]}>{alert.time}</Text>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
+      </>
+    );
+  }
 
   return (
     <Modal
@@ -210,107 +597,7 @@ export function MoviaSidebar({
           style={[styles.scroll, { backgroundColor: theme.colors.background }]}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("lines")}</Text>
-          {isLoading ? (
-            [1, 2, 3, 4, 5, 6, 7].map((i) => <LineSkeleton key={i} />)
-          ) : lines.length === 0 ? (
-            <Text style={[styles.empty, { color: theme.colors.textTertiary }]}>{t('lines.empty')}</Text>
-          ) : (
-            lines.map((line) => (
-              <TouchableOpacity
-                key={line.number}
-                style={[styles.lineRow, { borderBottomColor: theme.colors.borderSubtle }]}
-                activeOpacity={0.7}
-              >
-                <LineChip line={line.number} />
-                <Text style={[styles.lineName, { color: theme.colors.textPrimary }]}>{line.name}</Text>
-                {showIncidentStatus && <StatusBadge status={line.status} />}
-              </TouchableOpacity>
-            ))
-          )}
-
-          {showIncidentStatus && (
-            <>
-              <Text style={[styles.sectionTitle, { marginTop: 24, color: theme.colors.textTertiary }]}>
-                {t("alerts")}
-              </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.filters}
-                contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
-              >
-                {INCIDENT_FILTERS.map(
-                  filter => (
-                    <TouchableOpacity
-                      key={filter}
-                      onPress={() => setIncidentFilter(filter)}
-                      style={[
-                        styles.filterChip,
-                        {
-                          backgroundColor: theme.colors.surfaceElevated,
-                          borderColor: theme.colors.border,
-                        },
-                        incidentFilter === filter && styles.filterChipActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.filterText,
-                          { color: theme.colors.textSecondary },
-                          incidentFilter === filter && styles.filterTextActive,
-                        ]}
-                      >
-                        {filter === "ALL" ? t("filter.all") : filter}
-                      </Text>
-                    </TouchableOpacity>
-                  ),
-                )}
-              </ScrollView>
-
-              {filteredAlerts.length === 0 && (
-                <View style={[
-                  styles.alertEmpty,
-                  {
-                    backgroundColor: theme.colors.surfaceElevated,
-                    borderColor: theme.colors.borderSubtle,
-                  },
-                ]}>
-                  <Text style={[styles.alertEmptyTitle, { color: theme.colors.textPrimary }]}>
-                    {incidentFilter === "ALL" ? t("alerts.empty_all_title") : `${t("alerts.empty_line_title")} ${incidentFilter}`}
-                  </Text>
-                  <Text style={[styles.alertEmptyText, { color: theme.colors.textSecondary }]}>{t("alerts.empty_body")}</Text>
-                  {!!incidentsSourceLabel && (
-                    <Text style={[styles.alertMeta, { color: theme.colors.textTertiary }]}>{incidentsSourceLabel}</Text>
-                  )}
-                  {!!incidentsUpdatedLabel && (
-                    <Text style={[styles.alertMeta, { color: theme.colors.textTertiary }]}>{incidentsUpdatedLabel}</Text>
-                  )}
-                </View>
-              )}
-
-              {filteredAlerts.map((alert, i) => (
-                <TouchableOpacity
-                  key={`${alert.lineId}-${i}-${alert.text}`}
-                  style={[styles.alertRow, { borderBottomColor: theme.colors.borderSubtle }]}
-                  activeOpacity={0.7}
-                >
-                  <StatusBadge status={alert.type} />
-                  <Text style={styles.alertLine}>{alert.lineId}</Text>
-                  <Text style={[styles.alertText, { color: theme.colors.textPrimary }]} numberOfLines={2}>
-                    {alert.text}
-                  </Text>
-                  {!!alert.description && (
-                    <Text style={[styles.alertDescription, { color: theme.colors.textSecondary }]} numberOfLines={3}>
-                      {alert.description}
-                    </Text>
-                  )}
-                  <Text style={[styles.alertMeta, { color: theme.colors.textTertiary }]}>{alert.sourceLabel}</Text>
-                  <Text style={[styles.alertTime, { color: theme.colors.textTertiary }]}>{alert.time}</Text>
-                </TouchableOpacity>
-              ))}
-            </>
-          )}
+          {renderSidebarContent()}
 
           <View style={styles.langSection}>
             {LANGUAGES.map((lang) => (
@@ -423,6 +710,135 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(0,0,0,0.06)",
   },
   lineName: { flex: 1, fontSize: 14, fontWeight: "500" },
+  detailHeader: {
+    minHeight: 62,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderBottomWidth: 1,
+  },
+  detailBackButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailHeaderText: { flex: 1, minWidth: 0 },
+  detailTitle: { fontSize: 15, fontWeight: "800" },
+  detailSubtitle: { marginTop: 2, fontSize: 11, fontWeight: "700" },
+  detailContent: { paddingBottom: 8 },
+  poiRow: {
+    marginHorizontal: 14,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  poiDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  poiTextBlock: { flex: 1, minWidth: 0 },
+  poiName: { fontSize: 13, fontWeight: "800" },
+  poiMeta: { marginTop: 3, fontSize: 11, lineHeight: 15, fontWeight: "700" },
+  poiSummary: { marginTop: 4, fontSize: 11, lineHeight: 15 },
+  stationRow: {
+    minHeight: 48,
+    paddingHorizontal: 20,
+    paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderBottomWidth: 1,
+  },
+  stationLineDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  stationRowText: { flex: 1, minWidth: 0 },
+  stationRowName: { fontSize: 13, fontWeight: "700" },
+  stationRowMeta: { marginTop: 2, fontSize: 11, fontWeight: "600" },
+  accordion: {
+    marginHorizontal: 14,
+    marginBottom: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  accordionHeader: {
+    minHeight: 42,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  accordionTitle: { fontSize: 13, fontWeight: "800" },
+  accordionBody: { paddingBottom: 8 },
+  accessRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  accessName: { fontSize: 13, fontWeight: "800" },
+  accessAddress: { marginTop: 3, fontSize: 12, lineHeight: 16 },
+  accessReference: { marginTop: 2, fontSize: 11, fontWeight: "600" },
+  mapsButton: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  mapsButtonText: { fontSize: 12, fontWeight: "800", color: Colors.actionBlue },
+  emptyInline: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  connectionChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  connectionChip: {
+    minWidth: 30,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  connectionChipText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  expressRouteRows: {
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  expressRouteRow: {
+    minHeight: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  expressRouteLine: { fontSize: 12, fontWeight: "800" },
+  expressRouteHint: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "700",
+  },
   empty: {
     paddingHorizontal: 20,
     paddingVertical: 12,

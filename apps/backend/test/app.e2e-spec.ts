@@ -5,10 +5,12 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 
 const SMOKE_DEVICE_ID = '550e8400-e29b-41d4-a716-446655440000';
+const RATE_LIMIT_IP = '203.0.113.42';
 
 describe('Security Smoke Tests (e2e)', () => {
   let app: INestApplication<App>;
   let token: string;
+  const originalMetricsToken = process.env.METRICS_TOKEN;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -16,6 +18,11 @@ describe('Security Smoke Tests (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    (
+      app.getHttpAdapter().getInstance() as {
+        set?: (setting: string, value: unknown) => void;
+      }
+    ).set?.('trust proxy', 1);
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -24,7 +31,7 @@ describe('Security Smoke Tests (e2e)', () => {
       }),
     );
     app.setGlobalPrefix('v1', {
-      exclude: ['health', 'health/ready', 'health/live'],
+      exclude: ['health', 'health/ready', 'health/live', 'metrics'],
     });
     await app.init();
 
@@ -35,11 +42,39 @@ describe('Security Smoke Tests (e2e)', () => {
   });
 
   afterAll(async () => {
+    if (originalMetricsToken === undefined) {
+      delete process.env.METRICS_TOKEN;
+    } else {
+      process.env.METRICS_TOKEN = originalMetricsToken;
+    }
     await app.close();
   });
 
   it('GET /health — 200 sem token', () => {
     return request(app.getHttpServer()).get('/health').expect(200);
+  });
+
+  it('GET /metrics — 200 sem token em test env local', () => {
+    delete process.env.METRICS_TOKEN;
+    return request(app.getHttpServer()).get('/metrics').expect(200);
+  });
+
+  it('GET /metrics — 401 com token configurado e auth ausente/incorreto', async () => {
+    process.env.METRICS_TOKEN = 'test-metrics-token-123';
+
+    await request(app.getHttpServer()).get('/metrics').expect(401);
+    await request(app.getHttpServer())
+      .get('/metrics')
+      .set('Authorization', 'Bearer wrong-token')
+      .expect(401);
+  });
+
+  it('GET /metrics — 200 com token configurado e bearer correto', () => {
+    process.env.METRICS_TOKEN = 'test-metrics-token-123';
+    return request(app.getHttpServer())
+      .get('/metrics')
+      .set('Authorization', 'Bearer test-metrics-token-123')
+      .expect(200);
   });
 
   it('GET /v1/lines — 200 sem token', () => {
@@ -55,6 +90,36 @@ describe('Security Smoke Tests (e2e)', () => {
         const body = res.body as { access_token?: string };
         if (!body.access_token) throw new Error('Token ausente');
       });
+  });
+
+  it('POST /v1/auth/session — 429 acima do limite rígido', async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await request(app.getHttpServer())
+        .post('/v1/auth/session')
+        .set('X-Forwarded-For', RATE_LIMIT_IP)
+        .send({ deviceId: rateLimitDeviceId(i) })
+        .expect(201);
+    }
+
+    await request(app.getHttpServer())
+      .post('/v1/auth/session')
+      .set('X-Forwarded-For', RATE_LIMIT_IP)
+      .send({ deviceId: rateLimitDeviceId(6) })
+      .expect(429)
+      .expect((res) => {
+        const body = res.body as { statusCode?: number; message?: string };
+        if (body.statusCode !== 429) {
+          throw new Error('Resposta 429 sem statusCode consistente');
+        }
+        if (!body.message) {
+          throw new Error('Resposta 429 sem message');
+        }
+      });
+
+    await request(app.getHttpServer())
+      .get('/health')
+      .set('X-Forwarded-For', RATE_LIMIT_IP)
+      .expect(200);
   });
 
   it('GET /v1/auth/me — 401 sem token', () => {
@@ -186,3 +251,7 @@ describe('Security Smoke Tests (e2e)', () => {
       .expect(200);
   });
 });
+
+function rateLimitDeviceId(index: number): string {
+  return `550e8400-e29b-41d4-a716-${String(446655440100 + index)}`;
+}

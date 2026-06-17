@@ -10,6 +10,12 @@ import { useLocale } from '../../context/LocaleContext';
 import { CacheService } from '../../config/cache.service';
 import { Colors, getLineColor } from '../../theme/colors';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { getPoiById } from '../../poi/data/pois';
+import type { PointOfInterest, ResolvedPoiDestination } from '../../poi/types';
+import { normalizeSearchText } from '../../poi/search/normalizeSearchText';
+import { normalizeStationId } from '../../poi/search/normalizeStationId';
+import { resolvePoiDestination } from '../../poi/search/resolvePoiDestination';
+import { searchPois } from '../../poi/search/searchPois';
 import {
   getExpressRouteState,
   getVisibleExpressRouteState,
@@ -21,6 +27,19 @@ type StationLine = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 
 const VALID_LINES: StationLine[] = ['1', '2', '3', '4', '4A', '5', '6'];
 
+export type StationSearchSelectionOptions = {
+  poiDestination?: ResolvedPoiDestination;
+};
+
+export type SearchHistoryItem = StationResult & {
+  itemType?: 'station' | 'poi';
+  displayName?: string;
+  poiId?: string;
+  routeStationName?: string;
+  routeLineIds?: string[];
+  timestamp?: number;
+};
+
 function toStationLine(lineId: string): StationLine | null {
   const line = lineId.replace(/^L/i, '') as StationLine;
   return VALID_LINES.includes(line) ? line : null;
@@ -30,18 +49,40 @@ function getStationLines(station: StationResult): StationLine[] {
   return [...new Set((station.lines ?? []).map(toStationLine).filter((line): line is StationLine => !!line))];
 }
 
+function toStationLines(lineIds: string[]): StationLine[] {
+  return [...new Set(lineIds.map(toStationLine).filter((line): line is StationLine => !!line))];
+}
+
+function getHistoryKey(item: SearchHistoryItem): string {
+  return item.itemType === 'poi' && item.poiId ? `poi:${item.poiId}` : `station:${item.id}`;
+}
+
+function getPrimaryPoiStation(poi: PointOfInterest) {
+  return poi.recommendedStations.find(station => station.isPrimary) ?? poi.recommendedStations[0];
+}
+
+function formatLineIds(lineIds: string[]): string {
+  return lineIds.map(lineId => lineId.startsWith('L') ? lineId : `L${lineId}`).join('/');
+}
+
+function getPoiCategoryLabel(category: PointOfInterest['category'], t: (key: string) => string): string {
+  return t(`poi.category.${category}`);
+}
+
 interface StationSearchModalProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (station: StationResult) => void;
+  onSelect: (station: StationResult, options?: StationSearchSelectionOptions) => void;
   titleKey?: string;
   nearbyStations?: NearbyStation[];
   selectedStation?: StationResult | null;
   selectedStationHintKey?: string;
+  enablePoiSearch?: boolean;
 }
 
 export function StationSearchModal({
   visible, onClose, onSelect, titleKey, nearbyStations = [], selectedStation, selectedStationHintKey,
+  enablePoiSearch = true,
 }: StationSearchModalProps) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
@@ -49,11 +90,11 @@ export function StationSearchModal({
   const theme = useAppTheme();
   const modalTitle = t(titleKey ?? 'where_to');
   const selectedHint = selectedStationHintKey ? t(selectedStationHintKey) : undefined;
-  const [recentStations, setRecentStations] = useState<StationResult[]>([]);
+  const [recentStations, setRecentStations] = useState<SearchHistoryItem[]>([]);
 
   useEffect(() => {
     if (visible) {
-      CacheService.get<StationResult[]>('route_history').then(hist => {
+      CacheService.get<SearchHistoryItem[]>('route_history').then(hist => {
         if (hist) setRecentStations(hist.slice(0, 3));
       });
     }
@@ -61,6 +102,9 @@ export function StationSearchModal({
   const { data: allStations = [], isLoading: loadingAll } = useStations();
   const { data: searchResults = [], isFetching: loadingSearch } = useStationSearch(query);
   const isLoading = loadingAll || loadingSearch;
+  const poiResults = useMemo(() => (
+    enablePoiSearch && query.trim().length > 0 ? searchPois(query).slice(0, 6) : []
+  ), [enablePoiSearch, query]);
   const filtered = useMemo(() => {
     if (!query.trim()) return allStations;
     if (query.length >= 2 && searchResults.length > 0) return searchResults;
@@ -73,9 +117,40 @@ export function StationSearchModal({
     );
   }, [query, allStations, searchResults]);
 
-  function handleSelect(station: StationResult) {
+  function handleSelect(station: StationResult, options?: StationSearchSelectionOptions) {
     setQuery('');
-    onSelect(station);
+    onSelect(station, options);
+  }
+
+  function findStationForPoiDestination(resolvedDestination: ResolvedPoiDestination): StationResult | null {
+    const normalizedStationId = normalizeStationId(resolvedDestination.routeDestinationStationId);
+    const normalizedStationName = normalizeStationId(resolvedDestination.routeDestinationStationName);
+
+    return allStations.find(station =>
+      normalizeStationId(station.id) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationName,
+    ) ?? null;
+  }
+
+  function handlePoiSelect(poi: PointOfInterest) {
+    const resolvedDestination = resolvePoiDestination(poi);
+    const station = findStationForPoiDestination(resolvedDestination);
+    if (!station) return;
+
+    handleSelect(station, { poiDestination: resolvedDestination });
+  }
+
+  function handleRecentSelect(item: SearchHistoryItem) {
+    if (item.itemType === 'poi' && item.poiId) {
+      const poi = getPoiById(item.poiId);
+      if (poi) {
+        handlePoiSelect(poi);
+        return;
+      }
+    }
+
+    handleSelect(withFreshStationData(item));
   }
 
   async function handleClearHistory() {
@@ -83,8 +158,13 @@ export function StationSearchModal({
     setRecentStations([]);
   }
 
-  function renderLineChips(station: StationResult) {
-    const stationLines = getStationLines(station);
+  async function handleRemoveHistoryItem(item: SearchHistoryItem) {
+    const nextHistory = recentStations.filter(historyItem => getHistoryKey(historyItem) !== getHistoryKey(item));
+    setRecentStations(nextHistory);
+    await CacheService.set('route_history', nextHistory, 30 * 24 * 60 * 60 * 1000);
+  }
+
+  function renderLineChipsFromLines(stationLines: StationLine[]) {
     if (stationLines.length === 0) return null;
 
     return (
@@ -96,6 +176,15 @@ export function StationSearchModal({
         ))}
       </View>
     );
+  }
+
+  function renderLineChips(station: StationResult) {
+    return renderLineChipsFromLines(getStationLines(station));
+  }
+
+  function renderPoiLineChips(poi: PointOfInterest) {
+    const primaryStation = getPrimaryPoiStation(poi);
+    return renderLineChipsFromLines(toStationLines(primaryStation.lineIds));
   }
 
   function renderExpressRouteBadges(station: StationResult) {
@@ -123,8 +212,42 @@ export function StationSearchModal({
     );
   }
 
-  function withFreshStationData(station: StationResult) {
-    return allStations.find(s => s.id === station.id) ?? station;
+  function withFreshStationData(station: StationResult | SearchHistoryItem) {
+    const routeStationName = 'routeStationName' in station && station.routeStationName
+      ? station.routeStationName
+      : station.name;
+    return allStations.find(s =>
+      s.id === station.id ||
+      normalizeStationId(s.name) === normalizeStationId(routeStationName),
+    ) ?? station;
+  }
+
+  function renderPoiResult(poi: PointOfInterest) {
+    const primaryStation = getPrimaryPoiStation(poi);
+    const routeLines = formatLineIds(primaryStation.lineIds);
+
+    return (
+      <TouchableOpacity
+        key={poi.id}
+        style={styles.stationItem}
+        onPress={() => handlePoiSelect(poi)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.stationIcon, { backgroundColor: `${Colors.actionBlue}18` }]}>
+          <Feather name="map-pin" size={14} color={Colors.actionBlue} />
+        </View>
+        <View style={styles.stationInfo}>
+          <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{poi.name}</Text>
+          <Text style={[styles.poiMeta, { color: theme.colors.textTertiary }]}>
+            {getPoiCategoryLabel(poi.category, t)} · {t('search.recommendedStation')}: {primaryStation.stationName} · {routeLines}
+          </Text>
+          <Text style={[styles.poiSummary, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+            {poi.lastMile.summary}
+          </Text>
+        </View>
+        {renderPoiLineChips(poi)}
+      </TouchableOpacity>
+    );
   }
 
   return (
@@ -177,6 +300,14 @@ export function StationSearchModal({
           </View>
         ) : (
           <>
+            {query.trim().length > 0 && poiResults.length > 0 && (
+              <>
+                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t('poi.nearbyPlaces')}</Text>
+                </View>
+                {poiResults.map(renderPoiResult)}
+              </>
+            )}
             {!query.trim() && nearbyStations.length > 0 && (
               <>
                 <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
@@ -220,19 +351,36 @@ export function StationSearchModal({
                     <Text style={styles.clearText}>{t('search.clear')}</Text>
                   </TouchableOpacity>
                 </View>
-                {recentStations.map(station => {
-                  const freshStation = withFreshStationData(station);
+                {recentStations.map(item => {
+                  const freshStation = withFreshStationData(item);
+                  const displayName = item.displayName ?? item.name;
+                  const historyLines = item.routeLineIds ? toStationLines(item.routeLineIds) : getStationLines(freshStation);
                   return (
-                    <TouchableOpacity key={freshStation.id} style={styles.stationItem} onPress={() => handleSelect(freshStation)} activeOpacity={0.7}>
+                    <TouchableOpacity key={getHistoryKey(item)} style={styles.stationItem} onPress={() => handleRecentSelect(item)} activeOpacity={0.7}>
                       <Feather name="clock" size={16} color={theme.colors.textTertiary} />
                       <View style={styles.stationInfo}>
-                        <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{freshStation.name}</Text>
+                        <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{displayName}</Text>
                         <View style={styles.stationMeta}>
-                          <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>{freshStation.shortCode}</Text>
-                          {renderLineChips(freshStation)}
+                          <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>
+                            {item.itemType === 'poi'
+                              ? `${t('search.recommendedStation')}: ${item.routeStationName ?? freshStation.name}`
+                              : freshStation.shortCode}
+                          </Text>
+                          {renderLineChipsFromLines(historyLines)}
                         </View>
-                        {renderExpressRouteBadges(freshStation)}
+                        {item.itemType === 'poi' ? null : renderExpressRouteBadges(freshStation)}
                       </View>
+                      <TouchableOpacity
+                        onPress={event => {
+                          event.stopPropagation();
+                          handleRemoveHistoryItem(item);
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={styles.removeRecentButton}
+                        accessibilityLabel={t('search.removeRecent')}
+                      >
+                        <Feather name="x" size={16} color={theme.colors.textTertiary} />
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   );
                 })}
@@ -269,10 +417,12 @@ export function StationSearchModal({
               </TouchableOpacity>
             )}
             ListEmptyComponent={
-              <View style={styles.empty}>
-                <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>{t("search.empty")}</Text>
-                <Text style={styles.emptyAction}>{t('search.view_lines_map')}</Text>
-              </View>
+              poiResults.length === 0 ? (
+                <View style={styles.empty}>
+                  <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>{t("search.empty")}</Text>
+                  <Text style={styles.emptyAction}>{t('search.view_lines_map')}</Text>
+                </View>
+              ) : null
             }
           />
           </>
@@ -283,11 +433,7 @@ export function StationSearchModal({
 }
 
 function normalize(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
+  return normalizeSearchText(value);
 }
 
 const styles = StyleSheet.create({
@@ -336,6 +482,8 @@ const styles = StyleSheet.create({
   },
   stationInfo: { flex: 1 },
   stationName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
+  poiMeta: { marginTop: 5, fontSize: 12, color: Colors.textTertiary, fontWeight: '700' },
+  poiSummary: { marginTop: 5, fontSize: 12, lineHeight: 17, color: Colors.textSecondary },
   stationMeta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -355,6 +503,13 @@ const styles = StyleSheet.create({
   clearText: { fontSize: 12, fontWeight: '700', color: Colors.accentPrimary },
   stationCode: { fontSize: 12, color: Colors.textTertiary },
   selectedBadge: { fontSize: 11, fontWeight: '800', color: '#1A73E8' },
+  removeRecentButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   lineChips: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   lineChip: {
     minWidth: 24,

@@ -31,6 +31,7 @@ export function useLanguage() { return useContext(LanguageContext); }
 
 
 const MAX_RETRIES = 3;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 interface SessionResponse {
   access_token: string;
@@ -97,7 +98,9 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
     <View style={[styles.errorContainer, { backgroundColor: theme.colors.background }]} accessibilityRole="alert">
       <Text style={styles.errorIcon}>⚠️</Text>
       <Text style={[styles.errorTitle, { color: theme.colors.textPrimary }]}>Algo salió mal</Text>
-      <Text style={[styles.errorMessage, { color: theme.colors.textSecondary }]}>{error.message}</Text>
+      <Text style={[styles.errorMessage, { color: theme.colors.textSecondary }]}>
+        {IS_PRODUCTION ? 'No se pudo completar la operación.' : error.message}
+      </Text>
       <TouchableOpacity style={styles.retryBtn} onPress={retry}>
         <Text style={styles.retryText}>Intentar nuevamente</Text>
       </TouchableOpacity>

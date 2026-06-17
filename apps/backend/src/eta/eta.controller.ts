@@ -6,6 +6,7 @@ import {
   Request,
   BadRequestException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { EtaService } from './eta.service';
 
 interface JwtRequest {
@@ -18,6 +19,7 @@ const STATION_ID_REGEX = /^st_[a-z0-9_]+$/;
 export class EtaController {
   constructor(private readonly etaService: EtaService) {}
 
+  @Throttle({ eta: { ttl: 60_000, limit: 60 } })
   @Get(':destinationId')
   async getEta(
     @Request() req: JwtRequest,
