@@ -35,7 +35,8 @@
         "ACCESS_COARSE_LOCATION",
         "POST_NOTIFICATIONS"
       ],
-      "allowBackup": false
+      "allowBackup": false,
+      "versionCode": 220
     },
     "ios": {
       "supportsTablet": true,
@@ -43,6 +44,6 @@
         "NSLocationWhenInUseUsageDescription": "Movia usa sua localização para encontrar a estação mais próxima."
       }
     },
-    "version": "1.1.2"
+    "version": "2.2.0"
   }
 }

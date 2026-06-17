@@ -44,7 +44,7 @@ import { MetroIncidentsModule } from './metro-incidents/metro-incidents.module';
           .default(30),
         SENTRY_DSN: Joi.string().optional().allow(''),
         METRICS_TOKEN: Joi.when('NODE_ENV', {
-          is: 'production',
+          is: Joi.valid('production', 'staging'),
           then: Joi.string().min(16).required(),
           otherwise: Joi.string().optional().allow(''),
         }),

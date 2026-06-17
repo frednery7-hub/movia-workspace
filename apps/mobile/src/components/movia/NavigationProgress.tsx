@@ -34,7 +34,6 @@ interface NavigationProgressProps {
   navigationConfidenceLabel: string;
   navigationConfidenceColor: string;
   tripStatus: TripStatus;
-  isDetectingAutoStart?: boolean;
   currentStationDistanceMeters?: number | null;
   onClose: () => void;
 }
@@ -50,7 +49,7 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, isDetectingAutoStart = false, currentStationDistanceMeters = null, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, currentStationDistanceMeters = null, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const theme = useAppTheme();
@@ -207,9 +206,6 @@ export function NavigationProgress({
             </View>
             {currentDirection && (
               <Text style={[styles.directionText, { color: theme.colors.textPrimary }]}>L{currentLine} · {t('direction')} {currentDirection}</Text>
-            )}
-            {isDetectingAutoStart && (
-              <Text style={[styles.autoStartHint, { color: theme.colors.textTertiary }]}>{t('trip.detecting_position')}</Text>
             )}
           </View>
           <TouchableOpacity
@@ -422,13 +418,6 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   directionText: { fontSize: 12, color: Colors.textPrimary, marginTop: 3, fontWeight: '800' },
-  autoStartHint: {
-    marginTop: 5,
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textTertiary,
-    opacity: 0.78,
-  },
   expandButton: {
     width: 30, height: 30, borderRadius: 15,
     alignItems: 'center', justifyContent: 'center',

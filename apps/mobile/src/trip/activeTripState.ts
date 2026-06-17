@@ -85,6 +85,7 @@ export const CURRENT_STATION_BANNER_RADIUS_METERS = 200;
 export const HARD_MAX_STATION_MATCH_RADIUS_METERS = 200;
 export const AUTO_START_RADIUS_METERS = CURRENT_STATION_BANNER_RADIUS_METERS;
 export const AUTO_START_ALLOWED_INDEX_RANGE = [0, 1, 2] as const;
+export const AUTO_DETECT_MAX_DURATION_MS = 15_000;
 
 export type GeoLocation = {
   latitude: number;

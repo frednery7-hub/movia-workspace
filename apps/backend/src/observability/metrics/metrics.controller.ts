@@ -14,12 +14,19 @@ export class MetricsController {
     @Headers('authorization') auth?: string,
   ): Promise<void> {
     const token = process.env.METRICS_TOKEN;
-    if (token) {
-      if (auth !== `Bearer ${token}`) {
-        res.status(401).json({ message: 'Unauthorized' });
-        return;
-      }
+    const isLocalOnly =
+      process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+
+    if (!token && !isLocalOnly) {
+      res.status(503).json({ message: 'Metrics token not configured' });
+      return;
     }
+
+    if (token && auth !== `Bearer ${token}`) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
     res.setHeader('Content-Type', this.metrics.getContentType());
     res.end(await this.metrics.getMetrics());
   }

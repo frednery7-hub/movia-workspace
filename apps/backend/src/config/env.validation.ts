@@ -16,5 +16,9 @@ export const envValidationSchema = Joi.object({
   PRIVACY_RESPONSE_SLA_DAYS: Joi.number().integer().positive().default(30),
   MAPBOX_PUBLIC_TOKEN: Joi.string().allow('').optional(),
   SENTRY_DSN: Joi.string().allow('').optional(),
-  METRICS_TOKEN: Joi.string().allow('').optional(),
+  METRICS_TOKEN: Joi.when('NODE_ENV', {
+    is: Joi.valid('production', 'staging'),
+    then: Joi.string().min(16).required(),
+    otherwise: Joi.string().allow('').optional(),
+  }),
 });

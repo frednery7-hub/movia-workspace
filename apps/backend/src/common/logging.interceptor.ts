@@ -37,7 +37,9 @@ export class LoggingInterceptor implements NestInterceptor {
           const res = context.switchToHttp().getResponse<Response>();
           const status = String(res.statusCode);
 
-          res.setHeader('x-correlation-id', correlationId);
+          if (!res.headersSent) {
+            res.setHeader('x-correlation-id', correlationId);
+          }
 
           this.logger.info('http_request', {
             correlationId,

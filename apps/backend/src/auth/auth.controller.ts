@@ -22,6 +22,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ authSession: { ttl: 60_000, limit: 10 } })
   @Post('refresh')
   async refresh(@Body() dto: RefreshDto): Promise<SessionTokens> {
     return this.authService.refreshSession(dto.refresh_token);

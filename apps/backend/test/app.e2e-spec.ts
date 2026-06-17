@@ -10,6 +10,7 @@ const RATE_LIMIT_IP = '203.0.113.42';
 describe('Security Smoke Tests (e2e)', () => {
   let app: INestApplication<App>;
   let token: string;
+  const originalMetricsToken = process.env.METRICS_TOKEN;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -30,7 +31,7 @@ describe('Security Smoke Tests (e2e)', () => {
       }),
     );
     app.setGlobalPrefix('v1', {
-      exclude: ['health', 'health/ready', 'health/live'],
+      exclude: ['health', 'health/ready', 'health/live', 'metrics'],
     });
     await app.init();
 
@@ -41,11 +42,39 @@ describe('Security Smoke Tests (e2e)', () => {
   });
 
   afterAll(async () => {
+    if (originalMetricsToken === undefined) {
+      delete process.env.METRICS_TOKEN;
+    } else {
+      process.env.METRICS_TOKEN = originalMetricsToken;
+    }
     await app.close();
   });
 
   it('GET /health — 200 sem token', () => {
     return request(app.getHttpServer()).get('/health').expect(200);
+  });
+
+  it('GET /metrics — 200 sem token em test env local', () => {
+    delete process.env.METRICS_TOKEN;
+    return request(app.getHttpServer()).get('/metrics').expect(200);
+  });
+
+  it('GET /metrics — 401 com token configurado e auth ausente/incorreto', async () => {
+    process.env.METRICS_TOKEN = 'test-metrics-token-123';
+
+    await request(app.getHttpServer()).get('/metrics').expect(401);
+    await request(app.getHttpServer())
+      .get('/metrics')
+      .set('Authorization', 'Bearer wrong-token')
+      .expect(401);
+  });
+
+  it('GET /metrics — 200 com token configurado e bearer correto', () => {
+    process.env.METRICS_TOKEN = 'test-metrics-token-123';
+    return request(app.getHttpServer())
+      .get('/metrics')
+      .set('Authorization', 'Bearer test-metrics-token-123')
+      .expect(200);
   });
 
   it('GET /v1/lines — 200 sem token', () => {

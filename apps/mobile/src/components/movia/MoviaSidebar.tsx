@@ -23,6 +23,8 @@ import { STATIONS } from "@movia/shared-data/network/stations";
 import { LineChip } from "./LineChip";
 import { StatusBadge } from "./StatusBadge";
 import { FareBanner } from "./FareBanner";
+import { ExpressRouteBadge } from "./ExpressRouteBadge";
+import { getExpressRouteState, getVisibleExpressRouteState } from "../../data/expressRoute";
 import { Colors, getLineColor } from "../../theme/colors";
 import { useAppTheme } from "../../theme/ThemeContext";
 import { useTariffStatus } from "../../hooks/useTariffStatus";
@@ -156,9 +158,7 @@ export function MoviaSidebar({
   const [incidentFilter, setIncidentFilter] = useState<IncidentLineFilter>("ALL");
   const [selectedLineId, setSelectedLineId] = useState<MetroLineId | null>(null);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    pois: true,
-  });
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const headerContext = `${locationLabel ?? "Santiago, CL"} · ${contextLabel ?? t("location.plan_santiago")}`;
@@ -208,12 +208,13 @@ export function MoviaSidebar({
   function handleBackFromDetail() {
     if (selectedStationId) {
       setSelectedStationId(null);
-      setExpandedSections({ pois: true });
+      setExpandedSections({});
       return;
     }
 
     if (selectedLineId) {
       setSelectedLineId(null);
+      setExpandedSections({});
     }
   }
 
@@ -240,9 +241,10 @@ export function MoviaSidebar({
     );
   }
 
-  function renderPoiRow(poi: PointOfInterest, compact = false) {
+  function renderPoiRow(poi: PointOfInterest, compact = false, contextLineId?: MetroLineId | null) {
     const primaryStation = getPrimaryPoiStation(poi);
     const lineLabel = formatLineIds(primaryStation.lineIds);
+    const lineColor = contextLineId ?? primaryStation.lineIds[0];
 
     return (
       <TouchableOpacity
@@ -252,6 +254,7 @@ export function MoviaSidebar({
           {
             backgroundColor: theme.colors.surfaceElevated,
             borderColor: theme.colors.borderSubtle,
+            borderLeftColor: getLineColor(lineColor),
           },
         ]}
         activeOpacity={0.74}
@@ -260,7 +263,7 @@ export function MoviaSidebar({
           onClose();
         }}
       >
-        <View style={[styles.poiDot, { backgroundColor: getLineColor(primaryStation.lineIds[0]) }]} />
+        <View style={[styles.poiDot, { backgroundColor: getLineColor(lineColor) }]} />
         <View style={styles.poiTextBlock}>
           <Text style={[styles.poiName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{poi.name}</Text>
           <Text style={[styles.poiMeta, { color: theme.colors.textTertiary }]} numberOfLines={compact ? 1 : 2}>
@@ -301,6 +304,14 @@ export function MoviaSidebar({
     const stationLineIds = getStationLineIds(selectedStation.id);
     const stationPois = getPoisForStation(selectedStation.id);
     const stationAccesses = getAccessesForStation(selectedStation.id);
+    const stationExpressRoutes = stationLineIds
+      .map(lineId => ({
+        lineId,
+        state: getVisibleExpressRouteState(getExpressRouteState(lineId, selectedStation.name)),
+      }))
+      .filter((item): item is { lineId: MetroLineId; state: NonNullable<ReturnType<typeof getExpressRouteState>> } =>
+        item.state !== null,
+      );
 
     return (
       <>
@@ -349,22 +360,25 @@ export function MoviaSidebar({
             )
           ))}
 
-          {renderAccordion("express", t("expressRoute.label"), (
-            <Text style={[styles.emptyInline, { color: theme.colors.textTertiary }]}>
-              {t("expressRoute.scheduleInfo")}
-            </Text>
-          ))}
-
-          {renderAccordion("accessibility", t("station.accessibility"), (
-            <Text style={[styles.emptyInline, { color: theme.colors.textTertiary }]}>
-              {selectedStation.wheelchairAccessible ? t("station.accessibility.available") : t("station.accessibility.unknown")}
-            </Text>
-          ))}
-
-          {renderAccordion("operations", t("station.operationalInfo"), (
-            <Text style={[styles.emptyInline, { color: theme.colors.textTertiary }]}>
-              {selectedStation.isUnderground ? t("station.underground") : t("station.surface")}
-            </Text>
+          {stationExpressRoutes.length > 0 && renderAccordion("express", t("expressRoute.label"), (
+            <View style={styles.expressRouteRows}>
+              {stationExpressRoutes.map(({ lineId, state }) => (
+                <View key={`${lineId}-${state.type}`} style={styles.expressRouteRow}>
+                  <View style={[styles.stationLineDot, { backgroundColor: getLineColor(lineId) }]} />
+                  <Text style={[styles.expressRouteLine, { color: theme.colors.textSecondary }]}>{lineId}</Text>
+                  <ExpressRouteBadge
+                    type={state.type}
+                    availability={state.availability}
+                    compact
+                  />
+                  {state.type !== "common" && (
+                    <Text style={[styles.expressRouteHint, { color: theme.colors.textTertiary }]}>
+                      {t("expressRoute.takeTrain")} {state.type === "red" ? t("expressRoute.red") : t("expressRoute.green")}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
           ))}
         </View>
       </>
@@ -384,10 +398,11 @@ export function MoviaSidebar({
           `${terminals.terminalA} ↔ ${terminals.terminalB}`,
         )}
         <View style={styles.detailContent}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("poi.nearbyPlaces")}</Text>
-          {linePois.length > 0 ? linePois.map(poi => renderPoiRow(poi, true)) : (
-            <Text style={[styles.empty, { color: theme.colors.textTertiary }]}>{t("poi.nearbyPlaces.empty")}</Text>
-          )}
+          {renderAccordion("line-pois", t("poi.nearbyPlaces"), (
+            linePois.length > 0 ? linePois.map(poi => renderPoiRow(poi, true, selectedLineId)) : (
+              <Text style={[styles.emptyInline, { color: theme.colors.textTertiary }]}>{t("poi.nearbyPlaces.empty")}</Text>
+            )
+          ))}
 
           <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("search.all_stations")}</Text>
           {selectedLineStations.map(station => (
@@ -395,7 +410,10 @@ export function MoviaSidebar({
               key={`${selectedLineId}-${station.id}`}
               style={[styles.stationRow, { borderBottomColor: theme.colors.borderSubtle }]}
               activeOpacity={0.72}
-              onPress={() => setSelectedStationId(station.id)}
+              onPress={() => {
+                setSelectedStationId(station.id);
+                setExpandedSections({});
+              }}
             >
               <View style={[styles.stationLineDot, { backgroundColor: getLineColor(selectedLineId) }]} />
               <View style={styles.stationRowText}>
@@ -427,7 +445,10 @@ export function MoviaSidebar({
               key={line.number}
               style={[styles.lineRow, { borderBottomColor: theme.colors.borderSubtle }]}
               activeOpacity={0.7}
-              onPress={() => setSelectedLineId(toMetroLineId(line.number))}
+              onPress={() => {
+                setSelectedLineId(toMetroLineId(line.number));
+                setExpandedSections({});
+              }}
             >
               <LineChip line={line.number} />
               <Text style={[styles.lineName, { color: theme.colors.textPrimary }]}>{line.name}</Text>
@@ -799,6 +820,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   connectionChipText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  expressRouteRows: {
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  expressRouteRow: {
+    minHeight: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  expressRouteLine: { fontSize: 12, fontWeight: "800" },
+  expressRouteHint: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "700",
+  },
   empty: {
     paddingHorizontal: 20,
     paddingVertical: 12,
