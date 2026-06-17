@@ -813,6 +813,7 @@ export default function HomeScreen() {
       setLanguage(lang.toLowerCase().startsWith('pt') ? 'PT' : lang.toLowerCase().startsWith('en') ? 'EN' : 'ES');
 
       const status = await LocationService.requestPermission();
+      await TripNotificationService.requestPermission();
       if (status === 'granted') {
         const loc = await LocationService.getCurrentLocation();
         if (loc.latitude && loc.longitude) {

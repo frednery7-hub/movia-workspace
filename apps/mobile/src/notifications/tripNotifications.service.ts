@@ -37,6 +37,14 @@ export class TripNotificationService {
     return status === 'granted';
   }
 
+  /**
+   * Solicita a permissao de notificacao de forma proativa (ex: no boot do app),
+   * em vez de esperar a primeira notificacao real de viagem para perguntar.
+   */
+  static async requestPermission(): Promise<boolean> {
+    return this.ensurePermission();
+  }
+
   static async notifyNextStation(title: string, body: string): Promise<void> {
     const canNotify = await this.ensurePermission();
     if (!canNotify) return;
