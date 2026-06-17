@@ -18,7 +18,8 @@ export type NavigationMode =
   | 'gps-unstable'
   | 'hybrid'
   | 'approximate'
-  | 'offline';
+  | 'offline'
+  | 'inertial';
 
 export type RouteStation = {
   id: string;

@@ -29,6 +29,12 @@ import { ENABLE_METRO_INCIDENTS } from '../src/config/featureFlags';
 import { IdentityService } from '../src/security/identity.service';
 import { LocationService } from '../src/location/location.service';
 import { getLocationMemoryCacheTtlForTripStatus } from '../src/location/locationMemoryCache';
+import {
+  computeInertialFallback,
+  type InertialFallbackResult,
+} from '../src/trip/inertialIntegration';
+import type { MotionStateSample } from '../src/location/inertial/sustainedArrivalWindow';
+
 import { InertialService } from '../src/sensors/InertialService';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
 import {
@@ -95,7 +101,7 @@ const DARK_MAP_STYLE = [
 type AppScreen = 'map' | 'searching' | 'navigating';
 type LineNumber = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 type OriginSource = 'manual' | 'gps-nearest-station' | 'history' | 'planning-mode' | 'empty';
-type NavigationConfidenceMode = 'normal' | 'gps-unstable' | 'hybrid' | 'approximate' | 'recalculating' | 'offline' | 'error';
+type NavigationConfidenceMode = 'normal' | 'gps-unstable' | 'hybrid' | 'approximate' | 'recalculating' | 'offline' | 'error' | 'inertial';
 
 const VALID_LINE_NUMBERS: LineNumber[] = ['1', '2', '3', '4', '4A', '5', '6'];
 
@@ -185,6 +191,7 @@ function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: Su
       recalculating: 'Recalculando rota',
       offline: 'Sem internet',
       error: 'Rota perdida',
+      inertial: 'Modo inercial',
     },
     'es-CL': {
       normal: 'Navegación normal',
@@ -194,6 +201,7 @@ function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: Su
       recalculating: 'Recalculando ruta',
       offline: 'Sin internet',
       error: 'Ruta perdida',
+      inertial: 'Modo inercial',
     },
     'en-US': {
       normal: 'Normal navigation',
@@ -203,6 +211,7 @@ function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: Su
       recalculating: 'Recalculating route',
       offline: 'No internet',
       error: 'Route lost',
+      inertial: 'Inertial mode',
     },
   };
 
@@ -256,6 +265,33 @@ export default function HomeScreen() {
   const [navigationConfidenceMode, setNavigationConfidenceMode] = useState<NavigationConfidenceMode>('normal');
   const [tripStatus, setTripStatus] = useState<TripStatus>('ended');
   const [stationProgressState, setStationProgressState] = useState<StationProgressState>('between-stations');
+  const motionSampleBufferRef = useRef<MotionStateSample[]>([]);
+  const lastConfirmedStationAtRef = useRef<number>(Date.now());
+  const previousSpeedMpsRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (tripStatus !== 'active') {
+      motionSampleBufferRef.current = [];
+    }
+  }, [tripStatus]);
+
+  const applyInertialFallbackResult = (fallback: InertialFallbackResult) => {
+    setNavigationConfidenceMode(fallback.navigationMode);
+    if (fallback.decision.shouldConfirmStation && fallback.decision.estimatedStationIndex !== null) {
+      setCurrentTrackedStationIndex(fallback.decision.estimatedStationIndex);
+      setVisualFocusedStationIndex(fallback.decision.estimatedStationIndex);
+      setStationProgressState('at-station');
+      lastConfirmedStationAtRef.current = Date.now();
+    } else if (fallback.decision.shouldAdvanceVisualState) {
+      setStationProgressState('approaching-next-station');
+      if (fallback.decision.nextStationIndex !== null) {
+        setVisualFocusedStationIndex(fallback.decision.nextStationIndex);
+      }
+    } else {
+      setStationProgressState('between-stations');
+    }
+  };
+
   const [currentStationDistanceMeters, setCurrentStationDistanceMeters] = useState<number | null>(null);
   const [sentNotifications, setSentNotifications] = useState<SentTripNotifications>(EMPTY_SENT_TRIP_NOTIFICATIONS);
   const [arrivalBanner, setArrivalBanner] = useState<string | null>(null);
@@ -581,9 +617,24 @@ export default function HomeScreen() {
       } catch {
         if (!cancelled) {
           setCurrentStationDistanceMeters(null);
-          setStationProgressState('between-stations');
-          if (tripStatus === 'active') {
-            setNavigationConfidenceMode('approximate');
+          if (tripStatus === 'active' && activeTripState) {
+            const fallback = computeInertialFallback({
+              tripStatus,
+              currentStationIndex: currentTrackedStationIndex,
+              destinationStationIndex: activeTripState.orderedRoutePath.length - 1,
+              routeStationCount: activeTripState.orderedRoutePath.length,
+              gpsAvailable: false,
+              speedMps: null,
+              previousSpeedMps: previousSpeedMpsRef.current,
+              isStationaryFromAccelerometer: inertialRef.current.getVerdict().isStationary,
+              motionSampleBuffer: motionSampleBufferRef.current,
+              secondsSinceLastConfirmedStation: (Date.now() - lastConfirmedStationAtRef.current) / 1000,
+            });
+            motionSampleBufferRef.current = fallback.updatedBuffer;
+            previousSpeedMpsRef.current = null;
+            applyInertialFallbackResult(fallback);
+          } else {
+            setStationProgressState('between-stations');
           }
         }
         return;
@@ -629,8 +680,29 @@ export default function HomeScreen() {
       }
 
       if (!nearest || nearest.distanceMeters > HARD_MAX_STATION_MATCH_RADIUS_METERS) {
-        setNavigationConfidenceMode('hybrid');
-        setStationProgressState('between-stations');
+        if (activeTripState) {
+          const fallback = computeInertialFallback({
+            tripStatus,
+            currentStationIndex: currentTrackedStationIndex,
+            destinationStationIndex: activeTripState.orderedRoutePath.length - 1,
+            routeStationCount: activeTripState.orderedRoutePath.length,
+            gpsAvailable: true,
+            // TODO: usar precisao real do GPS quando disponivel no tipo de retorno do LocationService
+            gpsAccuracyMeters: null,
+            distanceToNextStationMeters: nearest?.distanceMeters ?? null,
+            speedMps: loc.speedMps ?? null,
+            previousSpeedMps: previousSpeedMpsRef.current,
+            isStationaryFromAccelerometer: inertialRef.current.getVerdict().isStationary,
+            motionSampleBuffer: motionSampleBufferRef.current,
+            secondsSinceLastConfirmedStation: (Date.now() - lastConfirmedStationAtRef.current) / 1000,
+          });
+          motionSampleBufferRef.current = fallback.updatedBuffer;
+          previousSpeedMpsRef.current = loc.speedMps ?? null;
+          applyInertialFallbackResult(fallback);
+        } else {
+          setNavigationConfidenceMode('hybrid');
+          setStationProgressState('between-stations');
+        }
         return;
       }
 
