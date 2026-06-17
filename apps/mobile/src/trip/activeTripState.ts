@@ -8,6 +8,11 @@ import {
 
 export type TripStatus = 'preview' | 'active' | 'arrived' | 'ended';
 
+export type StationProgressState =
+  | 'between-stations'
+  | 'approaching-next-station'
+  | 'at-station';
+
 export type NavigationMode =
   | 'normal'
   | 'gps-unstable'
@@ -86,6 +91,10 @@ export const HARD_MAX_STATION_MATCH_RADIUS_METERS = 200;
 export const AUTO_START_RADIUS_METERS = CURRENT_STATION_BANNER_RADIUS_METERS;
 export const AUTO_START_ALLOWED_INDEX_RANGE = [0, 1, 2] as const;
 export const AUTO_DETECT_MAX_DURATION_MS = 15_000;
+export const STATION_APPROACH_RADIUS_METERS = 150;
+export const STATION_APPROACH_TIME_SECONDS = 30;
+export const STATION_ARRIVAL_RADIUS_METERS = 50;
+export const STATION_STOP_SPEED_MPS = 1;
 
 export type GeoLocation = {
   latitude: number;
@@ -251,6 +260,72 @@ export function shouldAutoStartTracking(params: {
   }
 
   return false;
+}
+
+export function deriveStationProgress(params: {
+  tripStatus: TripStatus;
+  currentStationIndex: number | null;
+  nearestRouteStationIndex: number | null;
+  distanceToNearestRouteStationMeters: number | null;
+  secondsToNearestRouteStation?: number | null;
+  speedMps?: number | null;
+}): {
+  stationProgressState: StationProgressState;
+  visualFocusedStationIndex: number | null;
+  confirmedStationIndex: number | null;
+} {
+  if (params.tripStatus !== 'active') {
+    return {
+      stationProgressState: 'between-stations',
+      visualFocusedStationIndex: params.currentStationIndex,
+      confirmedStationIndex: params.currentStationIndex,
+    };
+  }
+
+  const stationIndex = params.nearestRouteStationIndex;
+  const distance = params.distanceToNearestRouteStationMeters;
+  if (stationIndex === null || distance === null) {
+    return {
+      stationProgressState: 'between-stations',
+      visualFocusedStationIndex: params.currentStationIndex,
+      confirmedStationIndex: params.currentStationIndex,
+    };
+  }
+
+  const speedAllowsArrival =
+    params.speedMps === null ||
+    params.speedMps === undefined ||
+    params.speedMps <= STATION_STOP_SPEED_MPS;
+  const isArrival =
+    distance <= STATION_ARRIVAL_RADIUS_METERS && speedAllowsArrival;
+
+  if (isArrival) {
+    return {
+      stationProgressState: 'at-station',
+      visualFocusedStationIndex: stationIndex,
+      confirmedStationIndex: stationIndex,
+    };
+  }
+
+  const isApproachingByDistance = distance <= STATION_APPROACH_RADIUS_METERS;
+  const isApproachingByTime =
+    params.secondsToNearestRouteStation !== null &&
+    params.secondsToNearestRouteStation !== undefined &&
+    params.secondsToNearestRouteStation <= STATION_APPROACH_TIME_SECONDS;
+
+  if (isApproachingByDistance || isApproachingByTime) {
+    return {
+      stationProgressState: 'approaching-next-station',
+      visualFocusedStationIndex: stationIndex,
+      confirmedStationIndex: params.currentStationIndex,
+    };
+  }
+
+  return {
+    stationProgressState: 'between-stations',
+    visualFocusedStationIndex: params.currentStationIndex,
+    confirmedStationIndex: params.currentStationIndex,
+  };
 }
 
 export function shouldNotifyStationArrival(state: ActiveTripState): boolean {

@@ -12,6 +12,7 @@ export interface LocationResult {
   latitude?: number;
   longitude?: number;
   accuracy?: number;
+  speedMps?: number | null;
   fromCache?: boolean;
 }
 
@@ -27,7 +28,7 @@ export class LocationService {
     return status as LocationPermissionStatus;
   }
 
-  static async getCurrentLocation(options: { forceRefresh?: boolean } = {}): Promise<LocationResult> {
+  static async getCurrentLocation(options: { forceRefresh?: boolean; cacheTtlMs?: number } = {}): Promise<LocationResult> {
     const status = await this.getPermissionStatus();
 
     if (status !== 'granted') {
@@ -35,12 +36,13 @@ export class LocationService {
     }
 
     const cached = getCachedLocation();
-    if (!options.forceRefresh && cached && isCachedLocationFresh(cached)) {
+    if (!options.forceRefresh && cached && isCachedLocationFresh(cached, Date.now(), options.cacheTtlMs)) {
       return {
         status:    'granted',
         latitude:  cached.latitude,
         longitude: cached.longitude,
         accuracy:  cached.accuracy ?? undefined,
+        speedMps:  cached.speedMps ?? null,
         fromCache: true,
       };
     }
@@ -54,11 +56,13 @@ export class LocationService {
         latitude:  location.coords.latitude,
         longitude: location.coords.longitude,
         accuracy:  location.coords.accuracy ?? undefined,
+        speedMps:  location.coords.speed ?? null,
       };
       setCachedLocation({
         latitude:  result.latitude,
         longitude: result.longitude,
         accuracy:  result.accuracy ?? null,
+        speedMps:  result.speedMps,
         timestamp: Date.now(),
       });
 

@@ -1,9 +1,12 @@
-export const LOCATION_MEMORY_CACHE_TTL_MS = 60_000;
+export const LOCATION_MEMORY_CACHE_TTL_IDLE_MS = 60_000;
+export const LOCATION_MEMORY_CACHE_TTL_ACTIVE_TRIP_MS = 10_000;
+export const LOCATION_MEMORY_CACHE_TTL_MS = LOCATION_MEMORY_CACHE_TTL_IDLE_MS;
 
 export type CachedLocation = {
   latitude: number;
   longitude: number;
   accuracy?: number | null;
+  speedMps?: number | null;
   timestamp: number;
 };
 
@@ -24,7 +27,16 @@ export function clearCachedLocation(): void {
 export function isCachedLocationFresh(
   cache: CachedLocation | null,
   now = Date.now(),
+  ttlMs = LOCATION_MEMORY_CACHE_TTL_IDLE_MS,
 ): boolean {
   if (!cache) return false;
-  return now - cache.timestamp <= LOCATION_MEMORY_CACHE_TTL_MS;
+  return now - cache.timestamp <= ttlMs;
+}
+
+export function getLocationMemoryCacheTtlForTripStatus(
+  tripStatus: string,
+): number {
+  return tripStatus === 'active'
+    ? LOCATION_MEMORY_CACHE_TTL_ACTIVE_TRIP_MS
+    : LOCATION_MEMORY_CACHE_TTL_IDLE_MS;
 }

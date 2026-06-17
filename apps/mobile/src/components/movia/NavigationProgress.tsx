@@ -9,6 +9,7 @@ import { Colors, getLineColor } from '../../theme/colors';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   CURRENT_STATION_BANNER_RADIUS_METERS,
+  type StationProgressState,
   type TripStatus,
 } from '../../trip/activeTripState';
 import { getVisibleExpressRouteState, type ExpressRouteState } from '../../data/expressRoute';
@@ -34,6 +35,7 @@ interface NavigationProgressProps {
   navigationConfidenceLabel: string;
   navigationConfidenceColor: string;
   tripStatus: TripStatus;
+  stationProgressState?: StationProgressState;
   currentStationDistanceMeters?: number | null;
   onClose: () => void;
 }
@@ -49,16 +51,22 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
 
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, currentStationDistanceMeters = null, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, stationProgressState = 'between-stations', currentStationDistanceMeters = null, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const theme = useAppTheme();
   const lineColor = getLineColor(currentLine);
   const canShowCurrentStationBanner =
-    currentStationDistanceMeters !== null &&
-    currentStationDistanceMeters <= CURRENT_STATION_BANNER_RADIUS_METERS;
+    tripStatus === 'arrived' ||
+    (
+      tripStatus === 'active' &&
+      stationProgressState === 'at-station' &&
+      currentStationDistanceMeters !== null &&
+      currentStationDistanceMeters <= CURRENT_STATION_BANNER_RADIUS_METERS
+    );
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.25)).current;
+  const contentOpacity = useRef(new Animated.Value(1)).current;
   const sheetHeight = useRef(new Animated.Value(SHEET_HEIGHTS.normal)).current;
   const sheetStateRef = useRef<SheetState>('normal');
   const [sheetState, setSheetStateValue] = useState<SheetState>('normal');
@@ -66,7 +74,12 @@ export function NavigationProgress({
   const currentIndex = canShowCurrentStationBanner ? rawCurrentIndex : -1;
   const hasCurrentStation = currentIndex >= 0;
   const currentStation = hasCurrentStation ? stations[currentIndex] : undefined;
-  const nextStation = currentIndex >= 0 ? stations[currentIndex + 1] : stations[0];
+  const focusedStation = stations.find(station => station.status === 'next') ?? stations[0];
+  const nextStation = currentIndex >= 0 ? stations[currentIndex + 1] : focusedStation;
+  const isApproaching = stationProgressState === 'approaching-next-station' && Boolean(nextStation);
+  const approachingText = isApproaching && nextStation
+    ? `${t('navigation.approaching')} ${nextStation.name}`
+    : null;
   const hasArrived = tripStatus === 'arrived';
   const isPreview = tripStatus === 'preview';
   const isCompact = sheetState === 'compact';
@@ -86,6 +99,15 @@ export function NavigationProgress({
       ])
     ).start();
   }, []);
+
+  useEffect(() => {
+    contentOpacity.setValue(0.45);
+    Animated.timing(contentOpacity, {
+      toValue: 1,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [stationProgressState, currentStation?.id, nextStation?.id, contentOpacity]);
 
   function snapToSheetState(next: SheetState) {
     sheetStateRef.current = next;
@@ -179,10 +201,10 @@ export function NavigationProgress({
             <Text style={[styles.compactEta, { color: theme.colors.textPrimary }]} numberOfLines={1}>
               {hasArrived ? t('trip.completed') : estimatedTime}
             </Text>
-            <Text style={[styles.compactUpdated, { color: theme.colors.textTertiary }]} numberOfLines={2}>
-              {hasArrived ? `${t('trip.arrived_destination')}\n${destination}` : currentDirection ? `L${currentLine} · ${t('direction')} ${currentDirection}` : navigationConfidenceLabel}
+            <Animated.Text style={[styles.compactUpdated, { color: theme.colors.textTertiary, opacity: contentOpacity }]} numberOfLines={2}>
+              {hasArrived ? `${t('trip.arrived_destination')}\n${destination}` : approachingText ?? (currentDirection ? `L${currentLine} · ${t('direction')} ${currentDirection}` : navigationConfidenceLabel)}
               {!hasArrived && (nextStation ? `\n${t('navigation.next')}: ${nextStation.name}` : `\n${t('eta.arrives')} ${arrivalTime}`)}
-            </Text>
+            </Animated.Text>
           </View>
           <Feather name="chevron-up" size={18} color={Colors.textTertiary} />
         </TouchableOpacity>
@@ -219,10 +241,10 @@ export function NavigationProgress({
       )}
 
       {!isCompact && !isExpanded && (
-        <View style={[styles.nextPanel, { backgroundColor: theme.colors.surfaceMuted }]}>
+        <Animated.View style={[styles.nextPanel, { backgroundColor: theme.colors.surfaceMuted, opacity: contentOpacity }]}>
           <View style={styles.nextColumn}>
-            <Text style={[styles.nextLabel, { color: theme.colors.textTertiary }]}>{hasArrived ? t('trip.completed') : isPreview ? t('trip.preview') : hasCurrentStation ? t('navigation.you_are_here') : navigationConfidenceLabel}</Text>
-            <Text style={[styles.nextStationName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{hasCurrentStation ? currentStation?.name : origin}</Text>
+            <Text style={[styles.nextLabel, { color: theme.colors.textTertiary }]}>{hasArrived ? t('trip.completed') : isPreview ? t('trip.preview') : isApproaching ? t('navigation.approaching') : hasCurrentStation ? t('navigation.you_are_here') : navigationConfidenceLabel}</Text>
+            <Text style={[styles.nextStationName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{isApproaching ? nextStation?.name : hasCurrentStation ? currentStation?.name : origin}</Text>
           </View>
           {!hasArrived && (
             <View style={styles.nextColumn}>
@@ -230,7 +252,7 @@ export function NavigationProgress({
               <Text style={[styles.nextStationName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{nextStation?.name ?? destination}</Text>
             </View>
           )}
-        </View>
+        </Animated.View>
       )}
       </View>
 
@@ -281,7 +303,7 @@ export function NavigationProgress({
                   )}
                 </View>
 
-                <Animated.View style={styles.stationInfo}>
+                <Animated.View style={[styles.stationInfo, isNext && { opacity: contentOpacity }]}>
                   {isCurrent ? (
                     <LinearGradient
                       colors={[theme.colors.surfaceElevated, `${stationLineColor}${theme.isDark ? '24' : '18'}`]}

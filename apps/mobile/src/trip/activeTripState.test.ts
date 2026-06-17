@@ -1,5 +1,6 @@
 import {
   buildActiveTripState,
+  deriveStationProgress,
   markAtTransferSent,
   markDestinationArrivalSent,
   markOneBeforeDestinationSent,
@@ -9,6 +10,7 @@ import {
   shouldNotifyDestinationArrival,
   shouldNotifyOneBeforeDestination,
   shouldNotifyOneBeforeTransfer,
+  shouldNotifyStationArrival,
   startTripTracking,
   transitionTripStatus,
   type ActiveTripState,
@@ -270,6 +272,111 @@ describe('shouldAutoStartTracking', () => {
       nearestRouteStation: transferPath[1],
       distanceToNearestRouteStationMeters: 50,
     })).toBe(false);
+  });
+});
+
+describe('deriveStationProgress', () => {
+  it('distância <= 150m muda para approaching-next-station', () => {
+    expect(deriveStationProgress({
+      tripStatus: 'active',
+      currentStationIndex: 0,
+      nearestRouteStationIndex: 1,
+      distanceToNearestRouteStationMeters: 150,
+      speedMps: 5,
+    })).toEqual({
+      stationProgressState: 'approaching-next-station',
+      visualFocusedStationIndex: 1,
+      confirmedStationIndex: 0,
+    });
+  });
+
+  it('distância > 150m mantém between-stations', () => {
+    expect(deriveStationProgress({
+      tripStatus: 'active',
+      currentStationIndex: 0,
+      nearestRouteStationIndex: 1,
+      distanceToNearestRouteStationMeters: 151,
+      speedMps: 5,
+    })).toEqual({
+      stationProgressState: 'between-stations',
+      visualFocusedStationIndex: 0,
+      confirmedStationIndex: 0,
+    });
+  });
+
+  it('tempo <= 30s muda para approaching-next-station', () => {
+    expect(deriveStationProgress({
+      tripStatus: 'active',
+      currentStationIndex: 0,
+      nearestRouteStationIndex: 1,
+      distanceToNearestRouteStationMeters: 220,
+      secondsToNearestRouteStation: 30,
+      speedMps: 8,
+    }).stationProgressState).toBe('approaching-next-station');
+  });
+
+  it('distância <= 50m + speed <= 1 confirma at-station', () => {
+    expect(deriveStationProgress({
+      tripStatus: 'active',
+      currentStationIndex: 0,
+      nearestRouteStationIndex: 1,
+      distanceToNearestRouteStationMeters: 50,
+      speedMps: 1,
+    })).toEqual({
+      stationProgressState: 'at-station',
+      visualFocusedStationIndex: 1,
+      confirmedStationIndex: 1,
+    });
+  });
+
+  it('distância <= 50m + speed alta não confirma parada se speed estiver disponível', () => {
+    expect(deriveStationProgress({
+      tripStatus: 'active',
+      currentStationIndex: 0,
+      nearestRouteStationIndex: 1,
+      distanceToNearestRouteStationMeters: 50,
+      speedMps: 3,
+    })).toEqual({
+      stationProgressState: 'approaching-next-station',
+      visualFocusedStationIndex: 1,
+      confirmedStationIndex: 0,
+    });
+  });
+
+  it('approaching-next-station não torna elegível notificação de estação', () => {
+    const state = buildState(0);
+    const progress = deriveStationProgress({
+      tripStatus: state.tripStatus,
+      currentStationIndex: state.currentStationIndex,
+      nearestRouteStationIndex: 1,
+      distanceToNearestRouteStationMeters: 120,
+      speedMps: 4,
+    });
+    const unchangedState = buildState(progress.confirmedStationIndex);
+
+    expect(progress.stationProgressState).toBe('approaching-next-station');
+    expect(shouldNotifyStationArrival(unchangedState)).toBe(false);
+  });
+
+  it('at-station atualiza currentStationIndex quando o estado é reconstruído', () => {
+    const state = buildState(0);
+    const progress = deriveStationProgress({
+      tripStatus: state.tripStatus,
+      currentStationIndex: state.currentStationIndex,
+      nearestRouteStationIndex: 1,
+      distanceToNearestRouteStationMeters: 35,
+      speedMps: 0.5,
+    });
+    const nextState = buildActiveTripState({
+      routeId: state.routeId,
+      orderedRoutePath: state.orderedRoutePath,
+      currentStationIndex: progress.confirmedStationIndex,
+      navigationMode: state.navigationMode,
+      tripStatus: state.tripStatus,
+    });
+
+    expect(progress.stationProgressState).toBe('at-station');
+    expect(nextState.currentStationIndex).toBe(1);
   });
 });
 

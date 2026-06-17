@@ -28,6 +28,7 @@ import { useStations, findNearbyStations, findNearestStationWithDistance, Nearby
 import { ENABLE_METRO_INCIDENTS } from '../src/config/featureFlags';
 import { IdentityService } from '../src/security/identity.service';
 import { LocationService } from '../src/location/location.service';
+import { getLocationMemoryCacheTtlForTripStatus } from '../src/location/locationMemoryCache';
 import { InertialService } from '../src/sensors/InertialService';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
 import {
@@ -35,6 +36,7 @@ import {
   AUTO_DETECT_MAX_DURATION_MS,
   HARD_MAX_STATION_MATCH_RADIUS_METERS,
   buildActiveTripState,
+  deriveStationProgress,
   EMPTY_SENT_TRIP_NOTIFICATIONS,
   markOneBeforeDestinationSent,
   markStationArrivalSent,
@@ -49,6 +51,7 @@ import {
   type RouteStation,
   type SentTripNotifications,
   type StartTripTrackingSource,
+  type StationProgressState,
   type TripStatus,
 } from '../src/trip/activeTripState';
 import { t as translate, SupportedLocale } from '../src/i18n';
@@ -218,9 +221,9 @@ function getDestinationArrivalMessage(stationName: string, locale: SupportedLoca
   return `Llegaste a tu destino ${stationName}`;
 }
 
-async function getLocationWithTimeout(timeoutMs: number) {
+async function getLocationWithTimeout(timeoutMs: number, options: { cacheTtlMs?: number } = {}) {
   return Promise.race([
-    LocationService.getCurrentLocation(),
+    LocationService.getCurrentLocation(options),
     new Promise<never>((_, reject) => {
       setTimeout(() => {
         reject(new Error('LOCATION_DETECTION_TIMEOUT'));
@@ -252,6 +255,7 @@ export default function HomeScreen() {
   const [locationMode, setLocationMode] = useState<'loading' | 'nearby' | 'planning' | 'manual' | 'denied'>('loading');
   const [navigationConfidenceMode, setNavigationConfidenceMode] = useState<NavigationConfidenceMode>('normal');
   const [tripStatus, setTripStatus] = useState<TripStatus>('ended');
+  const [stationProgressState, setStationProgressState] = useState<StationProgressState>('between-stations');
   const [currentStationDistanceMeters, setCurrentStationDistanceMeters] = useState<number | null>(null);
   const [sentNotifications, setSentNotifications] = useState<SentTripNotifications>(EMPTY_SENT_TRIP_NOTIFICATIONS);
   const [arrivalBanner, setArrivalBanner] = useState<string | null>(null);
@@ -395,6 +399,7 @@ export default function HomeScreen() {
     const hasConfirmedStation =
       currentTrackedStationIndex !== null &&
       canShowCurrentStation &&
+      (stationProgressState === 'at-station' || tripStatus === 'arrived') &&
       currentStationDistanceMeters !== null &&
       currentStationDistanceMeters <= CURRENT_STATION_BANNER_RADIUS_METERS;
     const expressRouteState = activeTripState?.currentStationIndex === i
@@ -406,7 +411,7 @@ export default function HomeScreen() {
       line:   toLineNumber(p.lineId),
       status: hasConfirmedStation
         ? i < currentPathIndex ? 'completed' : i === currentPathIndex ? tripStatus === 'arrived' ? 'arrived' : 'current' : i === currentPathIndex + 1 ? 'next' : transferPoint ? 'transfer' : 'upcoming'
-        : transferPoint ? 'transfer' : i === visualFocusedStationIndex ? 'next' : 'upcoming',
+        : i === visualFocusedStationIndex ? 'next' : transferPoint ? 'transfer' : 'upcoming',
       direction: p.lineId === activeTripState?.currentLine
         ? activeTripState.directionTerminal ?? undefined
         : undefined,
@@ -537,6 +542,7 @@ export default function HomeScreen() {
     setArrivalBanner(null);
     setNavigationConfidenceMode('normal');
     setCurrentStationDistanceMeters(null);
+    setStationProgressState('between-stations');
     applyTripStatusTransition(routeKey ? 'preview' : 'ended');
   }, [routeKey]);
 
@@ -567,13 +573,15 @@ export default function HomeScreen() {
 
     async function syncActiveStation() {
       let loc;
+      const locationCacheTtlMs = getLocationMemoryCacheTtlForTripStatus(tripStatus);
       try {
         loc = tripStatus === 'preview'
-          ? await getLocationWithTimeout(AUTO_DETECT_MAX_DURATION_MS)
-          : await LocationService.getCurrentLocation();
+          ? await getLocationWithTimeout(AUTO_DETECT_MAX_DURATION_MS, { cacheTtlMs: locationCacheTtlMs })
+          : await LocationService.getCurrentLocation({ cacheTtlMs: locationCacheTtlMs });
       } catch {
         if (!cancelled) {
           setCurrentStationDistanceMeters(null);
+          setStationProgressState('between-stations');
           if (tripStatus === 'active') {
             setNavigationConfidenceMode('approximate');
           }
@@ -583,6 +591,7 @@ export default function HomeScreen() {
 
       if (cancelled || !loc.latitude || !loc.longitude || routeStations.length === 0) {
         setCurrentStationDistanceMeters(null);
+        setStationProgressState('between-stations');
         setNavigationConfidenceMode('approximate');
         return;
       }
@@ -621,19 +630,49 @@ export default function HomeScreen() {
 
       if (!nearest || nearest.distanceMeters > HARD_MAX_STATION_MATCH_RADIUS_METERS) {
         setNavigationConfidenceMode('hybrid');
+        setStationProgressState('between-stations');
         return;
       }
 
-      activeStationIdRef.current = nearest.station.id;
-
       if (nearestPathIndex < 0) return;
-      setCurrentTrackedStationIndex(nearestPathIndex);
-      setVisualFocusedStationIndex(nearestPathIndex);
+      const speedMps = loc.speedMps ?? null;
+      const secondsToNearestRouteStation =
+        speedMps !== null && speedMps > 0
+          ? nearest.distanceMeters / speedMps
+          : null;
+      const stationProgress = deriveStationProgress({
+        tripStatus,
+        currentStationIndex: currentTrackedStationIndex,
+        nearestRouteStationIndex: nearestPathIndex,
+        distanceToNearestRouteStationMeters: nearest.distanceMeters,
+        secondsToNearestRouteStation,
+        speedMps,
+      });
+
+      setStationProgressState(stationProgress.stationProgressState);
+      if (stationProgress.visualFocusedStationIndex !== null) {
+        setVisualFocusedStationIndex(stationProgress.visualFocusedStationIndex);
+      }
+
+      if (
+        stationProgress.stationProgressState !== 'at-station' ||
+        stationProgress.confirmedStationIndex === null
+      ) {
+        return;
+      }
+
+      const confirmedStationIndex = stationProgress.confirmedStationIndex;
+      const confirmedStation = routePath[confirmedStationIndex];
+      if (!confirmedStation) return;
+
+      activeStationIdRef.current = confirmedStation.id;
+      setCurrentTrackedStationIndex(confirmedStationIndex);
+      setVisualFocusedStationIndex(confirmedStationIndex);
       const locale = toLocale(language);
       let notificationTripState = buildActiveTripState({
         routeId,
         orderedRoutePath: routePath,
-        currentStationIndex: nearestPathIndex,
+        currentStationIndex: confirmedStationIndex,
         navigationMode: routeNavigationMode,
         sentNotifications: routeSentNotifications,
         tripStatus,
@@ -664,13 +703,16 @@ export default function HomeScreen() {
       };
     }
 
-    const timer = setInterval(syncActiveStation, 20_000);
+    const timer = setInterval(
+      syncActiveStation,
+      getLocationMemoryCacheTtlForTripStatus('active') + 250,
+    );
 
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [screen, etaData, stationsData, destination, routeKey, language, tripStatus, activeTripState?.routeId, sentNotificationsKey]);
+  }, [screen, etaData, stationsData, destination, routeKey, language, tripStatus, currentTrackedStationIndex, activeTripState?.routeId, sentNotificationsKey]);
 
   useEffect(() => {
     if (screen !== 'navigating' || tripStatus !== 'active' || !etaData || etaPath.length === 0 || navigationConfidenceMode === 'normal') {
@@ -751,6 +793,8 @@ export default function HomeScreen() {
     setOrigin(station);
     setOriginSource('manual');
     setCurrentTrackedStationIndex(null);
+    setVisualFocusedStationIndex(0);
+    setStationProgressState('between-stations');
     setSelectingOrigin(false);
     if (destination) {
       setScreen('navigating');
@@ -896,6 +940,8 @@ export default function HomeScreen() {
     setDestination(station);
     setDestinationDisplayName(poiDestination?.displayName ?? null);
     setCurrentTrackedStationIndex(null);
+    setVisualFocusedStationIndex(0);
+    setStationProgressState('between-stations');
     saveRouteHistory(buildHistoryItem(station, poiDestination));
     if (origin) {
       setScreen('navigating');
@@ -912,6 +958,8 @@ export default function HomeScreen() {
     setDestination(origin);
     setDestinationDisplayName(null);
     setCurrentTrackedStationIndex(null);
+    setVisualFocusedStationIndex(0);
+    setStationProgressState('between-stations');
     setScreen('navigating');
   }
 
@@ -919,6 +967,9 @@ export default function HomeScreen() {
     if (routeKey) TripNotificationService.endActiveTrip(routeKey).catch(() => undefined);
     setDestination(null);
     setDestinationDisplayName(null);
+    setCurrentTrackedStationIndex(null);
+    setVisualFocusedStationIndex(0);
+    setStationProgressState('between-stations');
     applyTripStatusTransition('ended');
     setScreen('map');
   }
@@ -1074,6 +1125,7 @@ export default function HomeScreen() {
           navigationConfidenceLabel={navigationConfidenceLabel}
           navigationConfidenceColor={navigationConfidenceColor}
           tripStatus={tripStatus}
+          stationProgressState={stationProgressState}
           currentStationDistanceMeters={currentStationDistanceMeters}
           onClose={handleCloseNavigation}
         />
