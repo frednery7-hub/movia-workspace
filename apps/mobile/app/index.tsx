@@ -61,6 +61,7 @@ import { getExpressRouteState, getVisibleExpressRouteState } from '../src/data/e
 import type { PointOfInterest, ResolvedPoiDestination } from '../src/poi/types';
 import { normalizeStationId } from '../src/poi/search/normalizeStationId';
 import { resolvePoiDestination } from '../src/poi/search/resolvePoiDestination';
+import type { ResolvedAddressDestination } from '../src/search/address/addressSearchApi';
 
 const { width, height } = Dimensions.get('window');
 
@@ -815,7 +816,21 @@ export default function HomeScreen() {
   function buildHistoryItem(
     station: StationResult,
     poiDestination?: ResolvedPoiDestination,
+    addressDestination?: ResolvedAddressDestination,
   ): SearchHistoryItem {
+    if (addressDestination) {
+      return {
+        ...station,
+        itemType: 'address',
+        displayName: addressDestination.displayName,
+        addressId: addressDestination.addressId,
+        routeStationName: addressDestination.routeDestinationStationName,
+        routeLineIds: addressDestination.lineIds,
+        routeDistanceMeters: addressDestination.distanceMeters,
+        timestamp: Date.now(),
+      };
+    }
+
     if (!poiDestination) {
       return {
         ...station,
@@ -937,12 +952,15 @@ export default function HomeScreen() {
     options?: StationSearchSelectionOptions,
   ) {
     const poiDestination = options?.poiDestination;
+    const addressDestination = options?.addressDestination;
     setDestination(station);
-    setDestinationDisplayName(poiDestination?.displayName ?? null);
+    setDestinationDisplayName(
+      addressDestination?.displayName ?? poiDestination?.displayName ?? null,
+    );
     setCurrentTrackedStationIndex(null);
     setVisualFocusedStationIndex(0);
     setStationProgressState('between-stations');
-    saveRouteHistory(buildHistoryItem(station, poiDestination));
+    saveRouteHistory(buildHistoryItem(station, poiDestination, addressDestination));
     if (origin) {
       setScreen('navigating');
     } else {

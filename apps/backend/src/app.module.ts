@@ -22,6 +22,7 @@ import { ObservabilityModule } from './observability/observability.module';
 import { LoggingInterceptor } from './common/logging.interceptor';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 import { MetroIncidentsModule } from './metro-incidents/metro-incidents.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -43,6 +44,18 @@ import { MetroIncidentsModule } from './metro-incidents/metro-incidents.module';
           .positive()
           .default(30),
         SENTRY_DSN: Joi.string().optional().allow(''),
+        ADDRESS_SEARCH_ENABLED: Joi.string()
+          .valid('true', 'false')
+          .default('false'),
+        GOOGLE_GEOCODING_API_KEY: Joi.string().optional().allow(''),
+        ADDRESS_SEARCH_CACHE_TTL_SECONDS: Joi.number()
+          .integer()
+          .positive()
+          .default(604_800),
+        ADDRESS_SEARCH_MAX_RESULTS: Joi.number()
+          .integer()
+          .positive()
+          .default(5),
         METRICS_TOKEN: Joi.when('NODE_ENV', {
           is: Joi.valid('production', 'staging'),
           then: Joi.string().min(16).required(),
@@ -55,6 +68,7 @@ import { MetroIncidentsModule } from './metro-incidents/metro-incidents.module';
       { name: 'authSession', ttl: 60_000, limit: 5 },
       { name: 'geoLocation', ttl: 60_000, limit: 20 },
       { name: 'eta', ttl: 60_000, limit: 60 },
+      { name: 'addressSearch', ttl: 60_000, limit: 20 },
     ]),
     PrismaModule,
     AuthModule,
@@ -70,6 +84,7 @@ import { MetroIncidentsModule } from './metro-incidents/metro-incidents.module';
     StationsModule,
     ObservabilityModule,
     MetroIncidentsModule,
+    SearchModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

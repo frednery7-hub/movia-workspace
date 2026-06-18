@@ -16,6 +16,13 @@ export const envValidationSchema = Joi.object({
   PRIVACY_RESPONSE_SLA_DAYS: Joi.number().integer().positive().default(30),
   MAPBOX_PUBLIC_TOKEN: Joi.string().allow('').optional(),
   SENTRY_DSN: Joi.string().allow('').optional(),
+  ADDRESS_SEARCH_ENABLED: Joi.string().valid('true', 'false').default('false'),
+  GOOGLE_GEOCODING_API_KEY: Joi.string().allow('').optional(),
+  ADDRESS_SEARCH_CACHE_TTL_SECONDS: Joi.number()
+    .integer()
+    .positive()
+    .default(604_800),
+  ADDRESS_SEARCH_MAX_RESULTS: Joi.number().integer().positive().default(5),
   METRICS_TOKEN: Joi.when('NODE_ENV', {
     is: Joi.valid('production', 'staging'),
     then: Joi.string().min(16).required(),

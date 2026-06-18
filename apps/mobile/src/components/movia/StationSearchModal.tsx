@@ -17,6 +17,14 @@ import { normalizeStationId } from '../../poi/search/normalizeStationId';
 import { resolvePoiDestination } from '../../poi/search/resolvePoiDestination';
 import { searchPois } from '../../poi/search/searchPois';
 import {
+  formatAddressDistance,
+  resolveAddressDestination,
+  searchAddress,
+  shouldSearchAddressQuery,
+  type AddressSearchResult,
+  type ResolvedAddressDestination,
+} from '../../search/address/addressSearchApi';
+import {
   getExpressRouteState,
   getVisibleExpressRouteState,
   type ExpressRouteState,
@@ -29,14 +37,17 @@ const VALID_LINES: StationLine[] = ['1', '2', '3', '4', '4A', '5', '6'];
 
 export type StationSearchSelectionOptions = {
   poiDestination?: ResolvedPoiDestination;
+  addressDestination?: ResolvedAddressDestination;
 };
 
 export type SearchHistoryItem = StationResult & {
-  itemType?: 'station' | 'poi';
+  itemType?: 'station' | 'poi' | 'address';
   displayName?: string;
   poiId?: string;
+  addressId?: string;
   routeStationName?: string;
   routeLineIds?: string[];
+  routeDistanceMeters?: number;
   timestamp?: number;
 };
 
@@ -54,6 +65,7 @@ function toStationLines(lineIds: string[]): StationLine[] {
 }
 
 function getHistoryKey(item: SearchHistoryItem): string {
+  if (item.itemType === 'address' && item.addressId) return `address:${item.addressId}`;
   return item.itemType === 'poi' && item.poiId ? `poi:${item.poiId}` : `station:${item.id}`;
 }
 
@@ -91,6 +103,8 @@ export function StationSearchModal({
   const modalTitle = t(titleKey ?? 'where_to');
   const selectedHint = selectedStationHintKey ? t(selectedStationHintKey) : undefined;
   const [recentStations, setRecentStations] = useState<SearchHistoryItem[]>([]);
+  const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([]);
+  const [addressLoading, setAddressLoading] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -105,6 +119,35 @@ export function StationSearchModal({
   const poiResults = useMemo(() => (
     enablePoiSearch && query.trim().length > 0 ? searchPois(query).slice(0, 6) : []
   ), [enablePoiSearch, query]);
+
+  useEffect(() => {
+    const normalizedQuery = query.trim();
+    if (!visible || !shouldSearchAddressQuery(normalizedQuery)) {
+      setAddressResults([]);
+      setAddressLoading(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setAddressLoading(true);
+      searchAddress(normalizedQuery, { signal: controller.signal })
+        .then(results => {
+          if (!controller.signal.aborted) setAddressResults(results.slice(0, 5));
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setAddressResults([]);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setAddressLoading(false);
+        });
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, visible]);
   const filtered = useMemo(() => {
     if (!query.trim()) return allStations;
     if (query.length >= 2 && searchResults.length > 0) return searchResults;
@@ -133,6 +176,17 @@ export function StationSearchModal({
     ) ?? null;
   }
 
+  function findStationForAddressDestination(resolvedDestination: ResolvedAddressDestination): StationResult | null {
+    const normalizedStationId = normalizeStationId(resolvedDestination.routeDestinationStationId);
+    const normalizedStationName = normalizeStationId(resolvedDestination.routeDestinationStationName);
+
+    return allStations.find(station =>
+      normalizeStationId(station.id) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationName,
+    ) ?? null;
+  }
+
   function handlePoiSelect(poi: PointOfInterest) {
     const resolvedDestination = resolvePoiDestination(poi);
     const station = findStationForPoiDestination(resolvedDestination);
@@ -141,12 +195,45 @@ export function StationSearchModal({
     handleSelect(station, { poiDestination: resolvedDestination });
   }
 
+  function handleAddressSelect(address: AddressSearchResult) {
+    const resolvedDestination = resolveAddressDestination(address);
+    const station = findStationForAddressDestination(resolvedDestination);
+    if (!station) return;
+
+    handleSelect(station, { addressDestination: resolvedDestination });
+  }
+
+  function buildAddressDestinationFromHistory(item: SearchHistoryItem): ResolvedAddressDestination | null {
+    if (item.itemType !== 'address' || !item.addressId || !item.routeStationName) return null;
+
+    return {
+      type: 'address',
+      displayName: item.displayName ?? item.name,
+      routeDestinationStationId: item.id,
+      routeDestinationStationName: item.routeStationName,
+      lineIds: item.routeLineIds ?? item.lines ?? [],
+      distanceMeters: item.routeDistanceMeters ?? 0,
+      addressId: item.addressId,
+    };
+  }
+
   function handleRecentSelect(item: SearchHistoryItem) {
     if (item.itemType === 'poi' && item.poiId) {
       const poi = getPoiById(item.poiId);
       if (poi) {
         handlePoiSelect(poi);
         return;
+      }
+    }
+
+    if (item.itemType === 'address') {
+      const addressDestination = buildAddressDestinationFromHistory(item);
+      if (addressDestination) {
+        const station = findStationForAddressDestination(addressDestination);
+        if (station) {
+          handleSelect(station, { addressDestination });
+          return;
+        }
       }
     }
 
@@ -250,6 +337,34 @@ export function StationSearchModal({
     );
   }
 
+  function renderAddressResult(address: AddressSearchResult) {
+    const routeLines = formatLineIds(address.nearestStation.lineIds);
+    const isFarFromMetro = address.nearestStation.distanceMeters > 2_500;
+
+    return (
+      <TouchableOpacity
+        key={address.id}
+        style={styles.stationItem}
+        onPress={() => handleAddressSelect(address)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.stationIcon, { backgroundColor: `${Colors.actionBlue}18` }]}>
+          <Feather name="navigation" size={14} color={Colors.actionBlue} />
+        </View>
+        <View style={styles.stationInfo}>
+          <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{address.label}</Text>
+          <Text style={[styles.poiMeta, { color: theme.colors.textTertiary }]} numberOfLines={1}>
+            {t('search.address.nearestStation')}: {address.nearestStation.name} · {routeLines} · {formatAddressDistance(address.nearestStation.distanceMeters)}
+          </Text>
+          <Text style={[styles.poiSummary, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            {isFarFromMetro ? t('search.address.farFromMetro') : address.formattedAddress}
+          </Text>
+        </View>
+        {renderLineChipsFromLines(toStationLines(address.nearestStation.lineIds))}
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.surface }]}>
@@ -308,6 +423,17 @@ export function StationSearchModal({
                 {poiResults.map(renderPoiResult)}
               </>
             )}
+            {query.trim().length >= 3 && (addressLoading || addressResults.length > 0) && (
+              <>
+                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>
+                    {addressLoading ? t('search.address.searching') : t('search.address.nearestStation')}
+                  </Text>
+                  {addressLoading && <ActivityIndicator size="small" color={Colors.actionBlue} />}
+                </View>
+                {addressResults.map(renderAddressResult)}
+              </>
+            )}
             {!query.trim() && nearbyStations.length > 0 && (
               <>
                 <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
@@ -362,7 +488,7 @@ export function StationSearchModal({
                         <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{displayName}</Text>
                         <View style={styles.stationMeta}>
                           <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>
-                            {item.itemType === 'poi'
+                            {item.itemType === 'poi' || item.itemType === 'address'
                               ? `${t('search.recommendedStation')}: ${item.routeStationName ?? freshStation.name}`
                               : freshStation.shortCode}
                           </Text>
