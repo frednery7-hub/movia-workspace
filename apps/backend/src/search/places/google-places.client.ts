@@ -77,7 +77,10 @@ export class GooglePlacesClient {
       );
 
       if (!response.ok) {
-        this.logger.warn(`PLACES_AUTOCOMPLETE_HTTP_${response.status}`);
+        const errorBody = await response.text().catch(() => '');
+        this.logger.warn(
+          `PLACES_AUTOCOMPLETE_HTTP_${response.status} — ${errorBody}`,
+        );
         return [];
       }
 
@@ -138,7 +141,10 @@ export class GooglePlacesClient {
       });
 
       if (!response.ok) {
-        this.logger.warn(`PLACES_DETAILS_HTTP_${response.status}`);
+        const errorBody = await response.text().catch(() => '');
+        this.logger.warn(
+          `PLACES_DETAILS_HTTP_${response.status} — ${errorBody}`,
+        );
         return null;
       }
 
