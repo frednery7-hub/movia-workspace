@@ -136,6 +136,18 @@ describe('Security Smoke Tests (e2e)', () => {
       .expect(503);
   });
 
+  it('GET /v1/search/places/autocomplete — público com feature disabled controlado', () => {
+    return request(app.getHttpServer())
+      .get('/v1/search/places/autocomplete?q=costanera')
+      .expect(503);
+  });
+
+  it('GET /v1/search/places/details — público com feature disabled controlado', () => {
+    return request(app.getHttpServer())
+      .get('/v1/search/places/details?placeId=mock-place-id')
+      .expect(503);
+  });
+
   it('POST /v1/geo/location — 401 sem token', () => {
     return request(app.getHttpServer())
       .post('/v1/geo/location')

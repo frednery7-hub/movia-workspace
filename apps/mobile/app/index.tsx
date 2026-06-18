@@ -62,6 +62,7 @@ import type { PointOfInterest, ResolvedPoiDestination } from '../src/poi/types';
 import { normalizeStationId } from '../src/poi/search/normalizeStationId';
 import { resolvePoiDestination } from '../src/poi/search/resolvePoiDestination';
 import type { ResolvedAddressDestination } from '../src/search/address/addressSearchApi';
+import type { ResolvedPlaceDestination } from '../src/search/places/placesSearchTypes';
 
 const { width, height } = Dimensions.get('window');
 
@@ -817,7 +818,21 @@ export default function HomeScreen() {
     station: StationResult,
     poiDestination?: ResolvedPoiDestination,
     addressDestination?: ResolvedAddressDestination,
+    placeDestination?: ResolvedPlaceDestination,
   ): SearchHistoryItem {
+    if (placeDestination) {
+      return {
+        ...station,
+        itemType: 'place',
+        displayName: placeDestination.displayName,
+        placeId: placeDestination.placeId,
+        routeStationName: placeDestination.routeDestinationStationName,
+        routeLineIds: placeDestination.lineIds,
+        routeDistanceMeters: placeDestination.distanceMeters,
+        timestamp: Date.now(),
+      };
+    }
+
     if (addressDestination) {
       return {
         ...station,
@@ -851,6 +866,8 @@ export default function HomeScreen() {
   }
 
   function getHistoryKey(item: SearchHistoryItem): string {
+    if (item.itemType === 'address' && item.addressId) return `address:${item.addressId}`;
+    if (item.itemType === 'place' && item.placeId) return `place:${item.placeId}`;
     return item.itemType === 'poi' && item.poiId ? `poi:${item.poiId}` : `station:${item.id}`;
   }
 
@@ -953,14 +970,15 @@ export default function HomeScreen() {
   ) {
     const poiDestination = options?.poiDestination;
     const addressDestination = options?.addressDestination;
+    const placeDestination = options?.placeDestination;
     setDestination(station);
     setDestinationDisplayName(
-      addressDestination?.displayName ?? poiDestination?.displayName ?? null,
+      placeDestination?.displayName ?? addressDestination?.displayName ?? poiDestination?.displayName ?? null,
     );
     setCurrentTrackedStationIndex(null);
     setVisualFocusedStationIndex(0);
     setStationProgressState('between-stations');
-    saveRouteHistory(buildHistoryItem(station, poiDestination, addressDestination));
+    saveRouteHistory(buildHistoryItem(station, poiDestination, addressDestination, placeDestination));
     if (origin) {
       setScreen('navigating');
     } else {

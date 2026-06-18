@@ -23,6 +23,21 @@ export const envValidationSchema = Joi.object({
     .positive()
     .default(604_800),
   ADDRESS_SEARCH_MAX_RESULTS: Joi.number().integer().positive().default(5),
+  PLACES_SEARCH_ENABLED: Joi.string().valid('true', 'false').default('false'),
+  GOOGLE_PLACES_API_KEY: Joi.string().allow('').optional(),
+  PLACES_AUTOCOMPLETE_CACHE_TTL_SECONDS: Joi.number()
+    .integer()
+    .positive()
+    .default(300),
+  PLACES_DETAILS_CACHE_TTL_SECONDS: Joi.number()
+    .integer()
+    .positive()
+    .default(604_800),
+  PLACES_MAX_RESULTS: Joi.number().integer().positive().default(5),
+  PLACES_COUNTRY_CODE: Joi.string().length(2).default('CL'),
+  PLACES_LOCATION_BIAS_LAT: Joi.number().default(-33.4489),
+  PLACES_LOCATION_BIAS_LNG: Joi.number().default(-70.6693),
+  PLACES_LOCATION_BIAS_RADIUS_METERS: Joi.number().positive().default(35_000),
   METRICS_TOKEN: Joi.when('NODE_ENV', {
     is: Joi.valid('production', 'staging'),
     then: Joi.string().min(16).required(),

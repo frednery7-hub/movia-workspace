@@ -25,6 +25,17 @@ import {
   type ResolvedAddressDestination,
 } from '../../search/address/addressSearchApi';
 import {
+  createPlacesSessionToken,
+  getPlaceDetails,
+  resolvePlaceDestination,
+  searchPlacesAutocomplete,
+  shouldSearchPlacesQuery,
+} from '../../search/places/placesSearchApi';
+import type {
+  PlaceAutocompleteResult,
+  ResolvedPlaceDestination,
+} from '../../search/places/placesSearchTypes';
+import {
   getExpressRouteState,
   getVisibleExpressRouteState,
   type ExpressRouteState,
@@ -38,13 +49,15 @@ const VALID_LINES: StationLine[] = ['1', '2', '3', '4', '4A', '5', '6'];
 export type StationSearchSelectionOptions = {
   poiDestination?: ResolvedPoiDestination;
   addressDestination?: ResolvedAddressDestination;
+  placeDestination?: ResolvedPlaceDestination;
 };
 
 export type SearchHistoryItem = StationResult & {
-  itemType?: 'station' | 'poi' | 'address';
+  itemType?: 'station' | 'poi' | 'address' | 'place';
   displayName?: string;
   poiId?: string;
   addressId?: string;
+  placeId?: string;
   routeStationName?: string;
   routeLineIds?: string[];
   routeDistanceMeters?: number;
@@ -66,6 +79,7 @@ function toStationLines(lineIds: string[]): StationLine[] {
 
 function getHistoryKey(item: SearchHistoryItem): string {
   if (item.itemType === 'address' && item.addressId) return `address:${item.addressId}`;
+  if (item.itemType === 'place' && item.placeId) return `place:${item.placeId}`;
   return item.itemType === 'poi' && item.poiId ? `poi:${item.poiId}` : `station:${item.id}`;
 }
 
@@ -105,9 +119,14 @@ export function StationSearchModal({
   const [recentStations, setRecentStations] = useState<SearchHistoryItem[]>([]);
   const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
+  const [placeResults, setPlaceResults] = useState<PlaceAutocompleteResult[]>([]);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [placeDetailsLoadingId, setPlaceDetailsLoadingId] = useState<string | null>(null);
+  const [placesSessionToken, setPlacesSessionToken] = useState<string>(createPlacesSessionToken);
 
   useEffect(() => {
     if (visible) {
+      setPlacesSessionToken(createPlacesSessionToken());
       CacheService.get<SearchHistoryItem[]>('route_history').then(hist => {
         if (hist) setRecentStations(hist.slice(0, 3));
       });
@@ -119,6 +138,38 @@ export function StationSearchModal({
   const poiResults = useMemo(() => (
     enablePoiSearch && query.trim().length > 0 ? searchPois(query).slice(0, 6) : []
   ), [enablePoiSearch, query]);
+
+  useEffect(() => {
+    const normalizedQuery = query.trim();
+    if (!visible || !shouldSearchPlacesQuery(normalizedQuery)) {
+      setPlaceResults([]);
+      setPlacesLoading(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setPlacesLoading(true);
+      searchPlacesAutocomplete(normalizedQuery, {
+        sessionToken: placesSessionToken,
+        signal: controller.signal,
+      })
+        .then(results => {
+          if (!controller.signal.aborted) setPlaceResults(results.slice(0, 5));
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setPlaceResults([]);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setPlacesLoading(false);
+        });
+    }, 350);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [placesSessionToken, query, visible]);
 
   useEffect(() => {
     const normalizedQuery = query.trim();
@@ -187,6 +238,17 @@ export function StationSearchModal({
     ) ?? null;
   }
 
+  function findStationForPlaceDestination(resolvedDestination: ResolvedPlaceDestination): StationResult | null {
+    const normalizedStationId = normalizeStationId(resolvedDestination.routeDestinationStationId);
+    const normalizedStationName = normalizeStationId(resolvedDestination.routeDestinationStationName);
+
+    return allStations.find(station =>
+      normalizeStationId(station.id) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationId ||
+      normalizeStationId(station.name) === normalizedStationName,
+    ) ?? null;
+  }
+
   function handlePoiSelect(poi: PointOfInterest) {
     const resolvedDestination = resolvePoiDestination(poi);
     const station = findStationForPoiDestination(resolvedDestination);
@@ -203,6 +265,29 @@ export function StationSearchModal({
     handleSelect(station, { addressDestination: resolvedDestination });
   }
 
+  async function handlePlaceSelect(place: PlaceAutocompleteResult) {
+    if (placeDetailsLoadingId) return;
+
+    setPlaceDetailsLoadingId(place.placeId);
+    try {
+      const details = await getPlaceDetails(place.placeId, {
+        sessionToken: placesSessionToken,
+      });
+      if (!details) return;
+
+      const resolvedDestination = resolvePlaceDestination(details);
+      if (!resolvedDestination) return;
+
+      const station = findStationForPlaceDestination(resolvedDestination);
+      if (!station) return;
+
+      setPlacesSessionToken(createPlacesSessionToken());
+      handleSelect(station, { placeDestination: resolvedDestination });
+    } finally {
+      setPlaceDetailsLoadingId(null);
+    }
+  }
+
   function buildAddressDestinationFromHistory(item: SearchHistoryItem): ResolvedAddressDestination | null {
     if (item.itemType !== 'address' || !item.addressId || !item.routeStationName) return null;
 
@@ -214,6 +299,20 @@ export function StationSearchModal({
       lineIds: item.routeLineIds ?? item.lines ?? [],
       distanceMeters: item.routeDistanceMeters ?? 0,
       addressId: item.addressId,
+    };
+  }
+
+  function buildPlaceDestinationFromHistory(item: SearchHistoryItem): ResolvedPlaceDestination | null {
+    if (item.itemType !== 'place' || !item.placeId || !item.routeStationName) return null;
+
+    return {
+      type: 'place',
+      displayName: item.displayName ?? item.name,
+      routeDestinationStationId: item.id,
+      routeDestinationStationName: item.routeStationName,
+      lineIds: item.routeLineIds ?? item.lines ?? [],
+      distanceMeters: item.routeDistanceMeters ?? 0,
+      placeId: item.placeId,
     };
   }
 
@@ -232,6 +331,17 @@ export function StationSearchModal({
         const station = findStationForAddressDestination(addressDestination);
         if (station) {
           handleSelect(station, { addressDestination });
+          return;
+        }
+      }
+    }
+
+    if (item.itemType === 'place') {
+      const placeDestination = buildPlaceDestinationFromHistory(item);
+      if (placeDestination) {
+        const station = findStationForPlaceDestination(placeDestination);
+        if (station) {
+          handleSelect(station, { placeDestination });
           return;
         }
       }
@@ -365,6 +475,37 @@ export function StationSearchModal({
     );
   }
 
+  function renderPlaceResult(place: PlaceAutocompleteResult) {
+    const isResolving = placeDetailsLoadingId === place.placeId;
+
+    return (
+      <TouchableOpacity
+        key={place.id}
+        style={styles.stationItem}
+        onPress={() => { void handlePlaceSelect(place); }}
+        activeOpacity={0.7}
+        disabled={!!placeDetailsLoadingId}
+      >
+        <View style={[styles.stationIcon, { backgroundColor: `${Colors.actionBlue}18` }]}>
+          <Feather name="map" size={14} color={Colors.actionBlue} />
+        </View>
+        <View style={styles.stationInfo}>
+          <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{place.primaryText}</Text>
+          {!!place.secondaryText && (
+            <Text style={[styles.poiSummary, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+              {place.secondaryText}
+            </Text>
+          )}
+        </View>
+        {isResolving ? (
+          <ActivityIndicator size="small" color={Colors.actionBlue} />
+        ) : (
+          <Feather name="chevron-right" size={16} color={theme.colors.border} />
+        )}
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.surface }]}>
@@ -421,6 +562,17 @@ export function StationSearchModal({
                   <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t('poi.nearbyPlaces')}</Text>
                 </View>
                 {poiResults.map(renderPoiResult)}
+              </>
+            )}
+            {query.trim().length >= 3 && (placesLoading || placeResults.length > 0) && (
+              <>
+                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>
+                    {placesLoading ? t('search.places.searching') : t('search.places.section')}
+                  </Text>
+                  {placesLoading && <ActivityIndicator size="small" color={Colors.actionBlue} />}
+                </View>
+                {placeResults.map(renderPlaceResult)}
               </>
             )}
             {query.trim().length >= 3 && (addressLoading || addressResults.length > 0) && (
@@ -488,13 +640,13 @@ export function StationSearchModal({
                         <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{displayName}</Text>
                         <View style={styles.stationMeta}>
                           <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>
-                            {item.itemType === 'poi' || item.itemType === 'address'
+                            {item.itemType === 'poi' || item.itemType === 'address' || item.itemType === 'place'
                               ? `${t('search.recommendedStation')}: ${item.routeStationName ?? freshStation.name}`
                               : freshStation.shortCode}
                           </Text>
                           {renderLineChipsFromLines(historyLines)}
                         </View>
-                        {item.itemType === 'poi' ? null : renderExpressRouteBadges(freshStation)}
+                        {item.itemType === 'poi' || item.itemType === 'place' ? null : renderExpressRouteBadges(freshStation)}
                       </View>
                       <TouchableOpacity
                         onPress={event => {
@@ -543,7 +695,7 @@ export function StationSearchModal({
               </TouchableOpacity>
             )}
             ListEmptyComponent={
-              poiResults.length === 0 ? (
+              poiResults.length === 0 && placeResults.length === 0 && addressResults.length === 0 ? (
                 <View style={styles.empty}>
                   <Text style={[styles.emptyText, { color: theme.colors.textTertiary }]}>{t("search.empty")}</Text>
                   <Text style={styles.emptyAction}>{t('search.view_lines_map')}</Text>
