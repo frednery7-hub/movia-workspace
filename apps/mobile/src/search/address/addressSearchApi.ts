@@ -58,13 +58,18 @@ export function resolveAddressDestination(
 
 export async function searchAddress(
   query: string,
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; originLineIds?: string[] } = {},
 ): Promise<AddressSearchResult[]> {
   if (!shouldSearchAddressQuery(query)) return [];
 
   try {
     const { data } = await api.get<AddressSearchResponse>('/search/address', {
-      params: { q: query.trim() },
+      params: {
+        q: query.trim(),
+        ...(options.originLineIds && options.originLineIds.length > 0
+          ? { originLineIds: options.originLineIds.join(',') }
+          : {}),
+      },
       signal: options.signal,
     });
     return data.results;

@@ -43,6 +43,10 @@ describe('SearchController Places', () => {
       sessionToken: 'session-1',
     });
 
-    expect(placesDetails.resolve).toHaveBeenCalledWith('place-1', 'session-1');
+    expect(placesDetails.resolve).toHaveBeenCalledWith(
+      'place-1',
+      'session-1',
+      undefined,
+    );
   });
 });

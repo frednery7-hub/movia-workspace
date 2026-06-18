@@ -7,6 +7,13 @@ import type {
 
 export const MAX_RECOMMENDED_STATION_DISTANCE_METERS = 2_500;
 
+/**
+ * Valor inicial, ajustar conforme teste real. Margem aplicada sobre a
+ * distancia da estacao mais proxima para preferir uma estacao na mesma
+ * linha da origem, evitando baldeacao evitavel.
+ */
+export const SAME_LINE_PREFERENCE_MARGIN_METERS = 350;
+
 export function haversineDistanceMeters(
   a: { latitude: number; longitude: number },
   b: { latitude: number; longitude: number },
@@ -44,7 +51,7 @@ export class StationNearestService {
       },
     });
 
-    const nearest = stations
+    const candidates = stations
       .filter(
         (station) =>
           typeof station.latitude === 'number' &&
@@ -63,12 +70,26 @@ export class StationNearestService {
           }),
         ),
       }))
-      .sort((a, b) => a.distanceMeters - b.distanceMeters)[0];
+      .sort((a, b) => a.distanceMeters - b.distanceMeters);
 
+    const nearest = candidates[0];
     if (!nearest) {
       throw new NotFoundException(
         'Nenhuma estação com coordenadas disponível.',
       );
+    }
+
+    if (input.originLineIds && input.originLineIds.length > 0) {
+      const maxDistance =
+        nearest.distanceMeters + SAME_LINE_PREFERENCE_MARGIN_METERS;
+      const sameLineCandidate = candidates.find(
+        (candidate) =>
+          candidate.distanceMeters <= maxDistance &&
+          candidate.lineIds.some((lineId) =>
+            input.originLineIds!.includes(lineId),
+          ),
+      );
+      if (sameLineCandidate) return sameLineCandidate;
     }
 
     return nearest;

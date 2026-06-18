@@ -1,6 +1,11 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { AddressSearchCacheService } from './address-search-cache.service';
 import { AddressSearchService } from './address-search.service';
+import {
+  createAddressQueryHash,
+  normalizeAddressQuery,
+} from './address-query.util';
+import { originLineIdsCacheKeyPart } from './line-id.util';
 
 function makeService(
   options: {
@@ -57,25 +62,25 @@ describe('AddressSearchService', () => {
 
   it('cache hit evita chamada Google', async () => {
     const cache = new AddressSearchCacheService();
-    cache.set(
-      '0189f10f3568da8cce18851d0be3c32b004aff6101e0b3635a595deabd4d1f1b',
-      [
-        {
-          id: 'addr-1',
-          label: 'Av. Providencia 1200',
-          formattedAddress: 'Av. Providencia 1200, Santiago, Chile',
-          latitude: -33.42,
-          longitude: -70.6,
-          nearestStation: {
-            id: 'st_tobalaba',
-            name: 'Tobalaba',
-            lineIds: ['L1', 'L4'],
-            distanceMeters: 280,
-          },
-          source: 'google_geocoding',
-        },
-      ],
+    const cacheKey = createAddressQueryHash(
+      `${normalizeAddressQuery('Av. Providencia 1200')}|${originLineIdsCacheKeyPart(undefined)}`,
     );
+    cache.set(cacheKey, [
+      {
+        id: 'addr-1',
+        label: 'Av. Providencia 1200',
+        formattedAddress: 'Av. Providencia 1200, Santiago, Chile',
+        latitude: -33.42,
+        longitude: -70.6,
+        nearestStation: {
+          id: 'st_tobalaba',
+          name: 'Tobalaba',
+          lineIds: ['L1', 'L4'],
+          distanceMeters: 280,
+        },
+        source: 'google_geocoding',
+      },
+    ]);
     const geocoding = { searchAddress: jest.fn() };
     const { service } = makeService({ cache, geocoding });
 

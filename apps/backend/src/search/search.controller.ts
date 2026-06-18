@@ -20,7 +20,7 @@ export class SearchController {
   @Throttle({ addressSearch: { ttl: 60_000, limit: 20 } })
   @Get('address')
   searchAddress(@Query() query: AddressSearchQueryDto) {
-    return this.addressSearch.search(query.q);
+    return this.addressSearch.search(query.q, query.originLineIds);
   }
 
   @Throttle({ addressSearch: { ttl: 60_000, limit: 30 } })
@@ -32,6 +32,10 @@ export class SearchController {
   @Throttle({ addressSearch: { ttl: 60_000, limit: 20 } })
   @Get('places/details')
   searchPlaceDetails(@Query() query: PlaceDetailsQueryDto) {
-    return this.placesDetails.resolve(query.placeId, query.sessionToken);
+    return this.placesDetails.resolve(
+      query.placeId,
+      query.sessionToken,
+      query.originLineIds,
+    );
   }
 }

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { StationNearestService } from '../station-nearest.service';
+import { originLineIdsCacheKeyPart } from '../line-id.util';
 import { GooglePlacesClient } from './google-places.client';
 import {
   createPlacesCacheKey,
@@ -28,12 +29,18 @@ export class PlacesDetailsService {
   async resolve(
     placeId: string,
     sessionToken?: string,
+    originLineIds?: string[],
   ): Promise<PlaceDetailsResponse> {
     if (this.config.get<string>('PLACES_SEARCH_ENABLED') !== 'true') {
       throw new ServiceUnavailableException('Places search disabled.');
     }
 
-    const cacheKey = createPlacesCacheKey(['places', 'details', placeId]);
+    const cacheKey = createPlacesCacheKey([
+      'places',
+      'details',
+      placeId,
+      originLineIdsCacheKeyPart(originLineIds),
+    ]);
     const cachedDetails = this.cache.getDetails(cacheKey);
     if (cachedDetails) return cachedDetails;
 
@@ -46,6 +53,7 @@ export class PlacesDetailsService {
       .findNearestStation({
         latitude: candidate.latitude,
         longitude: candidate.longitude,
+        originLineIds,
       })
       .catch((error: unknown) => {
         this.logger.warn({

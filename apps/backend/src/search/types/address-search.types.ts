@@ -34,6 +34,7 @@ export type GeocodingCandidate = {
 export type NearestStationInput = {
   latitude: number;
   longitude: number;
+  originLineIds?: string[];
 };
 
 export type NearestStationResult = {

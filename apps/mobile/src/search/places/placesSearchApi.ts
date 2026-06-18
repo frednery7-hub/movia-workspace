@@ -62,7 +62,7 @@ export async function searchPlacesAutocomplete(
 
 export async function getPlaceDetails(
   placeId: string,
-  options: { sessionToken?: string; signal?: AbortSignal } = {},
+  options: { sessionToken?: string; signal?: AbortSignal; originLineIds?: string[] } = {},
 ): Promise<PlaceDetailsResponse | null> {
   try {
     const { data } = await api.get<PlaceDetailsResponse>(
@@ -71,6 +71,9 @@ export async function getPlaceDetails(
         params: {
           placeId,
           ...(options.sessionToken ? { sessionToken: options.sessionToken } : {}),
+          ...(options.originLineIds && options.originLineIds.length > 0
+            ? { originLineIds: options.originLineIds.join(',') }
+            : {}),
         },
         signal: options.signal,
       },

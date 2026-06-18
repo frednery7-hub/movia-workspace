@@ -182,7 +182,10 @@ export function StationSearchModal({
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setAddressLoading(true);
-      searchAddress(normalizedQuery, { signal: controller.signal })
+      searchAddress(normalizedQuery, {
+        signal: controller.signal,
+        originLineIds: selectedStation?.lines ?? nearbyStations[0]?.station.lines,
+      })
         .then(results => {
           if (!controller.signal.aborted) setAddressResults(results.slice(0, 5));
         })
@@ -272,6 +275,7 @@ export function StationSearchModal({
     try {
       const details = await getPlaceDetails(place.placeId, {
         sessionToken: placesSessionToken,
+        originLineIds: selectedStation?.lines ?? nearbyStations[0]?.station.lines,
       });
       if (!details) return;
 

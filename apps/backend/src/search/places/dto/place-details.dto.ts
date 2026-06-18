@@ -1,5 +1,12 @@
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsArray,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+import { normalizeOriginLineIds } from '../../line-id.util';
 
 export class PlaceDetailsQueryDto {
   @Transform(({ value }) => String(value ?? '').trim())
@@ -16,4 +23,10 @@ export class PlaceDetailsQueryDto {
   @IsString()
   @MaxLength(160)
   sessionToken?: string;
+
+  @Transform(({ value }) => normalizeOriginLineIds(value))
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  originLineIds?: string[];
 }

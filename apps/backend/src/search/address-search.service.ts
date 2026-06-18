@@ -15,6 +15,7 @@ import {
 } from './address-search-cache.service';
 import { GoogleGeocodingClient } from './geocoding/google-geocoding.client';
 import { StationNearestService } from './station-nearest.service';
+import { originLineIdsCacheKeyPart } from './line-id.util';
 import type {
   AddressSearchResponse,
   AddressSearchResult,
@@ -31,13 +32,18 @@ export class AddressSearchService {
     private readonly stationNearest: StationNearestService,
   ) {}
 
-  async search(query: string): Promise<AddressSearchResponse> {
+  async search(
+    query: string,
+    originLineIds?: string[],
+  ): Promise<AddressSearchResponse> {
     if (this.config.get<string>('ADDRESS_SEARCH_ENABLED') !== 'true') {
       throw new ServiceUnavailableException('Address search disabled.');
     }
 
     const normalizedQuery = normalizeAddressQuery(query);
-    const queryHash = createAddressQueryHash(normalizedQuery);
+    const queryHash = createAddressQueryHash(
+      `${normalizedQuery}|${originLineIdsCacheKeyPart(originLineIds)}`,
+    );
     this.logger.log(getSafeAddressQueryLogMeta(query));
 
     const cachedResults = this.cache.get(queryHash);
@@ -53,6 +59,7 @@ export class AddressSearchService {
       const nearestStation = await this.stationNearest.findNearestStation({
         latitude: candidate.latitude,
         longitude: candidate.longitude,
+        originLineIds,
       });
 
       results.push({
