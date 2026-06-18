@@ -130,6 +130,12 @@ describe('Security Smoke Tests (e2e)', () => {
     return request(app.getHttpServer()).get('/v1/eta/st_baquedano').expect(401);
   });
 
+  it('GET /v1/search/address — público com feature disabled controlado', () => {
+    return request(app.getHttpServer())
+      .get('/v1/search/address?q=Av.%20Providencia%201200')
+      .expect(503);
+  });
+
   it('POST /v1/geo/location — 401 sem token', () => {
     return request(app.getHttpServer())
       .post('/v1/geo/location')

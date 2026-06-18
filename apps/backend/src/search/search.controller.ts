@@ -1,8 +1,10 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { Public } from '../auth/public.decorator';
 import { AddressSearchQueryDto } from './dto/address-search-query.dto';
 import { AddressSearchService } from './address-search.service';
 
+@Public()
 @Controller('search')
 export class SearchController {
   constructor(private readonly addressSearch: AddressSearchService) {}
