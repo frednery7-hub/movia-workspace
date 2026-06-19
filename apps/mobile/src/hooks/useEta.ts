@@ -34,6 +34,22 @@ export interface EtaResponse {
   prediction: EtaPrediction;
   status: 'NORMAL' | 'DELAYED' | 'DEGRADED' | 'NO_ROUTE';
   routeDegraded: boolean;
+  routes?: EtaRouteOption[];
+}
+
+export interface EtaRouteOption {
+  id: string;
+  type: 'recommended' | 'alternative';
+  label: string;
+  reason?: string;
+  differenceLabel?: string;
+  durationMinutes: number;
+  walkMeters: number;
+  transfers: number;
+  path: EtaPath[];
+  linesOnRoute: string[];
+  timing: EtaTiming;
+  arrivalTime: string;
 }
 
 async function fetchEta(

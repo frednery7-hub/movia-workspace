@@ -55,8 +55,13 @@ export type ResolvedPoiDestination = {
 export type StationAccess = {
   id: string;
   stationId: string;
+  label: string;
   name: string;
+  type: 'entrance' | 'exit' | 'both';
   address: string;
+  latitude?: number;
+  longitude?: number;
+  source: 'manual' | 'official' | 'estimated';
   reference?: string;
   status?: 'available' | 'closed' | 'unknown';
   googleMapsQuery: string;

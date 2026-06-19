@@ -57,7 +57,12 @@
       "^@movia/shared-data/(.*)$": "<rootDir>/../../packages/shared-data/src/$1"
     },
     "transform": {
-      "^.+\\.ts$": ["ts-jest", { "tsconfig": "tsconfig.json" }]
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.json"
+        }
+      ]
     }
   },
   "private": true

@@ -31,6 +31,7 @@ import {
   searchPlacesAutocomplete,
   shouldSearchPlacesQuery,
 } from '../../search/places/placesSearchApi';
+import { ConsentService } from '../../privacy/consent.service';
 import type {
   PlaceAutocompleteResult,
   ResolvedPlaceDestination,
@@ -150,19 +151,29 @@ export function StationSearchModal({
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setPlacesLoading(true);
-      searchPlacesAutocomplete(normalizedQuery, {
-        sessionToken: placesSessionToken,
-        signal: controller.signal,
-      })
-        .then(results => {
-          if (!controller.signal.aborted) setPlaceResults(results.slice(0, 5));
+      (async () => {
+        const allowed = await ConsentService.canUsePlaces();
+        if (!allowed) {
+          if (!controller.signal.aborted) {
+            setPlaceResults([]);
+            setPlacesLoading(false);
+          }
+          return;
+        }
+        searchPlacesAutocomplete(normalizedQuery, {
+          sessionToken: placesSessionToken,
+          signal: controller.signal,
         })
-        .catch(() => {
-          if (!controller.signal.aborted) setPlaceResults([]);
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setPlacesLoading(false);
-        });
+          .then(results => {
+            if (!controller.signal.aborted) setPlaceResults(results.slice(0, 5));
+          })
+          .catch(() => {
+            if (!controller.signal.aborted) setPlaceResults([]);
+          })
+          .finally(() => {
+            if (!controller.signal.aborted) setPlacesLoading(false);
+          });
+      })();
     }, 350);
 
     return () => {
@@ -182,19 +193,29 @@ export function StationSearchModal({
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setAddressLoading(true);
-      searchAddress(normalizedQuery, {
-        signal: controller.signal,
-        originLineIds: selectedStation?.lines ?? nearbyStations[0]?.station.lines,
-      })
-        .then(results => {
-          if (!controller.signal.aborted) setAddressResults(results.slice(0, 5));
+      (async () => {
+        const allowed = await ConsentService.canUsePlaces();
+        if (!allowed) {
+          if (!controller.signal.aborted) {
+            setAddressResults([]);
+            setAddressLoading(false);
+          }
+          return;
+        }
+        searchAddress(normalizedQuery, {
+          signal: controller.signal,
+          originLineIds: selectedStation?.lines ?? nearbyStations[0]?.station.lines,
         })
-        .catch(() => {
-          if (!controller.signal.aborted) setAddressResults([]);
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setAddressLoading(false);
-        });
+          .then(results => {
+            if (!controller.signal.aborted) setAddressResults(results.slice(0, 5));
+          })
+          .catch(() => {
+            if (!controller.signal.aborted) setAddressResults([]);
+          })
+          .finally(() => {
+            if (!controller.signal.aborted) setAddressLoading(false);
+          });
+      })();
     }, 500);
 
     return () => {
@@ -270,6 +291,7 @@ export function StationSearchModal({
 
   async function handlePlaceSelect(place: PlaceAutocompleteResult) {
     if (placeDetailsLoadingId) return;
+    if (!(await ConsentService.canUsePlaces())) return;
 
     setPlaceDetailsLoadingId(place.placeId);
     try {

@@ -16,6 +16,7 @@ import {
   EtaRouteStatus,
   EtaTiming,
   EtaPrediction,
+  EtaRouteOption,
 } from './dto/enriched-eta-response.dto';
 import { LineStatus } from '@prisma/client';
 import { AiPrediction } from '../ai-engine/dto/prediction.dto';
@@ -96,7 +97,8 @@ export class EtaService implements OnModuleInit {
       confidence: { nearestStationConfidence: 1, snappingConfidence: 1 },
     };
 
-    const route = this.routeEngine.route({ origin, destination });
+    const routeOptions = this.routeEngine.routeOptions({ origin, destination });
+    const route = routeOptions[0];
     if (!route) {
       this.metrics.etaNoRouteTotal.inc();
       throw new NotFoundException(
@@ -163,6 +165,15 @@ export class EtaService implements OnModuleInit {
       linesOnRoute,
       result.routeDegraded,
     );
+    const routes = routeOptions.map((option, index) =>
+      this.buildRouteOption(
+        option,
+        index === 0 ? 'recommended' : 'alternative',
+        lineStatuses,
+        now,
+        result.etaSeconds,
+      ),
+    );
 
     this.metrics.etaDurationMs.observe(Date.now() - startMs);
     this.logger.log(
@@ -180,6 +191,78 @@ export class EtaService implements OnModuleInit {
       prediction,
       status,
       routeDegraded: result.routeDegraded,
+      routes,
+    };
+  }
+
+  private buildRouteOption(
+    route: NonNullable<ReturnType<RouteEngine['route']>>,
+    type: EtaRouteOption['type'],
+    lineStatuses: LineStatusMap,
+    now: number,
+    recommendedDurationSeconds: number,
+  ): EtaRouteOption {
+    const result = this.etaEngine.compute({ route, lineStatuses });
+    const stationIds: string[] = [];
+    const lineIds: string[] = [];
+
+    for (const segment of route.segments) {
+      if (segment.edge.type !== 'TRACK') continue;
+      if (stationIds.length === 0) {
+        stationIds.push(segment.fromNode.stationId);
+        lineIds.push(segment.fromNode.lineId);
+      }
+      stationIds.push(segment.toNode.stationId);
+      lineIds.push(segment.toNode.lineId);
+    }
+
+    const linesOnRoute = [...new Set(lineIds)];
+    const totalEstimatedSeconds = result.etaSeconds;
+    const differenceMinutes = Math.max(
+      0,
+      Math.round((totalEstimatedSeconds - recommendedDurationSeconds) / 60),
+    );
+
+    return {
+      id:
+        type === 'recommended'
+          ? 'recommended'
+          : `alternative-${linesOnRoute.join('-')}`,
+      type,
+      label: type === 'recommended' ? 'Ruta recomendada' : 'Ruta alternativa',
+      reason:
+        type === 'alternative'
+          ? route.transferCount === 0
+            ? 'Sin combinaciones'
+            : 'Recorrido por líneas diferentes'
+          : undefined,
+      differenceLabel:
+        type === 'alternative' && differenceMinutes > 0
+          ? `+${differenceMinutes} min`
+          : undefined,
+      durationMinutes: Math.max(1, Math.round(totalEstimatedSeconds / 60)),
+      walkMeters: route.segments.reduce(
+        (sum, segment) =>
+          segment.edge.type === 'WALK'
+            ? sum + segment.edge.distanceMeters
+            : sum,
+        0,
+      ),
+      transfers: route.transferCount,
+      path: stationIds.map((id, index) => ({
+        id,
+        name: this.stationsCache.get(id) ?? id,
+        lineId: lineIds[index] ?? '',
+      })),
+      linesOnRoute,
+      timing: {
+        baseDurationSeconds: totalEstimatedSeconds,
+        currentDelaySeconds: 0,
+        predictedDelaySeconds: 0,
+        appliedDelaySeconds: 0,
+        totalEstimatedSeconds,
+      },
+      arrivalTime: new Date(now + totalEstimatedSeconds * 1000).toISOString(),
     };
   }
 

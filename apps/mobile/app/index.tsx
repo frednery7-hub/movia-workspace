@@ -1,10 +1,10 @@
 import { CacheService } from '../src/config/cache.service';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useLanguage } from './_layout';
 import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, View, Text, StyleSheet, Dimensions, PanResponder, AppState, TouchableOpacity,
+  ActivityIndicator, View, Text, StyleSheet, Dimensions, PanResponder, AppState, TouchableOpacity, Animated,
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import {
@@ -63,6 +63,10 @@ import { normalizeStationId } from '../src/poi/search/normalizeStationId';
 import { resolvePoiDestination } from '../src/poi/search/resolvePoiDestination';
 import type { ResolvedAddressDestination } from '../src/search/address/addressSearchApi';
 import type { ResolvedPlaceDestination } from '../src/search/places/placesSearchTypes';
+import { ConsentService } from '../src/privacy/consent.service';
+import { PermissionExplainerModal } from '../src/components/movia/PermissionExplainerModal';
+import { buildActiveTripProgress } from '../src/trip/tripProgress';
+import { getAccessesForStation } from '../src/poi/search/getAccessesForStation';
 
 const { width, height } = Dimensions.get('window');
 
@@ -262,15 +266,26 @@ export default function HomeScreen() {
   const [sentNotifications, setSentNotifications] = useState<SentTripNotifications>(EMPTY_SENT_TRIP_NOTIFICATIONS);
   const [arrivalBanner, setArrivalBanner] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
+  const [selectedRouteOptionId, setSelectedRouteOptionId] = useState('recommended');
+  const [showLocationPermission, setShowLocationPermission] = useState(false);
+  const [showNotificationPermission, setShowNotificationPermission] = useState(false);
+  const [progressClock, setProgressClock] = useState(() => Date.now());
   const activeStationIdRef = useRef<string | null>(null);
+  const routeStartedAtRef = useRef(Date.now());
+  const promptOpacity = useRef(new Animated.Value(0)).current;
+  const promptTranslateY = useRef(new Animated.Value(8)).current;
 
   const { data: linesData,    isLoading: linesLoading }  = useLines();
   const { data: networkState }                           = useNetworkState();
   const { data: metroIncidents }                         = useMetroIncidents();
   const { data: stationsData }                           = useStations();
-  const { data: etaData, isLoading: etaLoading }         = useEta(
+  const { data: etaResponse, isLoading: etaLoading }     = useEta(
     origin?.id, destination?.id,
   );
+  const selectedRouteOption = etaResponse?.routes?.find(route => route.id === selectedRouteOptionId);
+  const etaData = etaResponse && selectedRouteOption
+    ? { ...etaResponse, ...selectedRouteOption, routes: etaResponse.routes }
+    : etaResponse;
   const locale = toLocale(language);
 
   // Monta LineItem[] mesclando linhas + networkState
@@ -322,7 +337,7 @@ export default function HomeScreen() {
     .map(station => `${station.id}:${station.lineId}`)
     .join('>');
   const routeKey = origin && destination && etaData
-    ? `${origin.id}:${destination.id}:${routePathKey}`
+    ? `${origin.id}:${destination.id}:${selectedRouteOptionId}:${routePathKey}`
     : null;
   const canShowCurrentStation = tripStatus === 'active' || tripStatus === 'arrived';
   const hasCurrentStation = canShowCurrentStation && currentTrackedStationIndex !== null;
@@ -366,6 +381,25 @@ export default function HomeScreen() {
     nextLine: routeGradientNextLine,
     hasTransfer: routeGradientNextLine !== null,
   });
+  const originAccess = origin
+    ? getAccessesForStation(origin.id).find(access => access.type === 'entrance' || access.type === 'both') ?? null
+    : null;
+  const destinationAccess = destination
+    ? getAccessesForStation(destination.id).find(access => access.type === 'exit' || access.type === 'both') ?? null
+    : null;
+  const tripProgress = activeTripState && etaData
+    ? buildActiveTripProgress({
+      routeId: activeTripState.routeId,
+      stationIds: activeTripState.orderedRoutePath.map(station => station.id),
+      tripStatus,
+      currentStationIndex: activeTripState.currentStationIndex,
+      elapsedSeconds: Math.max(0, (progressClock - routeStartedAtRef.current) / 1000),
+      totalEstimatedSeconds: etaData.timing.totalEstimatedSeconds,
+      navigationMode: activeTripState.navigationMode,
+      estimatedArrivalTime: etaData.arrivalTime,
+    })
+    : null;
+  const alternativeRoute = etaResponse?.routes?.find(route => route.type === 'alternative') ?? null;
 
   function applyTripStatusTransition(nextStatus: TripStatus) {
     setTripStatus(currentStatus => (
@@ -534,6 +568,10 @@ export default function HomeScreen() {
   useEffect(() => {
     TripNotificationService.configure();
     IdentityService.getProfileName().then(setProfileName);
+    Animated.parallel([
+      Animated.timing(promptOpacity, { toValue: 1, duration: 560, delay: 180, useNativeDriver: true }),
+      Animated.timing(promptTranslateY, { toValue: 0, duration: 560, delay: 180, useNativeDriver: true }),
+    ]).start();
   }, []);
 
   useEffect(() => {
@@ -546,7 +584,35 @@ export default function HomeScreen() {
     setCurrentStationDistanceMeters(null);
     setStationProgressState('between-stations');
     applyTripStatusTransition(routeKey ? 'preview' : 'ended');
+    routeStartedAtRef.current = Date.now();
+    setProgressClock(Date.now());
   }, [routeKey]);
+
+  useEffect(() => {
+    if (tripStatus !== 'active') return undefined;
+    routeStartedAtRef.current = Date.now();
+    setProgressClock(Date.now());
+    const timer = setInterval(() => setProgressClock(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [tripStatus]);
+
+  useEffect(() => {
+    setSelectedRouteOptionId('recommended');
+  }, [origin?.id, destination?.id]);
+
+  useEffect(() => {
+    if (tripStatus !== 'active') return;
+    let cancelled = false;
+    Promise.all([
+      TripNotificationService.getPermissionStatus(),
+      CacheService.get<boolean>('notification_permission_explainer_seen'),
+    ]).then(([status, seen]) => {
+      if (!cancelled && status === 'undetermined' && !seen) {
+        setShowNotificationPermission(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [tripStatus]);
 
   useEffect(() => {
     if (
@@ -680,7 +746,10 @@ export default function HomeScreen() {
         tripStatus,
       });
 
-      if (shouldNotifyOneBeforeDestination(notificationTripState)) {
+      if (
+        shouldNotifyOneBeforeDestination(notificationTripState) &&
+        (await ConsentService.canUseNotifications())
+      ) {
         try {
           await TripNotificationService.notifyNextStation(
             translate('notification.next_station.title', locale),
@@ -742,7 +811,8 @@ export default function HomeScreen() {
       const lang = await IdentityService.getPreferredLanguage();
       setLanguage(lang.toLowerCase().startsWith('pt') ? 'PT' : lang.toLowerCase().startsWith('en') ? 'EN' : 'ES');
 
-      const status = await LocationService.requestPermission();
+      const canUseLocation = await ConsentService.canUseLocation();
+      const status = await LocationService.getPermissionStatus();
       if (status === 'granted') {
         const loc = await LocationService.getCurrentLocation();
         if (loc.latitude && loc.longitude) {
@@ -776,8 +846,11 @@ export default function HomeScreen() {
           }
         }
       } else {
-        setLocationMode('denied');
+        setLocationMode(status === 'denied' ? 'denied' : 'manual');
         setOriginSource('empty');
+        if (status === 'undetermined' && canUseLocation) {
+          setTimeout(() => setShowLocationPermission(true), 500);
+        }
       }
     }
     init();
@@ -885,9 +958,10 @@ export default function HomeScreen() {
 
     setLocating(true);
     try {
-      let status = await LocationService.getPermissionStatus();
-      if (status !== 'granted') {
-        status = await LocationService.requestPermission();
+      const status = await LocationService.getPermissionStatus();
+      if (status === 'undetermined') {
+        setShowLocationPermission(true);
+        return;
       }
 
       if (status !== 'granted') {
@@ -952,6 +1026,45 @@ export default function HomeScreen() {
     }
   }
 
+  async function handleAllowLocation() {
+    const consent = await ConsentService.getConsent();
+    await ConsentService.saveConsent(true, consent?.analytics ?? false);
+    setShowLocationPermission(false);
+    const status = await LocationService.requestPermission();
+    if (status === 'granted') {
+      await handleLocateUser();
+    } else {
+      setLocationMode('denied');
+      setOriginSource('empty');
+    }
+  }
+
+  function handleDismissLocationPermission() {
+    setShowLocationPermission(false);
+    setLocationMode('manual');
+    setOriginSource('empty');
+  }
+
+  async function handleAllowNotifications() {
+    setShowNotificationPermission(false);
+    await CacheService.set('notification_permission_explainer_seen', true, 365 * 24 * 60 * 60 * 1000);
+    await TripNotificationService.requestPermission();
+  }
+
+  async function handleDismissNotifications() {
+    setShowNotificationPermission(false);
+    await CacheService.set('notification_permission_explainer_seen', true, 365 * 24 * 60 * 60 * 1000);
+  }
+
+  function handleSelectAlternativeRoute() {
+    if (!alternativeRoute) return;
+    setSelectedRouteOptionId(alternativeRoute.id);
+  }
+
+  function handleSelectRecommendedRoute() {
+    setSelectedRouteOptionId('recommended');
+  }
+
   // Auto-detecta estação de origem via GPS quando estações carregam
   useEffect(() => {
     if (!stationsData || !userLat || !userLon || locationMode === 'planning' || locationMode === 'denied') return;
@@ -961,8 +1074,8 @@ export default function HomeScreen() {
 
   // Quando ETA chega, vai para navegação
   useEffect(() => {
-    if (etaData && screen === 'searching') setScreen('navigating');
-  }, [etaData]);
+    if (etaResponse && screen === 'searching') setScreen('navigating');
+  }, [etaResponse]);
 
   function handleDestinationSelect(
     station: StationResult,
@@ -1069,6 +1182,18 @@ export default function HomeScreen() {
       <MapOverlay />
 
       <View style={[styles.searchWrapper, { top: insets.top + 12 }]}>
+        <Animated.Text
+          style={[
+            styles.homePrompt,
+            {
+              color: theme.colors.textPrimary,
+              opacity: promptOpacity,
+              transform: [{ translateY: promptTranslateY }],
+            },
+          ]}
+        >
+          {translate('home.prompt', toLocale(language))}
+        </Animated.Text>
         <SearchBar
           onMenuClick={() => setSidebarOpen(true)}
           onOriginClick={() => setSelectingOrigin(true)}
@@ -1163,9 +1288,36 @@ export default function HomeScreen() {
           tripStatus={tripStatus}
           stationProgressState={stationProgressState}
           currentStationDistanceMeters={currentStationDistanceMeters}
+          tripProgress={tripProgress}
+          originAccess={originAccess}
+          destinationAccess={destinationAccess}
+          alternativeRoute={selectedRouteOptionId === 'recommended' ? alternativeRoute : null}
+          showingAlternative={selectedRouteOptionId !== 'recommended'}
+          onSelectAlternative={handleSelectAlternativeRoute}
+          onSelectRecommended={handleSelectRecommendedRoute}
           onClose={handleCloseNavigation}
         />
       )}
+      <PermissionExplainerModal
+        visible={showLocationPermission}
+        kind="location"
+        onDismiss={handleDismissLocationPermission}
+        onAllow={handleAllowLocation}
+        onOpenPrivacy={() => {
+          setShowLocationPermission(false);
+          router.push('/privacy-policy');
+        }}
+      />
+      <PermissionExplainerModal
+        visible={showNotificationPermission}
+        kind="notifications"
+        onDismiss={handleDismissNotifications}
+        onAllow={handleAllowNotifications}
+        onOpenPrivacy={() => {
+          setShowNotificationPermission(false);
+          router.push('/privacy-policy');
+        }}
+      />
       <StationSearchModal
         visible={selectingOrigin}
         onClose={() => setSelectingOrigin(false)}
@@ -1215,6 +1367,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   searchWrapper: { position: 'absolute', left: 16, right: 16 },
+  homePrompt: {
+    marginBottom: 7,
+    fontSize: 18,
+    fontWeight: '800',
+    textShadowColor: 'rgba(255,255,255,0.72)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
   contextBanner: {
     position: 'absolute',
     left: 16,

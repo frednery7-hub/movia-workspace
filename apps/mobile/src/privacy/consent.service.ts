@@ -1,14 +1,14 @@
 import * as SecureStore from 'expo-secure-store';
 import { api }          from '../config/api';
 
-const CONSENT_KEY     = 'movia_privacy_consent';
-const CONSENT_VERSION = '1.0';
+const CONSENT_KEY = 'movia_privacy_consent';
+export const CONSENT_VERSION = '2.0';
 
 export interface ConsentRecord {
-  version:     string;
-  acceptedAt:  string;
+  version: string;
+  acceptedAt: string;
   locationUse: boolean;
-  analytics:   boolean;
+  analytics: boolean;
 }
 
 export class ConsentService {
@@ -25,7 +25,7 @@ export class ConsentService {
 
   static async saveConsent(locationUse: boolean, analytics: boolean): Promise<void> {
     const record: ConsentRecord = {
-      version:    CONSENT_VERSION,
+      version: CONSENT_VERSION,
       acceptedAt: new Date().toISOString(),
       locationUse,
       analytics,
@@ -38,6 +38,30 @@ export class ConsentService {
     } catch {
       // Falha silenciosa — consentimento local já salvo
     }
+  }
+
+  /**
+   * Recursos que dependem de tratamento ativo de dados (localização,
+   * notificações, Places/Geocoding) só ficam disponíveis quando a pessoa
+   * aceitou a versão MAIS RECENTE da política — não a versão anterior.
+   */
+  static async canUseLocation(): Promise<boolean> {
+    const consent = await this.getConsent();
+    return Boolean(
+      consent &&
+      consent.version === CONSENT_VERSION &&
+      consent.locationUse,
+    );
+  }
+
+  static async canUseNotifications(): Promise<boolean> {
+    const consent = await this.getConsent();
+    return Boolean(consent && consent.version === CONSENT_VERSION);
+  }
+
+  static async canUsePlaces(): Promise<boolean> {
+    const consent = await this.getConsent();
+    return Boolean(consent && consent.version === CONSENT_VERSION);
   }
 
   static async getConsent(): Promise<ConsentRecord | null> {

@@ -3,7 +3,7 @@ import { t, SupportedLocale } from '../i18n';
 
 interface LocaleContextValue {
   locale: SupportedLocale;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 const LocaleContext = createContext<LocaleContextValue>({
@@ -15,7 +15,7 @@ export function LocaleProvider({
   locale,
   children,
 }: { locale: SupportedLocale; children: React.ReactNode }) {
-  const translate = (key: string) => t(key, locale);
+  const translate = (key: string, params?: Record<string, string | number>) => t(key, locale, params);
   return (
     <LocaleContext.Provider value={{ locale, t: translate }}>
       {children}

@@ -229,6 +229,19 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionLabel, { color: theme.colors.textTertiary }]}>{t("settings.privacy")}</Text>
         <TouchableOpacity
           style={[styles.item, { backgroundColor: theme.colors.surfaceElevated }]}
+          onPress={() => router.push('/privacy-policy')}
+          activeOpacity={0.7}
+        >
+          <Feather name="file-text" size={19} color={theme.colors.iconMuted} />
+          <View style={styles.itemText}>
+            <Text style={[styles.itemTitle, { color: theme.colors.textPrimary }]}>{t("privacy.title")}</Text>
+            <Text style={[styles.itemDesc, { color: theme.colors.textTertiary }]}>{t("privacy.settings_desc")}</Text>
+          </View>
+          <Text style={[styles.itemArrow, { color: theme.colors.textTertiary }]}>›</Text>
+        </TouchableOpacity>
+        <View style={[styles.divider, { backgroundColor: theme.colors.borderSubtle }]} />
+        <TouchableOpacity
+          style={[styles.item, { backgroundColor: theme.colors.surfaceElevated }]}
           onPress={handleExportData}
           activeOpacity={0.7}
           disabled={loading === "export"}

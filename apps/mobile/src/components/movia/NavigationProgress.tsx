@@ -13,6 +13,13 @@ import {
   type TripStatus,
 } from '../../trip/activeTripState';
 import { getVisibleExpressRouteState, type ExpressRouteState } from '../../data/expressRoute';
+import type { EtaRouteOption } from '../../hooks/useEta';
+import type { StationAccess } from '../../poi/types';
+import {
+  getTripTimelineNotice,
+  type ActiveTripProgress,
+  type TripTimelineNotice,
+} from '../../trip/tripProgress';
 
 export interface Station {
   id: string;
@@ -37,6 +44,13 @@ interface NavigationProgressProps {
   tripStatus: TripStatus;
   stationProgressState?: StationProgressState;
   currentStationDistanceMeters?: number | null;
+  tripProgress?: ActiveTripProgress | null;
+  originAccess?: StationAccess | null;
+  destinationAccess?: StationAccess | null;
+  alternativeRoute?: EtaRouteOption | null;
+  showingAlternative?: boolean;
+  onSelectAlternative?: () => void;
+  onSelectRecommended?: () => void;
   onClose: () => void;
 }
 
@@ -49,9 +63,35 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
   expanded: Math.round(SCREEN_HEIGHT * 0.86),
 };
 
+function getNoticeIcon(notice: TripTimelineNotice): React.ComponentProps<typeof Feather>['name'] {
+  if (notice.type === 'arrived') return 'check-circle';
+  if (notice.type === 'before-destination') return 'flag';
+  if (notice.type === 'transfer') return 'repeat';
+  return 'navigation';
+}
+
+function getNoticeText(
+  notice: TripTimelineNotice,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  if (notice.type === 'arrived') return t('trip.arrived_destination');
+  if (notice.type === 'before-destination') return t('navigation.before_destination');
+  if (notice.type === 'transfer') {
+    return t('navigation.prepare_transfer', { station: notice.stationName });
+  }
+  if (notice.type === 'next') {
+    return `${t('navigation.next')}: ${notice.stationName} · ${t('navigation.remaining_stations', { count: notice.remainingStations })}`;
+  }
+  return t('navigation.remaining_stations', { count: notice.count });
+}
+
 export function NavigationProgress({
   origin, destination, estimatedTime, arrivalTime,
-  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor, tripStatus, stationProgressState = 'between-stations', currentStationDistanceMeters = null, onClose,
+  stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor,
+  tripStatus, stationProgressState = 'between-stations', currentStationDistanceMeters = null,
+  tripProgress = null, originAccess = null, destinationAccess = null,
+  alternativeRoute = null, showingAlternative = false,
+  onSelectAlternative, onSelectRecommended, onClose,
 }: NavigationProgressProps) {
   const { t } = useLocale();
   const theme = useAppTheme();
@@ -67,6 +107,7 @@ export function NavigationProgress({
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.25)).current;
   const contentOpacity = useRef(new Animated.Value(1)).current;
+  const activeSegmentOpacity = useRef(new Animated.Value(0.58)).current;
   const sheetHeight = useRef(new Animated.Value(SHEET_HEIGHTS.normal)).current;
   const sheetStateRef = useRef<SheetState>('normal');
   const [sheetState, setSheetStateValue] = useState<SheetState>('normal');
@@ -84,6 +125,13 @@ export function NavigationProgress({
   const isPreview = tripStatus === 'preview';
   const isCompact = sheetState === 'compact';
   const isExpanded = sheetState === 'expanded';
+  const nextTransferStation = nextStation?.transfer ? nextStation.name : undefined;
+  const timelineNotice = getTripTimelineNotice({
+    tripStatus,
+    remainingStations: tripProgress?.remainingStations ?? Math.max(0, stations.length - Math.max(currentIndex, 0) - 1),
+    nextStationName: nextStation?.name,
+    nextTransferStationName: nextTransferStation,
+  });
 
   useEffect(() => {
     Animated.loop(
@@ -99,6 +147,17 @@ export function NavigationProgress({
       ])
     ).start();
   }, []);
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(activeSegmentOpacity, { toValue: 1, duration: 850, useNativeDriver: true }),
+        Animated.timing(activeSegmentOpacity, { toValue: 0.58, duration: 850, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [activeSegmentOpacity]);
 
   useEffect(() => {
     contentOpacity.setValue(0.45);
@@ -229,6 +288,17 @@ export function NavigationProgress({
             {currentDirection && (
               <Text style={[styles.directionText, { color: theme.colors.textPrimary }]}>L{currentLine} · {t('direction')} {currentDirection}</Text>
             )}
+            {tripProgress && (
+              <View style={styles.tripProgressBlock}>
+                <View style={styles.tripProgressHeader}>
+                  <Text style={[styles.tripProgressLabel, { color: theme.colors.textSecondary }]}>{t('navigation.trip_progress')}</Text>
+                  <Text style={[styles.tripProgressValue, { color: lineColor }]}>{tripProgress.progressPercent}%</Text>
+                </View>
+                <View style={[styles.tripProgressTrack, { backgroundColor: theme.colors.borderSubtle }]}>
+                  <View style={[styles.tripProgressFill, { width: `${tripProgress.progressPercent}%`, backgroundColor: lineColor }]} />
+                </View>
+              </View>
+            )}
           </View>
           <TouchableOpacity
             onPress={toggleSheet}
@@ -254,6 +324,49 @@ export function NavigationProgress({
           )}
         </Animated.View>
       )}
+      {!isCompact && timelineNotice && (
+        <View style={[styles.noticeRow, { backgroundColor: theme.colors.surfaceMuted }]}>
+          <Feather name={getNoticeIcon(timelineNotice)} size={15} color={lineColor} />
+          <Text style={[styles.noticeText, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+            {getNoticeText(timelineNotice, t)}
+          </Text>
+        </View>
+      )}
+      {!isCompact && (originAccess || destinationAccess) && (
+        <View style={styles.accessBlock}>
+          {originAccess && (
+            <Text style={[styles.accessText, { color: theme.colors.textSecondary }]}>
+              {t('navigation.entrance', { label: originAccess.label, name: originAccess.name })}
+            </Text>
+          )}
+          {destinationAccess && (
+            <Text style={[styles.accessText, { color: theme.colors.textSecondary }]}>
+              {t('navigation.exit', { label: destinationAccess.label, name: destinationAccess.name })}
+            </Text>
+          )}
+        </View>
+      )}
+      {!isCompact && alternativeRoute && onSelectAlternative && (
+        <TouchableOpacity
+          style={[styles.alternativeRow, { borderColor: theme.colors.borderSubtle }]}
+          onPress={onSelectAlternative}
+          activeOpacity={0.78}
+        >
+          <View style={styles.alternativeCopy}>
+            <Text style={[styles.alternativeTitle, { color: theme.colors.textPrimary }]}>{t('navigation.alternative_available')}</Text>
+            <Text style={[styles.alternativeReason, { color: theme.colors.textTertiary }]} numberOfLines={1}>
+              {[alternativeRoute.reason, alternativeRoute.differenceLabel].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+          <Text style={[styles.alternativeAction, { color: lineColor }]}>{t('navigation.view_alternative')}</Text>
+        </TouchableOpacity>
+      )}
+      {!isCompact && showingAlternative && onSelectRecommended && (
+        <TouchableOpacity style={styles.recommendedButton} onPress={onSelectRecommended} activeOpacity={0.78}>
+          <Feather name="corner-up-left" size={14} color={lineColor} />
+          <Text style={[styles.alternativeAction, { color: lineColor }]}>{t('navigation.back_recommended')}</Text>
+        </TouchableOpacity>
+      )}
       </View>
 
       {!isCompact && (
@@ -267,19 +380,36 @@ export function NavigationProgress({
               (station.status === 'current' || station.status === 'arrived') &&
               canShowCurrentStationBanner;
             const isArrivedStation = station.status === 'arrived';
-            const isPassed = station.status === 'completed';
-            const isNext = station.status === 'next';
-            const isFuture = station.status === 'upcoming';
+            const isEstimatedCompleted =
+              tripStatus === 'active' &&
+              tripProgress !== null &&
+              index <= tripProgress.currentSegmentIndex &&
+              !isCurrent;
+            const isPassed = station.status === 'completed' || isEstimatedCompleted;
+            const isEstimatedNext =
+              tripStatus === 'active' &&
+              tripProgress !== null &&
+              index === tripProgress.currentSegmentIndex + 1;
+            const isNext = !isCurrent && !isPassed && (station.status === 'next' || isEstimatedNext);
+            const isFuture = station.status === 'upcoming' && !isNext && !isPassed;
             const isLast = index === stations.length - 1;
             const stationLine = station.line ?? currentLine;
             const stationLineColor = getLineColor(stationLine, lineColor);
             const nextLineColor = station.transfer ? getLineColor(station.transfer.line, stationLineColor) : stationLineColor;
             const visibleExpressRoute = getVisibleExpressRouteState(station.expressRoute);
+            const isActiveSegment =
+              !isLast &&
+              tripStatus === 'active' &&
+              tripProgress?.currentSegmentIndex === index;
+            const isCompletedSegment =
+              !isLast &&
+              tripProgress !== null &&
+              index < tripProgress.currentSegmentIndex;
 
             return (
               <View key={index} style={styles.stationRow}>
                 <View style={styles.trackColumn}>
-                  <View style={[
+                  <Animated.View style={[
                       styles.dot,
                       isCurrent && styles.dotCurrent,
                       isPassed && styles.dotPassed,
@@ -290,14 +420,39 @@ export function NavigationProgress({
                       isCurrent && { borderColor: stationLineColor, shadowColor: stationLineColor },
                       isNext && { borderColor: stationLineColor },
                       isPassed && { backgroundColor: stationLineColor },
+                      isNext && { transform: [{ scale: pulseAnim }] },
                     station.transfer && !isPassed && !isCurrent && { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: nextLineColor, backgroundColor: stationLineColor },
                   ]} />
                   {!isLast && station.transfer ? (
-                    <LinearGradient colors={[stationLineColor, nextLineColor]} style={styles.trackTransfer} />
+                    <View style={styles.trackTransfer}>
+                      <Animated.View style={[styles.trackTransferFill, isActiveSegment && { opacity: activeSegmentOpacity }]}>
+                        <LinearGradient
+                          colors={[stationLineColor, nextLineColor]}
+                          style={StyleSheet.absoluteFill}
+                        />
+                      </Animated.View>
+                    </View>
+                  ) : isActiveSegment ? (
+                    <View style={[styles.activeTrackContainer, { backgroundColor: theme.colors.borderSubtle }]}>
+                      <Animated.View
+                        style={[
+                          styles.activeTrackFill,
+                          {
+                            height: `${Math.max(12, tripProgress?.segmentProgressPercent ?? 0)}%`,
+                            opacity: activeSegmentOpacity,
+                          },
+                        ]}
+                      >
+                        <LinearGradient
+                          colors={[stationLineColor, `${stationLineColor}66`, stationLineColor]}
+                          style={StyleSheet.absoluteFill}
+                        />
+                      </Animated.View>
+                    </View>
                   ) : !isLast && (
                     <View style={[
                       styles.track,
-                      (isPassed || isCurrent) && { backgroundColor: stationLineColor },
+                      (isPassed || isCurrent || isCompletedSegment) && { backgroundColor: stationLineColor },
                       isFuture && [styles.trackDashed, { borderLeftColor: theme.colors.border }],
                     ]} />
                   )}
@@ -440,6 +595,12 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   directionText: { fontSize: 12, color: Colors.textPrimary, marginTop: 3, fontWeight: '800' },
+  tripProgressBlock: { marginTop: 7, width: 190 },
+  tripProgressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tripProgressLabel: { fontSize: 10, fontWeight: '700' },
+  tripProgressValue: { fontSize: 10, fontWeight: '800' },
+  tripProgressTrack: { height: 3, borderRadius: 2, marginTop: 4, overflow: 'hidden' },
+  tripProgressFill: { height: 3, borderRadius: 2 },
   expandButton: {
     width: 30, height: 30, borderRadius: 15,
     alignItems: 'center', justifyContent: 'center',
@@ -475,6 +636,42 @@ const styles = StyleSheet.create({
   nextColumn: { flex: 1 },
   nextLabel: { fontSize: 11, fontWeight: '800', color: Colors.textTertiary, textTransform: 'uppercase' },
   nextStationName: { marginTop: 4, fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  noticeRow: {
+    marginHorizontal: 18,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  noticeText: { flex: 1, fontSize: 12, lineHeight: 16, fontWeight: '700' },
+  accessBlock: { marginHorizontal: 20, marginBottom: 8, gap: 3 },
+  accessText: { fontSize: 11, lineHeight: 15, fontWeight: '600' },
+  alternativeRow: {
+    marginHorizontal: 18,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  alternativeCopy: { flex: 1 },
+  alternativeTitle: { fontSize: 12, fontWeight: '800' },
+  alternativeReason: { marginTop: 2, fontSize: 10, fontWeight: '600' },
+  alternativeAction: { fontSize: 11, fontWeight: '800' },
+  recommendedButton: {
+    alignSelf: 'flex-start',
+    marginHorizontal: 20,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   scroll: { flex: 1 },
   fullTimelineTitle: {
     paddingHorizontal: 20,
@@ -520,6 +717,22 @@ const styles = StyleSheet.create({
     width: 3,
     marginTop: 2,
     borderRadius: 2,
+    overflow: 'hidden',
+  },
+  trackTransferFill: { flex: 1 },
+  activeTrackContainer: {
+    flex: 1,
+    width: 3,
+    marginTop: 2,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  activeTrackFill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    minHeight: 8,
   },
   trackDashed: { backgroundColor: 'transparent', borderLeftWidth: 2, borderLeftColor: 'rgba(0,0,0,0.12)', borderStyle: 'dashed' },
   stationInfo: { flex: 1, paddingBottom: 16 },

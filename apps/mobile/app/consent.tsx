@@ -1,6 +1,6 @@
-import { useState }                                              from 'react';
+import { useState, useEffect }                                   from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { router }                                                from 'expo-router';
+import { router, useLocalSearchParams }                          from 'expo-router';
 import { ConsentService }                                        from '../src/privacy/consent.service';
 import { useLocale }                                             from '../src/context/LocaleContext';
 
@@ -8,6 +8,17 @@ export default function ConsentScreen() {
   const [locationUse, setLocationUse] = useState(true);
   const [analytics,   setAnalytics]   = useState(false);
   const { t } = useLocale();
+  const { updated } = useLocalSearchParams<{ updated?: string }>();
+  const isPolicyUpdate = updated === '1';
+
+  useEffect(() => {
+    if (!isPolicyUpdate) return;
+    ConsentService.getConsent().then((existing) => {
+      if (!existing) return;
+      setLocationUse(existing.locationUse);
+      setAnalytics(existing.analytics);
+    });
+  }, [isPolicyUpdate]);
 
   async function handleAccept() {
     await ConsentService.saveConsent(locationUse, analytics);
@@ -22,9 +33,9 @@ export default function ConsentScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{t('consent.title')}</Text>
+        <Text style={styles.title}>{t(isPolicyUpdate ? 'consent.updated_title' : 'consent.title')}</Text>
         <Text style={styles.subtitle}>
-          {t('consent.subtitle')}
+          {t(isPolicyUpdate ? 'consent.updated_subtitle' : 'consent.subtitle')}
         </Text>
       </View>
 
@@ -66,6 +77,10 @@ export default function ConsentScreen() {
         {t('consent.legal')}
       </Text>
 
+      <TouchableOpacity style={styles.policyLink} onPress={() => router.push('/privacy-policy')}>
+        <Text style={styles.policyLinkText}>{t('privacy.view_policy')}</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity style={styles.btnAccept} onPress={handleAccept}>
         <Text style={styles.btnAcceptText}>{t('consent.accept')}</Text>
       </TouchableOpacity>
@@ -92,6 +107,8 @@ const styles = StyleSheet.create({
   toggleText:     { fontSize: 12, fontWeight: '500', color: '#fff' },
   divider:        { height: 0.5, backgroundColor: '#e0e0e0', marginVertical: 12 },
   legal:          { fontSize: 11, color: '#999', lineHeight: 18, marginBottom: 24 },
+  policyLink:     { alignSelf: 'flex-start', marginBottom: 18 },
+  policyLinkText: { color: '#1A73E8', fontSize: 13, fontWeight: '700' },
   btnAccept:      { backgroundColor: '#E31837', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
   btnAcceptText:  { color: '#fff', fontWeight: '500', fontSize: 15 },
   btnDecline:     { borderRadius: 12, padding: 14, alignItems: 'center' },

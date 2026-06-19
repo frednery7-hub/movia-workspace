@@ -297,4 +297,31 @@ describe("RouteEngine — Dijkstra", () => {
       prevCumulative = seg.cumulativeCost;
     }
   });
+
+  it("retorna no máximo uma alternativa útil e dentro do limite de duração", () => {
+    const graph = buildTestGraph();
+    const directAlternative = makeTrackEdge(
+      "trk_puente_alto_tobalaba_alternative",
+      PLT.PUENTE_ALTO_L4,
+      PLT.TOBALABA_L4,
+      "L4",
+      4 * SEGMENT_COST + 30,
+    );
+    graph.edges.set(PLT.PUENTE_ALTO_L4, [
+      ...(graph.edges.get(PLT.PUENTE_ALTO_L4) ?? []),
+      directAlternative,
+    ]);
+
+    const options = new RouteEngine(graph).routeOptions({
+      origin: makeOrigin(STA.PUENTE_ALTO),
+      destination: makeOrigin(STA.TOBALABA),
+    });
+
+    expect(options).toHaveLength(2);
+    expect(options[0].totalDurationSeconds).toBe(4 * SEGMENT_COST);
+    expect(options[1].totalDurationSeconds).toBe(4 * SEGMENT_COST + 30);
+    expect(options[1].segments.map((segment) => segment.edge.id)).not.toEqual(
+      options[0].segments.map((segment) => segment.edge.id),
+    );
+  });
 });

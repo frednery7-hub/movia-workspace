@@ -114,10 +114,13 @@ function RootLayoutContent() {
   const [language, setLanguageState] = useState<Language>('ES');
   const [bootError, setBootError] = useState<string | null>(null);
   const [needsConsent, setNeedsConsent] = useState(false);
+  const [isConsentUpdate, setIsConsentUpdate] = useState(false);
 
   useEffect(() => {
-    if (isReady && needsConsent) router.replace('/consent');
-  }, [isReady, needsConsent]);
+    if (isReady && needsConsent) {
+      router.replace({ pathname: '/consent', params: { updated: isConsentUpdate ? '1' : '0' } });
+    }
+  }, [isReady, isConsentUpdate, needsConsent]);
 
   useEffect(() => {
     async function boot() {
@@ -146,8 +149,12 @@ function RootLayoutContent() {
         else if (savedLang?.toLowerCase().startsWith('en')) setLanguageState('EN');
         else setLanguageState('ES');
 
+        const previousConsent = await ConsentService.getConsent();
         const hasConsent = await ConsentService.hasValidConsent();
-        if (!hasConsent) setNeedsConsent(true);
+        if (!hasConsent) {
+          setIsConsentUpdate(previousConsent !== null);
+          setNeedsConsent(true);
+        }
       } catch (error) {
         console.error('Falha na inicializacao segura:', error);
         setBootError('No se pudo conectar al servidor. Verifica tu conexión.');
@@ -191,6 +198,7 @@ function RootLayoutContent() {
               <Stack.Screen name="index" />
               <Stack.Screen name="settings" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               <Stack.Screen name="consent" />
+              <Stack.Screen name="privacy-policy" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               <Stack.Screen name="no-location" />
             </Stack>
           </GestureHandlerRootView>

@@ -24,6 +24,21 @@ export interface EtaPrediction {
 
 export type EtaRouteStatus = 'NORMAL' | 'DELAYED' | 'DEGRADED' | 'NO_ROUTE';
 
+export interface EtaRouteOption {
+  id: string;
+  type: 'recommended' | 'alternative';
+  label: string;
+  reason?: string;
+  differenceLabel?: string;
+  durationMinutes: number;
+  walkMeters: number;
+  transfers: number;
+  path: RouteStation[];
+  linesOnRoute: string[];
+  timing: EtaTiming;
+  arrivalTime: string;
+}
+
 export interface EnrichedEtaResponse {
   destination: string;
   path: RouteStation[];
@@ -35,4 +50,5 @@ export interface EnrichedEtaResponse {
   prediction: EtaPrediction | null;
   status: EtaRouteStatus;
   routeDegraded: boolean;
+  routes: EtaRouteOption[];
 }

@@ -4,8 +4,11 @@ export const STATION_ACCESSES: StationAccess[] = [
   {
     id: 'ecuador-access-a',
     stationId: 'ecuador',
-    name: 'Acceso A',
+    label: 'A',
+    name: "Av. Alameda Libertador Bernardo O'Higgins Norte",
+    type: 'both',
     address: "Av. Alameda Libertador Bernardo O'Higgins Norte",
+    source: 'manual',
     reference: 'Ecuador L1',
     status: 'available',
     googleMapsQuery:

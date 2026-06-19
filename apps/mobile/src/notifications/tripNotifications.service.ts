@@ -25,20 +25,20 @@ export class TripNotificationService {
     }
   }
 
-  private static async ensurePermission(): Promise<boolean> {
+  static async getPermissionStatus(): Promise<'granted' | 'denied' | 'undetermined'> {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status as 'granted' | 'denied' | 'undetermined';
+  }
+
+  static async requestPermission(): Promise<boolean> {
     this.configure();
-
-    let { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') {
-      const request = await Notifications.requestPermissionsAsync();
-      status = request.status;
-    }
-
-    return status === 'granted';
+    const request = await Notifications.requestPermissionsAsync();
+    return request.status === 'granted';
   }
 
   static async notifyNextStation(title: string, body: string): Promise<void> {
-    const canNotify = await this.ensurePermission();
+    this.configure();
+    const canNotify = await this.getPermissionStatus() === 'granted';
     if (!canNotify) return;
 
     await Notifications.scheduleNotificationAsync({
