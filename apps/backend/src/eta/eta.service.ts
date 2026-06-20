@@ -108,18 +108,7 @@ export class EtaService implements OnModuleInit {
 
     const result = this.etaEngine.compute({ route, lineStatuses });
 
-    const stationIds: string[] = [];
-    const lineIds: string[] = [];
-    for (const segment of route.segments) {
-      if (segment.edge.type === 'TRACK') {
-        if (stationIds.length === 0) {
-          stationIds.push(segment.fromNode.stationId);
-          lineIds.push(segment.fromNode.lineId);
-        }
-        stationIds.push(segment.toNode.stationId);
-        lineIds.push(segment.toNode.lineId);
-      }
-    }
+    const { stationIds, lineIds } = this.buildPathFromSegments(route);
 
     const linesOnRoute = [...new Set(lineIds)];
     const path = stationIds.map((id, index) => ({
@@ -195,6 +184,30 @@ export class EtaService implements OnModuleInit {
     };
   }
 
+  private buildPathFromSegments(
+    route: NonNullable<ReturnType<RouteEngine['route']>>,
+  ): { stationIds: string[]; lineIds: string[] } {
+    const stationIds: string[] = [];
+    const lineIds: string[] = [];
+    for (const segment of route.segments) {
+      if (segment.edge.type !== 'TRACK') continue;
+
+      const lastIndex = stationIds.length - 1;
+      const isNewLeg =
+        lastIndex < 0 ||
+        stationIds[lastIndex] !== segment.fromNode.stationId ||
+        lineIds[lastIndex] !== segment.fromNode.lineId;
+
+      if (isNewLeg) {
+        stationIds.push(segment.fromNode.stationId);
+        lineIds.push(segment.fromNode.lineId);
+      }
+      stationIds.push(segment.toNode.stationId);
+      lineIds.push(segment.toNode.lineId);
+    }
+    return { stationIds, lineIds };
+  }
+
   private buildRouteOption(
     route: NonNullable<ReturnType<RouteEngine['route']>>,
     type: EtaRouteOption['type'],
@@ -208,7 +221,14 @@ export class EtaService implements OnModuleInit {
 
     for (const segment of route.segments) {
       if (segment.edge.type !== 'TRACK') continue;
-      if (stationIds.length === 0) {
+
+      const lastIndex = stationIds.length - 1;
+      const isNewLeg =
+        lastIndex < 0 ||
+        stationIds[lastIndex] !== segment.fromNode.stationId ||
+        lineIds[lastIndex] !== segment.fromNode.lineId;
+
+      if (isNewLeg) {
         stationIds.push(segment.fromNode.stationId);
         lineIds.push(segment.fromNode.lineId);
       }
