@@ -15,6 +15,14 @@ export interface EtaTiming {
   totalEstimatedSeconds: number;
 }
 
+export interface EtaBreakdown {
+  rideMinutes: number;
+  dwellMinutes: number;
+  transferWalkMinutes: number;
+  transferWaitMinutes: number;
+  totalMinutes: number;
+}
+
 export interface EtaPrediction {
   available: boolean;
   model: string;
@@ -29,6 +37,7 @@ export interface EtaResponse {
   stationsCount: number;
   linesOnRoute: string[];
   timing: EtaTiming;
+  etaBreakdown: EtaBreakdown;
   arrivalTime: string;
   arrivalTimeOptimistic: string;
   prediction: EtaPrediction;
@@ -49,6 +58,7 @@ export interface EtaRouteOption {
   path: EtaPath[];
   linesOnRoute: string[];
   timing: EtaTiming;
+  etaBreakdown: EtaBreakdown;
   arrivalTime: string;
 }
 
