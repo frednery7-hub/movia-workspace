@@ -30,6 +30,9 @@ import { IdentityService } from '../src/security/identity.service';
 import { LocationService } from '../src/location/location.service';
 import { getLocationMemoryCacheTtlForTripStatus } from '../src/location/locationMemoryCache';
 import { InertialService } from '../src/sensors/InertialService';
+import { LocationFusion } from '../src/sensors/LocationFusion';
+import type { RawGpsReading } from '../src/sensors/LocationFusion';
+import { postFusedLocation } from '../src/location/geoLocationApi';
 import { TripNotificationService } from '../src/notifications/tripNotifications.service';
 import {
   CURRENT_STATION_BANNER_RADIUS_METERS,
@@ -243,6 +246,7 @@ export default function HomeScreen() {
   const theme = useAppTheme();
   const mapRef = useRef<MapView>(null);
   const inertialRef = useRef(new InertialService());
+  const locationFusionRef = useRef(new LocationFusion());
 
   const [screen, setScreen]           = useState<AppScreen>('map');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -704,6 +708,24 @@ export default function HomeScreen() {
 
       if (nearestPathIndex < 0) return;
       const speedMps = loc.speedMps ?? null;
+
+      const gpsReading: RawGpsReading = {
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        accuracyMeters: loc.accuracy ?? 9999,
+        altitudeMeters: null,
+        altitudeAccuracyMeters: null,
+        headingDegrees: null,
+        speedMetersPerSecond: speedMps,
+        hardwareTimestampMs: Date.now(),
+        provider: 'GPS',
+      };
+      const fused = locationFusionRef.current.fuse(
+        gpsReading,
+        inertialRef.current.getVerdict(),
+      );
+      void postFusedLocation(fused, nearestRouteStation?.lineId);
+
       const secondsToNearestRouteStation =
         speedMps !== null && speedMps > 0
           ? nearest.distanceMeters / speedMps
