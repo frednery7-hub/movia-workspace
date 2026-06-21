@@ -24,3 +24,5 @@ packages/**/src/**/*.js.map
 !packages/**/babel.config.js
 !packages/**/commitlint.config.js
 .vscode/
+security-reports/
+movia-security-reports/
