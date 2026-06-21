@@ -12,6 +12,15 @@ import {
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * Hibernado em 2026-06-21: o scraper busca de datosdechile.cl (terceiro),
+ * nao do metro.cl oficial, mas o app exibia "Fonte oficial: Metro de
+ * Santiago". Desligado ate decidirmos buscar do metro.cl de verdade ou
+ * rotular a fonte real com honestidade. Reativar trocando para true
+ * apos resolver a divergencia de fonte.
+ */
+const METRO_INCIDENTS_ENABLED = process.env.METRO_INCIDENTS_ENABLED === 'true';
+
 @Injectable()
 export class MetroIncidentsService implements OnModuleInit {
   private readonly logger = new Logger(MetroIncidentsService.name);
@@ -25,12 +34,19 @@ export class MetroIncidentsService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
+    if (!METRO_INCIDENTS_ENABLED) {
+      this.logger.log('METRO_INCIDENTS_HIBERNATED — scraper nao iniciado.');
+      return;
+    }
     this.refresh().catch((error: Error) => {
       this.logger.warn(`METRO_INCIDENTS_BOOTSTRAP_FAILED — ${error.message}`);
     });
   }
 
   async getIncidents(): Promise<MetroIncidentsResponse> {
+    if (!METRO_INCIDENTS_ENABLED) {
+      return this.buildHibernatedResponse();
+    }
     if (this.cache && !this.isExpired(this.cache.updatedAt)) {
       return this.cache;
     }
@@ -48,9 +64,14 @@ export class MetroIncidentsService implements OnModuleInit {
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async refreshScheduled(): Promise<void> {
+    if (!METRO_INCIDENTS_ENABLED) return;
     await this.refresh().catch((error: Error) => {
       this.logger.warn(`METRO_INCIDENTS_CRON_FAILED — ${error.message}`);
     });
+  }
+
+  private buildHibernatedResponse(): MetroIncidentsResponse {
+    return this.buildResponse([], new Date().toISOString());
   }
 
   private async refresh(): Promise<MetroIncidentsResponse> {

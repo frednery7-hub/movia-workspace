@@ -90,10 +90,20 @@ export class PrivacyService {
     };
   }
 
-  recordConsent(
+  async recordConsent(
     deviceId: string,
     consent: { version: string; locationUse: boolean; analytics?: boolean },
-  ): { recorded: boolean; version: string } {
+  ): Promise<{ recorded: boolean; version: string }> {
+    await this.prisma.consentEvent.create({
+      data: {
+        deviceId,
+        action: 'GRANTED',
+        version: consent.version,
+        locationUse: consent.locationUse,
+        analytics: Boolean(consent.analytics),
+      },
+    });
+
     this.logger.log(
       `PRIVACY_AUDIT consent_recorded device:${maskId(deviceId)} version:${consent.version} location:${consent.locationUse} analytics:${Boolean(consent.analytics)}`,
     );
@@ -104,7 +114,16 @@ export class PrivacyService {
     };
   }
 
-  revokeConsent(deviceId: string): { revoked: boolean; message: string } {
+  async revokeConsent(
+    deviceId: string,
+  ): Promise<{ revoked: boolean; message: string }> {
+    await this.prisma.consentEvent.create({
+      data: {
+        deviceId,
+        action: 'REVOKED',
+      },
+    });
+
     this.logger.warn(
       `PRIVACY_AUDIT consent_revoked device:${maskId(deviceId)}`,
     );
