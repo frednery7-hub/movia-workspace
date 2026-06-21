@@ -8,8 +8,7 @@ import type {
   TrackEdge,
   TransferEdge,
 } from '@movia/shared-types';
-
-const TRANSFER_PENALTY_SECONDS = 180;
+import { TRANSFER_PENALTY_SECONDS } from '@movia/route-engine';
 
 @Injectable()
 export class GraphService implements OnModuleInit {

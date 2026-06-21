@@ -142,6 +142,8 @@ export class EtaService implements OnModuleInit {
       totalEstimatedSeconds,
     };
 
+    const etaBreakdown = this.buildEtaBreakdown(result.breakdown);
+
     const now = Date.now();
     const arrivalTime = new Date(
       now + totalEstimatedSeconds * 1000,
@@ -175,12 +177,34 @@ export class EtaService implements OnModuleInit {
       stationsCount: path.length,
       linesOnRoute,
       timing,
+      etaBreakdown,
       arrivalTime,
       arrivalTimeOptimistic,
       prediction,
       status,
       routeDegraded: result.routeDegraded,
       routes,
+    };
+  }
+
+  private buildEtaBreakdown(breakdown: {
+    rideSeconds: number;
+    dwellSeconds: number;
+    transferWalkSeconds: number;
+    transferWaitSeconds: number;
+  }) {
+    const toMinutes = (seconds: number) => Math.round(seconds / 60);
+    return {
+      rideMinutes: toMinutes(breakdown.rideSeconds),
+      dwellMinutes: toMinutes(breakdown.dwellSeconds),
+      transferWalkMinutes: toMinutes(breakdown.transferWalkSeconds),
+      transferWaitMinutes: toMinutes(breakdown.transferWaitSeconds),
+      totalMinutes: toMinutes(
+        breakdown.rideSeconds +
+          breakdown.dwellSeconds +
+          breakdown.transferWalkSeconds +
+          breakdown.transferWaitSeconds,
+      ),
     };
   }
 
@@ -238,6 +262,7 @@ export class EtaService implements OnModuleInit {
 
     const linesOnRoute = [...new Set(lineIds)];
     const totalEstimatedSeconds = result.etaSeconds;
+    const etaBreakdown = this.buildEtaBreakdown(result.breakdown);
     const differenceMinutes = Math.max(
       0,
       Math.round((totalEstimatedSeconds - recommendedDurationSeconds) / 60),
@@ -275,6 +300,7 @@ export class EtaService implements OnModuleInit {
         lineId: lineIds[index] ?? '',
       })),
       linesOnRoute,
+      etaBreakdown,
       timing: {
         baseDurationSeconds: totalEstimatedSeconds,
         currentDelaySeconds: 0,

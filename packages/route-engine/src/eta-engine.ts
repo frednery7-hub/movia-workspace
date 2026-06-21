@@ -4,7 +4,9 @@ import type { RouteResult, GraphEdge } from "@movia/shared-types";
  * ETA Engine — Motor Preditivo de Tempo de Chegada.
  *
  * Formula:
- *   ETA = Σ (d_i / v_i + t_dwell) × W_status
+ *   ETA = Σ (d_i / v_i + t_dwell) × W_status  [TRACK]
+ *       + Σ (walkingSeconds + TRANSFER_PENALTY_SECONDS) × W_status  [TRANSFER]
+ *       + Σ durationSeconds × W_status  [WALK]
  *
  * Onde:
  *   d_i      = distancia do segmento (metros)
@@ -24,18 +26,41 @@ export interface EtaInput {
   lineStatuses: LineStatusMap;
 }
 
+export interface EtaBreakdown {
+  rideSeconds: number;
+  dwellSeconds: number;
+  transferWalkSeconds: number;
+  transferWaitSeconds: number;
+}
+
 export interface EtaOutput {
   etaSeconds: number;
   arrivalTime: Date;
   confidence: number;
   routeDegraded: boolean;
   penaltyApplied: number;
+  breakdown: EtaBreakdown;
 }
 
 // ── Constantes operacionais ───────────────────────────────────────
 const DWELL_TIME_SECONDS = 20; // tempo de parada por estacao
 const SPEED_PENALTY_DELAYED = 1.5; // malha em atraso
 const DEFAULT_SPEED_MS = 11.1; // ~40 km/h velocidade nominal metro
+
+/**
+ * Espera estimada pelo proximo trem apos uma baldeacao.
+ * Fonte unica — tambem usada por GraphService (apps/backend) para o custo
+ * de roteamento, garantindo que a rota recomendada e o ETA exibido ao
+ * usuario usem exatamente o mesmo modelo de penalidade de transferencia.
+ */
+export const TRANSFER_PENALTY_SECONDS = 180;
+
+const EMPTY_BREAKDOWN: EtaBreakdown = {
+  rideSeconds: 0,
+  dwellSeconds: 0,
+  transferWalkSeconds: 0,
+  transferWaitSeconds: 0,
+};
 
 // ── Mapeamento de status para penalidade ─────────────────────────
 const STATUS_WEIGHT: Record<LineStatus, number> = {
@@ -48,17 +73,17 @@ export class EtaEngine {
   compute(input: EtaInput): EtaOutput {
     const { route, lineStatuses } = input;
 
-    let totalSeconds = 0;
+    let rideSeconds = 0;
+    let dwellSeconds = 0;
+    let transferWalkSeconds = 0;
+    let transferWaitSeconds = 0;
     let routeDegraded = false;
     let maxPenalty = 1.0;
 
     for (const segment of route.segments) {
       const edge = segment.edge;
-
-      // ── Tempo base do segmento ────────────────────────────────
       const segmentSeconds = this.computeSegmentSeconds(edge);
 
-      // ── Penalidade da malha ───────────────────────────────────
       const lineId = this.extractLineId(edge);
       const status = lineId ? (lineStatuses[lineId] ?? "NORMAL") : "NORMAL";
       const weight = STATUS_WEIGHT[status];
@@ -71,6 +96,7 @@ export class EtaEngine {
           confidence: 0,
           routeDegraded: true,
           penaltyApplied: Infinity,
+          breakdown: EMPTY_BREAKDOWN,
         };
       }
 
@@ -79,12 +105,20 @@ export class EtaEngine {
         maxPenalty = Math.max(maxPenalty, weight);
       }
 
-      // ── Dwell time apenas em arestas TRACK ───────────────────
-      const dwellTime = edge.type === "TRACK" ? DWELL_TIME_SECONDS : 0;
-
-      totalSeconds += (segmentSeconds + dwellTime) * weight;
+      if (edge.type === "TRACK") {
+        rideSeconds += segmentSeconds * weight;
+        dwellSeconds += DWELL_TIME_SECONDS * weight;
+      } else if (edge.type === "TRANSFER") {
+        transferWalkSeconds += segmentSeconds * weight;
+        transferWaitSeconds += TRANSFER_PENALTY_SECONDS * weight;
+      } else {
+        // WALK — acesso de origem/destino, sem espera adicional
+        transferWalkSeconds += segmentSeconds * weight;
+      }
     }
 
+    const totalSeconds =
+      rideSeconds + dwellSeconds + transferWalkSeconds + transferWaitSeconds;
     const confidence = this.computeConfidence(maxPenalty, route.transferCount);
 
     return {
@@ -93,6 +127,12 @@ export class EtaEngine {
       confidence,
       routeDegraded,
       penaltyApplied: maxPenalty,
+      breakdown: {
+        rideSeconds: Math.round(rideSeconds),
+        dwellSeconds: Math.round(dwellSeconds),
+        transferWalkSeconds: Math.round(transferWalkSeconds),
+        transferWaitSeconds: Math.round(transferWaitSeconds),
+      },
     };
   }
 

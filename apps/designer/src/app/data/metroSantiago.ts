@@ -160,7 +160,7 @@ export const STATIONS: Record<string, StationMeta> = {
   // ── Linha 6 — Roxo #9B59B6 (Cerrillos→Los Leones) ───────────────────────────
   st_cerrillos:               { name: "Cerrillos",               x: 21, y: 73, lines: ["6"] },
   st_lo_valledor:             { name: "Lo Valledor",             x: 26, y: 69, lines: ["6"], efeIntegration: true },
-  st_pedro_aguirre_cerda:     { name: "Pedro Aguirre Cerda",     x: 31, y: 66, lines: ["6"] },
+  st_presidente_pedro_aguirre_cerda:     { name: "Pedro Aguirre Cerda",     x: 31, y: 66, lines: ["6"] },
   st_bio_bio:                 { name: "Bío Bío",                 x: 44, y: 59, lines: ["6"] },
   st_estadio_nacional:        { name: "Estadio Nacional",        x: 57, y: 60, lines: ["6"] },
   st_ines_de_suarez:          { name: "Inés de Suárez",          x: 60, y: 53, lines: ["6"] },
@@ -235,7 +235,7 @@ export const LINES: MetroLine[] = [
   {
     id: "6", name: "Línea 6", color: "#9B59B6",
     stations: [
-      "st_cerrillos","st_lo_valledor","st_pedro_aguirre_cerda","st_franklin",
+      "st_cerrillos","st_lo_valledor","st_presidente_pedro_aguirre_cerda","st_franklin",
       "st_bio_bio","st_nuble","st_estadio_nacional","st_nunoa",
       "st_ines_de_suarez","st_los_leones",
     ],
