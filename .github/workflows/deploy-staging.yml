@@ -1,0 +1,96 @@
+name: Deploy Staging (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write  # necessario para Workload Identity Federation
+
+env:
+  PROJECT_ID: project-d1495bcf-fa0b-400c-bdb
+  REGION: southamerica-east1
+  SERVICE_NAME: movia-backend-staging
+  ARTIFACT_REPOSITORY: movia-backend
+  IMAGE_NAME: movia-backend-staging
+
+jobs:
+  deploy-staging:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Revalida antes de deployar -- nunca deployar sem checar ──
+      - name: Backend build
+        run: pnpm --filter backend build
+
+      - name: Backend lint
+        run: pnpm --filter backend exec eslint src --ext .ts
+
+      - name: Backend tests
+        run: pnpm --filter backend exec jest --watchman=false --no-coverage
+
+      # ── Autenticacao via Workload Identity Federation ───────────
+      # Sem chave de longa duracao: o GitHub Actions troca seu token
+      # OIDC por uma credencial temporaria, restrita a este repositorio.
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Set image tag
+        run: echo "TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Build and push image
+        run: |
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}"
+          docker buildx build \
+            --platform linux/amd64 \
+            --file apps/backend/Dockerfile \
+            --tag "$IMAGE_URI" \
+            --push \
+            .
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --project ${{ env.PROJECT_ID }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --image "${{ env.IMAGE_URI }}" \
+            --allow-unauthenticated \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,GOOGLE_GEOCODING_API_KEY=GOOGLE_GEOCODING_API_KEY:latest,GOOGLE_PLACES_API_KEY=GOOGLE_PLACES_API_KEY:latest,METRICS_TOKEN=METRICS_TOKEN:latest" \
+            --set-env-vars "NODE_ENV=staging,PRIVACY_REGION=CL,PRIVACY_RESPONSE_SLA_DAYS=30,ALLOWED_ORIGINS=http://localhost:8081,CORS_ORIGIN=http://localhost:8081,ADDRESS_SEARCH_ENABLED=true,ADDRESS_SEARCH_CACHE_TTL_SECONDS=604800,ADDRESS_SEARCH_MAX_RESULTS=5,PLACES_SEARCH_ENABLED=true,PLACES_AUTOCOMPLETE_CACHE_TTL_SECONDS=300,PLACES_DETAILS_CACHE_TTL_SECONDS=604800,PLACES_MAX_RESULTS=5,PLACES_COUNTRY_CODE=CL,PLACES_LOCATION_BIAS_LAT=-33.4489,PLACES_LOCATION_BIAS_LNG=-70.6693,PLACES_LOCATION_BIAS_RADIUS_METERS=35000"
+
+      - name: Smoke test /health
+        run: |
+          SERVICE_URL="$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --project ${{ env.PROJECT_ID }} \
+            --region ${{ env.REGION }} \
+            --format='value(status.url)')"
+          curl --fail --silent --show-error "${SERVICE_URL}/health"
