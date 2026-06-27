@@ -52,7 +52,7 @@ describe('GooglePlacesClient', () => {
           },
         ],
       }),
-    });
+    } as unknown as Response);
 
     await expect(
       makeClient().autocomplete('costanera', 'session-1'),
@@ -100,7 +100,7 @@ describe('GooglePlacesClient', () => {
         location: { latitude: -33.4172, longitude: -70.6065 },
         types: ['shopping_mall'],
       }),
-    });
+    } as unknown as Response);
 
     await expect(
       makeClient().getDetails('place-1', 'session-1'),
@@ -127,7 +127,10 @@ describe('GooglePlacesClient', () => {
   });
 
   it('retorna vazio/null quando a API externa falha', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 500 });
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+    } as unknown as Response);
     const client = makeClient();
 
     await expect(client.autocomplete('costanera')).resolves.toEqual([]);
