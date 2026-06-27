@@ -62,37 +62,47 @@ jobs:
       - name: Dependency Audit
         run: pnpm audit --audit-level=high
 
-      # ── Step 3: Lint ──────────────────────────────────────────
+      # ── Step 3: Whitespace / Diff Hygiene ─────────────────────
+      - name: Git Diff Check
+        run: git diff --check
+
+      # ── Step 4: Lint ──────────────────────────────────────────
       - name: Lint Backend
         run: pnpm --filter backend exec eslint src --ext .ts
 
-      # ── Step 4: Typecheck ─────────────────────────────────────
+      - name: Lint Mobile
+        run: pnpm --filter mobile lint
+
+      # ── Step 5: Typecheck ─────────────────────────────────────
       - name: Typecheck Backend
         run: pnpm --filter backend exec tsc --noEmit
 
       - name: Typecheck Mobile
         run: pnpm --filter mobile exec tsc --noEmit
 
-      # ── Step 5: Unit Tests ────────────────────────────────────
-      - name: Unit Tests
+      # ── Step 6: Unit Tests ────────────────────────────────────
+      - name: Unit Tests Backend
         run: pnpm --filter backend exec jest --watchman=false --no-coverage
 
-      # ── Step 6: Build ─────────────────────────────────────────
+      - name: Unit Tests Mobile
+        run: pnpm --filter mobile exec jest --watchman=false --no-coverage
+
+      # ── Step 7: Build ─────────────────────────────────────────
       - name: Build Backend
         run: pnpm --filter backend build
 
-      # ── Step 7: Prisma Migrate ────────────────────────────────
+      # ── Step 8: Prisma Migrate ────────────────────────────────
       - name: Prisma Migrate
         run: pnpm --filter backend exec prisma migrate deploy
 
-      # ── Step 8: Seed ──────────────────────────────────────────
+      # ── Step 9: Seed ──────────────────────────────────────────
       - name: Seed Database
         run: pnpm --filter backend exec prisma db seed
 
-      # ── Step 9: Security Smoke Tests ─────────────────────────
+      # ── Step 10: Security Smoke Tests ────────────────────────
       - name: Security Smoke Tests
         run: pnpm --filter backend test:e2e
 
-      # ── Step 10: Docker Build Check ───────────────────────────
+      # ── Step 11: Docker Build Check ───────────────────────────
       - name: Docker Build Check
         run: docker build -f apps/backend/Dockerfile -t movia-backend:ci .
