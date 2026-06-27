@@ -33,6 +33,13 @@
 - Polling de localização durante viagem ativa: 10s → 5s.
 
 ### Fixed
+- Estação Tobalaba tinha coordenadas incorretas no banco de dados de
+  staging (~6km deslocada da posição real), causando zigue-zague visual
+  no mapa em qualquer rota que passasse por ela. Corrigido com UPDATE
+  direto no banco (AWS RDS), validado contra a fonte de verdade
+  (`packages/shared-data/src/network/stations.ts`, já correta) e
+  contra coordenadas reais da estação. Auditoria confirmou as outras
+  125 estações sem divergência entre fonte e banco.
 - Estação de baldeação desaparecia do `path` retornado pela API
   (afetava toda rota com transferência de linha, ex: Tobalaba, Los Héroes).
 - Consentimento de privacidade não era persistido de fato (só logado).
