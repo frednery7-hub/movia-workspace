@@ -1,0 +1,12 @@
+# Terraform state contém dados sensíveis — nunca versionar
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# tfvars reais (não o .example) podem conter valores sensíveis
+*.tfvars
+!*.tfvars.example
+
+crash.log
+crash.*.log
