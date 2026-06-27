@@ -1,4 +1,9 @@
-import { EtaEngine } from "../eta-engine.ts";
+import {
+  EtaEngine,
+  TRANSFER_WAIT_EXPECTED_SECONDS,
+  TRANSFER_WAIT_MAX_SECONDS,
+  TRANSFER_WAIT_MIN_SECONDS,
+} from "../eta-engine.ts";
 import type { RouteResult, RouteSegment, GraphNode } from "@movia/shared-types";
 
 function makeNode(id: string, stationId: string): GraphNode {
@@ -42,6 +47,76 @@ function makeRoute(segmentCount: number, lineId = "L1"): RouteResult {
     totalDurationSeconds: segmentCount * 90,
     totalDistanceMeters: segmentCount * 1000,
     transferCount: 0,
+    accessible: true,
+  };
+}
+
+function makeRouteWithTransfers(transferCount: number): RouteResult {
+  const segments: RouteSegment[] = [];
+  let cumulativeCost = 0;
+
+  segments.push({
+    edge: {
+      id: "track_start",
+      type: "TRACK",
+      fromNodeId: "node_start",
+      toNodeId: "node_before_transfer",
+      cost: 90,
+      accessible: true,
+      lineId: "L1",
+      direction: "INBOUND",
+      distanceMeters: 1000,
+      sequence: 0,
+      timeProfiles: [],
+    },
+    fromNode: makeNode("node_start", "st_start"),
+    toNode: makeNode("node_before_transfer", "st_transfer_0"),
+    cumulativeCost: (cumulativeCost += 90),
+  });
+
+  for (let i = 0; i < transferCount; i++) {
+    segments.push({
+      edge: {
+        id: `transfer_${i}`,
+        type: "TRANSFER",
+        fromNodeId: `transfer_from_${i}`,
+        toNodeId: `transfer_to_${i}`,
+        walkingSeconds: 120,
+        platformChange: true,
+        cost: 120,
+        accessible: true,
+      },
+      fromNode: makeNode(`transfer_from_${i}`, `st_transfer_${i}`),
+      toNode: makeNode(`transfer_to_${i}`, `st_transfer_${i}`),
+      cumulativeCost: (cumulativeCost += 120),
+    });
+  }
+
+  segments.push({
+    edge: {
+      id: "track_end",
+      type: "TRACK",
+      fromNodeId: "node_after_transfer",
+      toNodeId: "node_end",
+      cost: 90,
+      accessible: true,
+      lineId: "L2",
+      direction: "INBOUND",
+      distanceMeters: 1000,
+      sequence: 1,
+      timeProfiles: [],
+    },
+    fromNode: makeNode("node_after_transfer", "st_after_transfer"),
+    toNode: makeNode("node_end", "st_end"),
+    cumulativeCost: (cumulativeCost += 90),
+  });
+
+  return {
+    segments,
+    totalCost: cumulativeCost,
+    totalDurationSeconds: cumulativeCost,
+    totalDistanceMeters: 2000,
+    transferCount,
     accessible: true,
   };
 }
@@ -95,5 +170,46 @@ describe("EtaEngine", () => {
     const result = engine.compute({ route, lineStatuses: {} });
     expect(result.etaSeconds).toBe(0);
     expect(result.routeDegraded).toBe(false);
+  });
+
+  it("não soma espera de transferência em rota sem baldeação", () => {
+    const result = engine.compute({
+      route: makeRoute(2),
+      lineStatuses: { L1: "NORMAL" },
+    });
+
+    expect(result.breakdown.transferWaitSeconds).toBe(0);
+  });
+
+  it("soma 3 minutos de espera esperada para 1 baldeação", () => {
+    const result = engine.compute({
+      route: makeRouteWithTransfers(1),
+      lineStatuses: { L1: "NORMAL", L2: "NORMAL" },
+    });
+
+    expect(result.breakdown.transferWaitSeconds).toBe(
+      TRANSFER_WAIT_EXPECTED_SECONDS,
+    );
+    expect(result.breakdown.minTotalSeconds).toBe(
+      result.breakdown.totalSeconds -
+        TRANSFER_WAIT_EXPECTED_SECONDS +
+        TRANSFER_WAIT_MIN_SECONDS,
+    );
+    expect(result.breakdown.maxTotalSeconds).toBe(
+      result.breakdown.totalSeconds -
+        TRANSFER_WAIT_EXPECTED_SECONDS +
+        TRANSFER_WAIT_MAX_SECONDS,
+    );
+  });
+
+  it("soma 6 minutos de espera esperada para 2 baldeações", () => {
+    const result = engine.compute({
+      route: makeRouteWithTransfers(2),
+      lineStatuses: { L1: "NORMAL", L2: "NORMAL" },
+    });
+
+    expect(result.breakdown.transferWaitSeconds).toBe(
+      TRANSFER_WAIT_EXPECTED_SECONDS * 2,
+    );
   });
 });

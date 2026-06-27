@@ -17,6 +17,7 @@ import {
   EtaTiming,
   EtaPrediction,
   EtaRouteOption,
+  AlternativeRouteReason,
 } from './dto/enriched-eta-response.dto';
 import { LineStatus } from '@prisma/client';
 import { AiPrediction } from '../ai-engine/dto/prediction.dto';
@@ -143,6 +144,8 @@ export class EtaService implements OnModuleInit {
     };
 
     const etaBreakdown = this.buildEtaBreakdown(result.breakdown);
+    const routeDestinationStation =
+      await this.getRouteDestinationStation(destinationId);
 
     const now = Date.now();
     const arrivalTime = new Date(
@@ -163,6 +166,7 @@ export class EtaService implements OnModuleInit {
         lineStatuses,
         now,
         result.etaSeconds,
+        route,
       ),
     );
 
@@ -173,6 +177,11 @@ export class EtaService implements OnModuleInit {
 
     return {
       destination: destinationId,
+      requestedDestination: {
+        type: 'station',
+        label: routeDestinationStation.name,
+      },
+      routeDestinationStation,
       path,
       stationsCount: path.length,
       linesOnRoute,
@@ -187,24 +196,65 @@ export class EtaService implements OnModuleInit {
     };
   }
 
+  private async getRouteDestinationStation(destinationId: string): Promise<{
+    id: string;
+    name: string;
+    lineIds: string[];
+    distanceMeters: number;
+  }> {
+    const station = await this.prisma.station.findUnique({
+      where: { id: destinationId },
+      select: {
+        id: true,
+        name: true,
+        platforms: {
+          select: { lineId: true },
+          orderBy: { lineId: 'asc' },
+        },
+      },
+    });
+
+    return {
+      id: station?.id ?? destinationId,
+      name:
+        station?.name ?? this.stationsCache.get(destinationId) ?? destinationId,
+      lineIds: station
+        ? [...new Set(station.platforms.map((platform) => platform.lineId))]
+        : [],
+      distanceMeters: 0,
+    };
+  }
+
   private buildEtaBreakdown(breakdown: {
     rideSeconds: number;
     dwellSeconds: number;
     transferWalkSeconds: number;
     transferWaitSeconds: number;
+    totalSeconds?: number;
+    minTotalSeconds?: number;
+    maxTotalSeconds?: number;
   }) {
     const toMinutes = (seconds: number) => Math.round(seconds / 60);
+    const totalSeconds =
+      breakdown.totalSeconds ??
+      breakdown.rideSeconds +
+        breakdown.dwellSeconds +
+        breakdown.transferWalkSeconds +
+        breakdown.transferWaitSeconds;
     return {
       rideMinutes: toMinutes(breakdown.rideSeconds),
       dwellMinutes: toMinutes(breakdown.dwellSeconds),
       transferWalkMinutes: toMinutes(breakdown.transferWalkSeconds),
       transferWaitMinutes: toMinutes(breakdown.transferWaitSeconds),
-      totalMinutes: toMinutes(
-        breakdown.rideSeconds +
-          breakdown.dwellSeconds +
-          breakdown.transferWalkSeconds +
-          breakdown.transferWaitSeconds,
-      ),
+      totalMinutes: toMinutes(totalSeconds),
+      minTotalMinutes:
+        breakdown.minTotalSeconds === undefined
+          ? undefined
+          : toMinutes(breakdown.minTotalSeconds),
+      maxTotalMinutes:
+        breakdown.maxTotalSeconds === undefined
+          ? undefined
+          : toMinutes(breakdown.maxTotalSeconds),
     };
   }
 
@@ -238,6 +288,7 @@ export class EtaService implements OnModuleInit {
     lineStatuses: LineStatusMap,
     now: number,
     recommendedDurationSeconds: number,
+    recommendedRoute: NonNullable<ReturnType<RouteEngine['route']>>,
   ): EtaRouteOption {
     const result = this.etaEngine.compute({ route, lineStatuses });
     const stationIds: string[] = [];
@@ -267,6 +318,11 @@ export class EtaService implements OnModuleInit {
       0,
       Math.round((totalEstimatedSeconds - recommendedDurationSeconds) / 60),
     );
+    const walkMeters = this.getRouteWalkMeters(route);
+    const reasonCode =
+      type === 'alternative'
+        ? this.getAlternativeRouteReason(route, recommendedRoute, linesOnRoute)
+        : undefined;
 
     return {
       id:
@@ -274,25 +330,22 @@ export class EtaService implements OnModuleInit {
           ? 'recommended'
           : `alternative-${linesOnRoute.join('-')}`,
       type,
-      label: type === 'recommended' ? 'Ruta recomendada' : 'Ruta alternativa',
-      reason:
-        type === 'alternative'
-          ? route.transferCount === 0
-            ? 'Sin combinaciones'
-            : 'Recorrido por líneas diferentes'
-          : undefined,
+      label: type === 'recommended' ? 'recommended' : 'alternative',
+      reason: reasonCode,
+      reasonCode,
+      summary: reasonCode
+        ? {
+            reason: reasonCode,
+            differenceMinutes,
+            label: 'alternative',
+          }
+        : undefined,
       differenceLabel:
         type === 'alternative' && differenceMinutes > 0
           ? `+${differenceMinutes} min`
           : undefined,
       durationMinutes: Math.max(1, Math.round(totalEstimatedSeconds / 60)),
-      walkMeters: route.segments.reduce(
-        (sum, segment) =>
-          segment.edge.type === 'WALK'
-            ? sum + segment.edge.distanceMeters
-            : sum,
-        0,
-      ),
+      walkMeters,
       transfers: route.transferCount,
       path: stationIds.map((id, index) => ({
         id,
@@ -310,6 +363,39 @@ export class EtaService implements OnModuleInit {
       },
       arrivalTime: new Date(now + totalEstimatedSeconds * 1000).toISOString(),
     };
+  }
+
+  private getRouteWalkMeters(
+    route: NonNullable<ReturnType<RouteEngine['route']>>,
+  ): number {
+    return route.segments.reduce(
+      (sum, segment) =>
+        segment.edge.type === 'WALK' ? sum + segment.edge.distanceMeters : sum,
+      0,
+    );
+  }
+
+  private getAlternativeRouteReason(
+    route: NonNullable<ReturnType<RouteEngine['route']>>,
+    recommendedRoute: NonNullable<ReturnType<RouteEngine['route']>>,
+    linesOnRoute: string[],
+  ): AlternativeRouteReason {
+    const recommendedWalkMeters = this.getRouteWalkMeters(recommendedRoute);
+    if (this.getRouteWalkMeters(route) < recommendedWalkMeters)
+      return 'lessWalking';
+    if (route.transferCount < recommendedRoute.transferCount)
+      return 'fewerTransfers';
+
+    const recommendedLines = new Set(
+      recommendedRoute.segments
+        .filter((segment) => segment.edge.type === 'TRACK')
+        .map((segment) => segment.fromNode.lineId),
+    );
+    const usesDifferentLines =
+      linesOnRoute.some((lineId) => !recommendedLines.has(lineId)) ||
+      recommendedLines.size !== linesOnRoute.length;
+
+    return usesDifferentLines ? 'differentLines' : 'simplerRoute';
   }
 
   private buildPrediction(linesOnRoute: string[]): EtaPrediction {

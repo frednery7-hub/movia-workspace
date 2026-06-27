@@ -31,6 +31,9 @@ export interface EtaBreakdown {
   dwellSeconds: number;
   transferWalkSeconds: number;
   transferWaitSeconds: number;
+  totalSeconds: number;
+  minTotalSeconds?: number;
+  maxTotalSeconds?: number;
 }
 
 export interface EtaOutput {
@@ -53,13 +56,19 @@ const DEFAULT_SPEED_MS = 11.1; // ~40 km/h velocidade nominal metro
  * de roteamento, garantindo que a rota recomendada e o ETA exibido ao
  * usuario usem exatamente o mesmo modelo de penalidade de transferencia.
  */
-export const TRANSFER_PENALTY_SECONDS = 180;
+export const TRANSFER_WAIT_MIN_SECONDS = 60;
+export const TRANSFER_WAIT_MAX_SECONDS = 300;
+export const TRANSFER_WAIT_EXPECTED_SECONDS = 180;
+export const TRANSFER_PENALTY_SECONDS = TRANSFER_WAIT_EXPECTED_SECONDS;
 
 const EMPTY_BREAKDOWN: EtaBreakdown = {
   rideSeconds: 0,
   dwellSeconds: 0,
   transferWalkSeconds: 0,
   transferWaitSeconds: 0,
+  totalSeconds: 0,
+  minTotalSeconds: 0,
+  maxTotalSeconds: 0,
 };
 
 // ── Mapeamento de status para penalidade ─────────────────────────
@@ -77,6 +86,8 @@ export class EtaEngine {
     let dwellSeconds = 0;
     let transferWalkSeconds = 0;
     let transferWaitSeconds = 0;
+    let transferWaitMinSeconds = 0;
+    let transferWaitMaxSeconds = 0;
     let routeDegraded = false;
     let maxPenalty = 1.0;
 
@@ -110,7 +121,9 @@ export class EtaEngine {
         dwellSeconds += DWELL_TIME_SECONDS * weight;
       } else if (edge.type === "TRANSFER") {
         transferWalkSeconds += segmentSeconds * weight;
-        transferWaitSeconds += TRANSFER_PENALTY_SECONDS * weight;
+        transferWaitSeconds += TRANSFER_WAIT_EXPECTED_SECONDS * weight;
+        transferWaitMinSeconds += TRANSFER_WAIT_MIN_SECONDS * weight;
+        transferWaitMaxSeconds += TRANSFER_WAIT_MAX_SECONDS * weight;
       } else {
         // WALK — acesso de origem/destino, sem espera adicional
         transferWalkSeconds += segmentSeconds * weight;
@@ -119,6 +132,8 @@ export class EtaEngine {
 
     const totalSeconds =
       rideSeconds + dwellSeconds + transferWalkSeconds + transferWaitSeconds;
+    const totalWithoutExpectedWait =
+      rideSeconds + dwellSeconds + transferWalkSeconds;
     const confidence = this.computeConfidence(maxPenalty, route.transferCount);
 
     return {
@@ -132,6 +147,13 @@ export class EtaEngine {
         dwellSeconds: Math.round(dwellSeconds),
         transferWalkSeconds: Math.round(transferWalkSeconds),
         transferWaitSeconds: Math.round(transferWaitSeconds),
+        totalSeconds: Math.round(totalSeconds),
+        minTotalSeconds: Math.round(
+          totalWithoutExpectedWait + transferWaitMinSeconds,
+        ),
+        maxTotalSeconds: Math.round(
+          totalWithoutExpectedWait + transferWaitMaxSeconds,
+        ),
       },
     };
   }

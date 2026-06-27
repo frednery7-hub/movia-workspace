@@ -8,6 +8,7 @@ import { PlacesAutocompleteService } from './places/places-autocomplete.service'
 import { PlacesCacheService } from './places/places-cache.service';
 import { PlacesDetailsService } from './places/places-details.service';
 import { StationNearestService } from './station-nearest.service';
+import { RouteDestinationResolver } from './route-destination-resolver.service';
 
 @Module({
   controllers: [SearchController],
@@ -20,6 +21,8 @@ import { StationNearestService } from './station-nearest.service';
     PlacesCacheService,
     PlacesDetailsService,
     StationNearestService,
+    RouteDestinationResolver,
   ],
+  exports: [RouteDestinationResolver],
 })
 export class SearchModule {}
