@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, TextInput, FlatList, TouchableOpacity,
-  Modal, StyleSheet, ActivityIndicator,
+  View, Text, TextInput, SectionList, TouchableOpacity,
+  Modal, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,6 +46,22 @@ import { ExpressRouteBadge } from './ExpressRouteBadge';
 type StationLine = '1' | '2' | '3' | '4' | '4A' | '5' | '6';
 
 const VALID_LINES: StationLine[] = ['1', '2', '3', '4', '4A', '5', '6'];
+
+type SearchSectionType = 'recent' | 'stations' | 'places' | 'pois';
+
+type SearchResultItem =
+  | { kind: 'recent'; id: string; rankScore: number; item: SearchHistoryItem }
+  | { kind: 'station'; id: string; rankScore: number; station: StationResult; distanceMeters?: number; isNearby?: boolean }
+  | { kind: 'place'; id: string; rankScore: number; place: PlaceAutocompleteResult }
+  | { kind: 'address'; id: string; rankScore: number; address: AddressSearchResult }
+  | { kind: 'poi'; id: string; rankScore: number; poi: PointOfInterest };
+
+type SearchSection = {
+  title: string;
+  type: SearchSectionType;
+  data: SearchResultItem[];
+  isLoading?: boolean;
+};
 
 export type StationSearchSelectionOptions = {
   poiDestination?: ResolvedPoiDestination;
@@ -135,7 +151,8 @@ export function StationSearchModal({
   }, [visible]);
   const { data: allStations = [], isLoading: loadingAll } = useStations();
   const { data: searchResults = [], isFetching: loadingSearch } = useStationSearch(query);
-  const isLoading = loadingAll || loadingSearch;
+  const isInitialLoading = loadingAll && allStations.length === 0;
+  const hasQuery = query.trim().length > 0;
   const poiResults = useMemo(() => (
     enablePoiSearch && query.trim().length > 0 ? searchPois(query).slice(0, 6) : []
   ), [enablePoiSearch, query]);
@@ -231,9 +248,128 @@ export function StationSearchModal({
     return allStations.filter(
       s => normalize(s.name).includes(q) ||
         normalize(s.shortCode).includes(q) ||
-        (lineQuery ? (s.lines ?? []).some(line => line.replace(/^L/i, '').toUpperCase() === lineQuery) : false),
+      (lineQuery ? (s.lines ?? []).some(line => line.replace(/^L/i, '').toUpperCase() === lineQuery) : false),
     );
   }, [query, allStations, searchResults]);
+
+  function getStationRankScore(station: StationResult): number {
+    const q = normalize(query);
+    if (!q) return 500;
+    const stationName = normalize(station.name);
+    const shortCode = normalize(station.shortCode);
+    if (stationName === q || shortCode === q) return 1_000;
+    if (stationName.startsWith(q) || shortCode.startsWith(q)) return 900;
+    if (stationName.includes(q) || shortCode.includes(q)) return 750;
+    return 500;
+  }
+
+  const searchSections = useMemo<SearchSection[]>(() => {
+    const sections: SearchSection[] = [];
+    const stationIds = new Set<string>();
+    const stationData: SearchResultItem[] = [];
+
+    if (!hasQuery && recentStations.length > 0) {
+      sections.push({
+        title: t('search.recent'),
+        type: 'recent',
+        data: recentStations.map((item, index) => ({
+          kind: 'recent',
+          id: getHistoryKey(item),
+          item,
+          rankScore: 900 - index,
+        })),
+      });
+    }
+
+    if (!hasQuery) {
+      nearbyStations.slice(0, 3).forEach(({ station, distanceMeters }, index) => {
+        const freshStation = withFreshStationData(station);
+        stationIds.add(freshStation.id);
+        stationData.push({
+          kind: 'station',
+          id: `nearby:${freshStation.id}`,
+          station: freshStation,
+          distanceMeters,
+          isNearby: true,
+          rankScore: 850 - index,
+        });
+      });
+    }
+
+    filtered.forEach(station => {
+      if (stationIds.has(station.id)) return;
+      stationIds.add(station.id);
+      stationData.push({
+        kind: 'station',
+        id: `station:${station.id}`,
+        station,
+        rankScore: getStationRankScore(station),
+      });
+    });
+
+    if (stationData.length > 0 || loadingSearch) {
+      sections.push({
+        title: !hasQuery && (nearbyStations.length > 0 || recentStations.length > 0)
+          ? t('search.all_stations')
+          : t('search.all_stations'),
+        type: 'stations',
+        data: stationData.sort((a, b) => b.rankScore - a.rankScore),
+        isLoading: loadingSearch,
+      });
+    }
+
+    const placeAddressData: SearchResultItem[] = [
+      ...placeResults.map((place, index) => ({
+        kind: 'place' as const,
+        id: `place:${place.placeId}`,
+        place,
+        rankScore: 700 - index,
+      })),
+      ...addressResults.map((address, index) => ({
+        kind: 'address' as const,
+        id: `address:${address.id}`,
+        address,
+        rankScore: 680 - index,
+      })),
+    ].sort((a, b) => b.rankScore - a.rankScore);
+
+    if (hasQuery && query.trim().length >= 3 && (placesLoading || addressLoading || placeAddressData.length > 0)) {
+      sections.push({
+        title: t('search.places.section'),
+        type: 'places',
+        data: placeAddressData,
+        isLoading: placesLoading || addressLoading,
+      });
+    }
+
+    if (hasQuery && poiResults.length > 0) {
+      sections.push({
+        title: t('poi.nearbyPlaces'),
+        type: 'pois',
+        data: poiResults.map((poi, index) => ({
+          kind: 'poi',
+          id: `poi:${poi.id}`,
+          poi,
+          rankScore: 600 - index,
+        })),
+      });
+    }
+
+    return sections;
+  }, [
+    addressLoading,
+    addressResults,
+    filtered,
+    hasQuery,
+    loadingSearch,
+    nearbyStations,
+    placeResults,
+    placesLoading,
+    poiResults,
+    query,
+    recentStations,
+    t,
+  ]);
 
   function handleSelect(station: StationResult, options?: StationSearchSelectionOptions) {
     setQuery('');
@@ -532,9 +668,105 @@ export function StationSearchModal({
     );
   }
 
+  function renderStationResult(item: Extract<SearchResultItem, { kind: 'station' }>) {
+    const isSelected = selectedStation?.id === item.station.id;
+    return (
+      <TouchableOpacity
+        style={[
+          styles.stationItem,
+          isSelected && [styles.stationItemSelected, { backgroundColor: theme.colors.selectedSurface }],
+        ]}
+        onPress={() => handleSelect(item.station)}
+        activeOpacity={0.7}
+      >
+        <View style={item.isNearby ? styles.nearbyIcon : [styles.stationIcon, { backgroundColor: `${Colors.accentPrimary}22` }]}>
+          <Feather
+            name={isSelected ? 'check' : item.isNearby ? 'navigation' : 'map-pin'}
+            size={14}
+            color={item.isNearby ? '#1A73E8' : Colors.accentPrimary}
+          />
+        </View>
+        <View style={styles.stationInfo}>
+          <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{item.station.name}</Text>
+          <View style={styles.stationMeta}>
+            <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>
+              {item.distanceMeters !== undefined ? `${item.distanceMeters} m` : item.station.shortCode}
+            </Text>
+            {renderLineChips(item.station)}
+          </View>
+          {renderExpressRouteBadges(item.station)}
+        </View>
+        {isSelected ? (
+          <Text style={styles.selectedBadge}>{t('search.selected')}</Text>
+        ) : (
+          <Feather name="chevron-right" size={16} color={theme.colors.border} />
+        )}
+      </TouchableOpacity>
+    );
+  }
+
+  function renderRecentResult(item: Extract<SearchResultItem, { kind: 'recent' }>) {
+    const freshStation = withFreshStationData(item.item);
+    const displayName = item.item.displayName ?? item.item.name;
+    const historyLines = item.item.routeLineIds ? toStationLines(item.item.routeLineIds) : getStationLines(freshStation);
+    return (
+      <TouchableOpacity style={styles.stationItem} onPress={() => handleRecentSelect(item.item)} activeOpacity={0.7}>
+        <Feather name="clock" size={16} color={theme.colors.textTertiary} />
+        <View style={styles.stationInfo}>
+          <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{displayName}</Text>
+          <View style={styles.stationMeta}>
+            <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>
+              {item.item.itemType === 'poi' || item.item.itemType === 'address' || item.item.itemType === 'place'
+                ? `${t('search.recommendedStation')}: ${item.item.routeStationName ?? freshStation.name}`
+                : freshStation.shortCode}
+            </Text>
+            {renderLineChipsFromLines(historyLines)}
+          </View>
+          {item.item.itemType === 'poi' || item.item.itemType === 'place' ? null : renderExpressRouteBadges(freshStation)}
+        </View>
+        <TouchableOpacity
+          onPress={event => {
+            event.stopPropagation();
+            handleRemoveHistoryItem(item.item);
+          }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.removeRecentButton}
+          accessibilityLabel={t('search.removeRecent')}
+        >
+          <Feather name="x" size={16} color={theme.colors.textTertiary} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  }
+
+  function renderSearchItem({ item }: { item: SearchResultItem }) {
+    if (item.kind === 'recent') return renderRecentResult(item);
+    if (item.kind === 'station') return renderStationResult(item);
+    if (item.kind === 'place') return renderPlaceResult(item.place);
+    if (item.kind === 'address') return renderAddressResult(item.address);
+    return renderPoiResult(item.poi);
+  }
+
+  function renderSectionHeader({ section }: { section: SearchSection }) {
+    return (
+      <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{section.title}</Text>
+        {section.isLoading && <ActivityIndicator size="small" color={Colors.actionBlue} />}
+        {section.type === 'recent' && (
+          <TouchableOpacity onPress={handleClearHistory} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.clearText}>{t('search.clear')}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.surface }]}>
+      <KeyboardAvoidingView
+        style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.surface }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn}>
             <Feather name="arrow-left" size={22} color={theme.colors.textPrimary} />
@@ -575,151 +807,20 @@ export function StationSearchModal({
           </View>
         )}
 
-        {isLoading ? (
+        {isInitialLoading ? (
           <View style={styles.loading}>
             <ActivityIndicator color={Colors.accentPrimary} />
             <Text style={[styles.loadingText, { color: theme.colors.textTertiary }]}>{t("search.loading")}</Text>
           </View>
         ) : (
-          <>
-            {query.trim().length > 0 && poiResults.length > 0 && (
-              <>
-                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t('poi.nearbyPlaces')}</Text>
-                </View>
-                {poiResults.map(renderPoiResult)}
-              </>
-            )}
-            {query.trim().length >= 3 && (placesLoading || placeResults.length > 0) && (
-              <>
-                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>
-                    {placesLoading ? t('search.places.searching') : t('search.places.section')}
-                  </Text>
-                  {placesLoading && <ActivityIndicator size="small" color={Colors.actionBlue} />}
-                </View>
-                {placeResults.map(renderPlaceResult)}
-              </>
-            )}
-            {query.trim().length >= 3 && (addressLoading || addressResults.length > 0) && (
-              <>
-                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>
-                    {addressLoading ? t('search.address.searching') : t('search.address.nearestStation')}
-                  </Text>
-                  {addressLoading && <ActivityIndicator size="small" color={Colors.actionBlue} />}
-                </View>
-                {addressResults.map(renderAddressResult)}
-              </>
-            )}
-            {!query.trim() && nearbyStations.length > 0 && (
-              <>
-                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t('search.nearby')}</Text>
-                </View>
-                {nearbyStations.slice(0, 3).map(({ station, distanceMeters }) => {
-                  const freshStation = withFreshStationData(station);
-                  const isSelected = selectedStation?.id === freshStation.id;
-                  return (
-                    <TouchableOpacity
-                      key={`nearby-${freshStation.id}`}
-                      style={[
-                        styles.stationItem,
-                        isSelected && [styles.stationItemSelected, { backgroundColor: theme.colors.selectedSurface }],
-                      ]}
-                      onPress={() => handleSelect(freshStation)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.nearbyIcon}>
-                        <Feather name={isSelected ? "check" : "navigation"} size={14} color="#1A73E8" />
-                      </View>
-                      <View style={styles.stationInfo}>
-                        <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{freshStation.name}</Text>
-                        <View style={styles.stationMeta}>
-                          <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>{distanceMeters} m</Text>
-                          {renderLineChips(freshStation)}
-                        </View>
-                        {renderExpressRouteBadges(freshStation)}
-                      </View>
-                      {isSelected && <Text style={styles.selectedBadge}>{t('search.selected')}</Text>}
-                    </TouchableOpacity>
-                  );
-                })}
-              </>
-            )}
-            {!query.trim() && recentStations.length > 0 && (
-              <>
-                <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("search.recent")}</Text>
-                  <TouchableOpacity onPress={handleClearHistory} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={styles.clearText}>{t('search.clear')}</Text>
-                  </TouchableOpacity>
-                </View>
-                {recentStations.map(item => {
-                  const freshStation = withFreshStationData(item);
-                  const displayName = item.displayName ?? item.name;
-                  const historyLines = item.routeLineIds ? toStationLines(item.routeLineIds) : getStationLines(freshStation);
-                  return (
-                    <TouchableOpacity key={getHistoryKey(item)} style={styles.stationItem} onPress={() => handleRecentSelect(item)} activeOpacity={0.7}>
-                      <Feather name="clock" size={16} color={theme.colors.textTertiary} />
-                      <View style={styles.stationInfo}>
-                        <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{displayName}</Text>
-                        <View style={styles.stationMeta}>
-                          <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>
-                            {item.itemType === 'poi' || item.itemType === 'address' || item.itemType === 'place'
-                              ? `${t('search.recommendedStation')}: ${item.routeStationName ?? freshStation.name}`
-                              : freshStation.shortCode}
-                          </Text>
-                          {renderLineChipsFromLines(historyLines)}
-                        </View>
-                        {item.itemType === 'poi' || item.itemType === 'place' ? null : renderExpressRouteBadges(freshStation)}
-                      </View>
-                      <TouchableOpacity
-                        onPress={event => {
-                          event.stopPropagation();
-                          handleRemoveHistoryItem(item);
-                        }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        style={styles.removeRecentButton}
-                        accessibilityLabel={t('search.removeRecent')}
-                      >
-                        <Feather name="x" size={16} color={theme.colors.textTertiary} />
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  );
-                })}
-              </>
-            )}
-            {!query.trim() && (nearbyStations.length > 0 || recentStations.length > 0) && (
-              <View style={[styles.sectionHeader, { backgroundColor: theme.colors.surfaceMuted }]}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.textTertiary }]}>{t("search.all_stations")}</Text>
-              </View>
-            )}
-          <FlatList
-            data={filtered}
+          <SectionList
+            sections={searchSections}
             keyExtractor={item => item.id}
             keyboardShouldPersistTaps="handled"
             ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.stationItem}
-                onPress={() => handleSelect(item)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.stationIcon, { backgroundColor: `${Colors.accentPrimary}22` }]}>
-                  <Feather name="map-pin" size={14} color={Colors.accentPrimary} />
-                </View>
-                <View style={styles.stationInfo}>
-                  <Text style={[styles.stationName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
-                  <View style={styles.stationMeta}>
-                    <Text style={[styles.stationCode, { color: theme.colors.textTertiary }]}>{item.shortCode}</Text>
-                    {renderLineChips(item)}
-                  </View>
-                  {renderExpressRouteBadges(item)}
-                </View>
-                <Feather name="chevron-right" size={16} color={theme.colors.border} />
-              </TouchableOpacity>
-            )}
+            renderItem={renderSearchItem}
+            renderSectionHeader={renderSectionHeader}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 24 }}
             ListEmptyComponent={
               poiResults.length === 0 && placeResults.length === 0 && addressResults.length === 0 ? (
                 <View style={styles.empty}>
@@ -729,9 +830,8 @@ export function StationSearchModal({
               ) : null
             }
           />
-          </>
         )}
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

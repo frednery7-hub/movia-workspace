@@ -1,4 +1,4 @@
-import type { NavigationMode, TripStatus } from './activeTripState';
+import type { ActiveTripState, NavigationMode, TripStatus } from './activeTripState';
 
 export type ActiveTripProgressMode = 'estimated' | 'gps' | 'hybrid';
 
@@ -25,6 +25,22 @@ export type TripTimelineNotice =
   | { type: 'next'; stationName: string; remainingStations: number }
   | { type: 'remaining'; count: number };
 
+export type TimelineNoticeType =
+  | 'arrived'
+  | 'beforeDestination'
+  | 'beforeTransfer'
+  | 'transfer'
+  | 'nextStation'
+  | 'remainingStations';
+
+export type TimelineNotice = {
+  id: string;
+  type: TimelineNoticeType;
+  priority: number;
+  stationName?: string;
+  remainingStations?: number;
+};
+
 export function getTripTimelineNotice(params: {
   tripStatus: TripStatus;
   remainingStations: number;
@@ -47,6 +63,81 @@ export function getTripTimelineNotice(params: {
   if (params.remainingStations > 0) {
     return { type: 'remaining', count: params.remainingStations };
   }
+  return null;
+}
+
+export function getActiveTimelineNotice(state: ActiveTripState): TimelineNotice | null {
+  const currentIndex = state.currentStationIndex;
+  const destinationIndex = state.orderedRoutePath.length - 1;
+
+  if (state.tripStatus === 'arrived' || (currentIndex !== null && currentIndex >= destinationIndex)) {
+    return {
+      id: `${state.routeId}:arrived:${state.destinationStation.id}`,
+      type: 'arrived',
+      priority: 100,
+      stationName: state.destinationStation.name,
+    };
+  }
+
+  if (state.tripStatus !== 'active') return null;
+
+  const nextIndex = currentIndex === null ? 0 : currentIndex + 1;
+  const nextStation = state.orderedRoutePath[nextIndex] ?? null;
+  const remainingStations = Math.max(0, state.orderedRoutePath.length - (currentIndex === null ? 0 : currentIndex + 1));
+
+  if (currentIndex !== null && currentIndex === destinationIndex - 1) {
+    return {
+      id: `${state.routeId}:before-destination:${state.destinationStation.id}`,
+      type: 'beforeDestination',
+      priority: 90,
+      stationName: state.destinationStation.name,
+      remainingStations,
+    };
+  }
+
+  const transferAtCurrent = currentIndex === null
+    ? null
+    : state.transferPoints.find(transferPoint => transferPoint.index === currentIndex);
+  if (transferAtCurrent) {
+    return {
+      id: `${state.routeId}:transfer:${transferAtCurrent.stationId}`,
+      type: 'transfer',
+      priority: 70,
+      stationName: transferAtCurrent.stationName,
+      remainingStations,
+    };
+  }
+
+  const transferAtNext = state.transferPoints.find(transferPoint => transferPoint.index === nextIndex);
+  if (transferAtNext) {
+    return {
+      id: `${state.routeId}:before-transfer:${transferAtNext.stationId}`,
+      type: 'beforeTransfer',
+      priority: 80,
+      stationName: transferAtNext.stationName,
+      remainingStations,
+    };
+  }
+
+  if (nextStation) {
+    return {
+      id: `${state.routeId}:next:${nextStation.id}:${nextIndex}`,
+      type: 'nextStation',
+      priority: 60,
+      stationName: nextStation.name,
+      remainingStations,
+    };
+  }
+
+  if (remainingStations > 0) {
+    return {
+      id: `${state.routeId}:remaining:${remainingStations}`,
+      type: 'remainingStations',
+      priority: 50,
+      remainingStations,
+    };
+  }
+
   return null;
 }
 

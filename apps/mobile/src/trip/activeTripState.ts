@@ -13,6 +13,16 @@ export type StationProgressState =
   | 'approaching-next-station'
   | 'at-station';
 
+export type ActiveTripPhase =
+  | 'notStarted'
+  | 'onTrain'
+  | 'approachingTransfer'
+  | 'transfer'
+  | 'waitingNextTrain'
+  | 'onNextLine'
+  | 'approachingDestination'
+  | 'arrived';
+
 export type NavigationMode =
   | 'normal'
   | 'gps-unstable'
@@ -59,6 +69,7 @@ export type ActiveTripState = {
   nextLine: MetroLineId | null;
   directionTerminal: string | null;
   transferPoints: TransferPoint[];
+  phase: ActiveTripPhase;
   navigationMode: NavigationMode;
   sentNotifications: SentTripNotifications;
   expressRoute: ExpressRouteState | null;
@@ -147,6 +158,12 @@ export function buildActiveTripState(
       transferPoints,
     ),
     transferPoints,
+    phase: deriveActiveTripPhase({
+      tripStatus: input.tripStatus,
+      orderedRoutePath,
+      currentStationIndex,
+      transferPoints,
+    }),
     navigationMode: input.navigationMode,
     sentNotifications: {
       ...EMPTY_SENT_TRIP_NOTIFICATIONS,
@@ -262,6 +279,49 @@ export function shouldAutoStartTracking(params: {
   return false;
 }
 
+export function deriveActiveTripPhase(params: {
+  tripStatus: TripStatus;
+  orderedRoutePath: readonly unknown[];
+  currentStationIndex: number | null;
+  transferPoints: readonly TransferPoint[];
+}): ActiveTripPhase {
+  if (params.tripStatus === 'arrived' || params.tripStatus === 'ended') {
+    return 'arrived';
+  }
+  if (params.tripStatus !== 'active' || params.currentStationIndex === null) {
+    return 'notStarted';
+  }
+
+  const currentStationIndex = params.currentStationIndex;
+  const destinationIndex = params.orderedRoutePath.length - 1;
+  if (currentStationIndex >= destinationIndex) return 'arrived';
+  if (currentStationIndex === destinationIndex - 1) {
+    return 'approachingDestination';
+  }
+
+  const upcomingTransfer = params.transferPoints.find(
+    transferPoint => transferPoint.index === currentStationIndex + 1,
+  );
+  if (upcomingTransfer) return 'approachingTransfer';
+
+  const currentTransfer = params.transferPoints.find(
+    transferPoint => transferPoint.index === currentStationIndex,
+  );
+  if (currentTransfer) return 'transfer';
+
+  const justChangedLine = params.transferPoints.find(
+    transferPoint => transferPoint.index + 1 === currentStationIndex,
+  );
+  if (justChangedLine) return 'waitingNextTrain';
+
+  const hasCompletedTransfer = params.transferPoints.some(
+    transferPoint => transferPoint.index + 1 < currentStationIndex,
+  );
+  if (hasCompletedTransfer) return 'onNextLine';
+
+  return 'onTrain';
+}
+
 export function deriveStationProgress(params: {
   tripStatus: TripStatus;
   currentStationIndex: number | null;
@@ -326,6 +386,20 @@ export function deriveStationProgress(params: {
     visualFocusedStationIndex: params.currentStationIndex,
     confirmedStationIndex: params.currentStationIndex,
   };
+}
+
+export function buildOneBeforeTransferNoticeId(
+  routeId: string,
+  transferStationId: string,
+): string {
+  return `transfer-before:${routeId}:${transferStationId}`;
+}
+
+export function buildOneBeforeDestinationNoticeId(
+  routeId: string,
+  destinationStationId: string,
+): string {
+  return `destination-before:${routeId}:${destinationStationId}`;
 }
 
 export function shouldNotifyStationArrival(state: ActiveTripState): boolean {

@@ -16,9 +16,8 @@ import { getVisibleExpressRouteState, type ExpressRouteState } from '../../data/
 import type { EtaRouteOption } from '../../hooks/useEta';
 import type { StationAccess } from '../../poi/types';
 import {
-  getTripTimelineNotice,
   type ActiveTripProgress,
-  type TripTimelineNotice,
+  type TimelineNotice,
 } from '../../trip/tripProgress';
 
 export interface Station {
@@ -47,6 +46,7 @@ interface NavigationProgressProps {
   tripProgress?: ActiveTripProgress | null;
   originAccess?: StationAccess | null;
   destinationAccess?: StationAccess | null;
+  timelineNotice?: TimelineNotice | null;
   alternativeRoute?: EtaRouteOption | null;
   showingAlternative?: boolean;
   onSelectAlternative?: () => void;
@@ -63,26 +63,40 @@ const SHEET_HEIGHTS: Record<SheetState, number> = {
   expanded: Math.round(SCREEN_HEIGHT * 0.86),
 };
 
-function getNoticeIcon(notice: TripTimelineNotice): React.ComponentProps<typeof Feather>['name'] {
+function getNoticeIcon(notice: TimelineNotice): React.ComponentProps<typeof Feather>['name'] {
   if (notice.type === 'arrived') return 'check-circle';
-  if (notice.type === 'before-destination') return 'flag';
+  if (notice.type === 'beforeDestination') return 'flag';
+  if (notice.type === 'beforeTransfer') return 'repeat';
   if (notice.type === 'transfer') return 'repeat';
   return 'navigation';
 }
 
 function getNoticeText(
-  notice: TripTimelineNotice,
+  notice: TimelineNotice,
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
   if (notice.type === 'arrived') return t('trip.arrived_destination');
-  if (notice.type === 'before-destination') return t('navigation.before_destination');
-  if (notice.type === 'transfer') {
+  if (notice.type === 'beforeDestination') return t('navigation.before_destination');
+  if (notice.type === 'beforeTransfer' && notice.stationName) {
     return t('navigation.prepare_transfer', { station: notice.stationName });
   }
-  if (notice.type === 'next') {
-    return `${t('navigation.next')}: ${notice.stationName} · ${t('navigation.remaining_stations', { count: notice.remainingStations })}`;
+  if (notice.type === 'transfer') {
+    return notice.stationName
+      ? t('navigation.transfer_here_station', { station: notice.stationName })
+      : t('navigation.transfer_here');
   }
-  return t('navigation.remaining_stations', { count: notice.count });
+  if (notice.type === 'nextStation' && notice.stationName) {
+    return `${t('navigation.next_station')}: ${notice.stationName}${notice.remainingStations === undefined ? '' : ` · ${t('navigation.remaining_stations', { count: notice.remainingStations })}`}`;
+  }
+  return t('navigation.remaining_stations', { count: notice.remainingStations ?? 0 });
+}
+
+function getAlternativeReasonText(
+  route: EtaRouteOption,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string | undefined {
+  const reason = route.reasonCode ?? route.summary?.reason;
+  return reason ? t(`navigation.alternative.reason.${reason}`) : route.reason;
 }
 
 export function NavigationProgress({
@@ -90,6 +104,7 @@ export function NavigationProgress({
   stations, currentLine, currentDirection, navigationConfidenceLabel, navigationConfidenceColor,
   tripStatus, stationProgressState = 'between-stations', currentStationDistanceMeters = null,
   tripProgress = null, originAccess = null, destinationAccess = null,
+  timelineNotice = null,
   alternativeRoute = null, showingAlternative = false,
   onSelectAlternative, onSelectRecommended, onClose,
 }: NavigationProgressProps) {
@@ -125,13 +140,7 @@ export function NavigationProgress({
   const isPreview = tripStatus === 'preview';
   const isCompact = sheetState === 'compact';
   const isExpanded = sheetState === 'expanded';
-  const nextTransferStation = nextStation?.transfer ? nextStation.name : undefined;
-  const timelineNotice = getTripTimelineNotice({
-    tripStatus,
-    remainingStations: tripProgress?.remainingStations ?? Math.max(0, stations.length - Math.max(currentIndex, 0) - 1),
-    nextStationName: nextStation?.name,
-    nextTransferStationName: nextTransferStation,
-  });
+  const alternativeReasonText = alternativeRoute ? getAlternativeReasonText(alternativeRoute, t) : undefined;
 
   useEffect(() => {
     Animated.loop(
@@ -262,7 +271,7 @@ export function NavigationProgress({
             </Text>
             <Animated.Text style={[styles.compactUpdated, { color: theme.colors.textTertiary, opacity: contentOpacity }]} numberOfLines={2}>
               {hasArrived ? `${t('trip.arrived_destination')}\n${destination}` : approachingText ?? (currentDirection ? `L${currentLine} · ${t('direction')} ${currentDirection}` : navigationConfidenceLabel)}
-              {!hasArrived && (nextStation ? `\n${t('navigation.next')}: ${nextStation.name}` : `\n${t('eta.arrives')} ${arrivalTime}`)}
+              {!hasArrived && (nextStation ? `\n${t('navigation.next_station')}: ${nextStation.name}` : `\n${t('eta.arrives')} ${arrivalTime}`)}
             </Animated.Text>
           </View>
           <Feather name="chevron-up" size={18} color={Colors.textTertiary} />
@@ -313,12 +322,12 @@ export function NavigationProgress({
       {!isCompact && !isExpanded && (
         <Animated.View style={[styles.nextPanel, { backgroundColor: theme.colors.surfaceMuted, opacity: contentOpacity }]}>
           <View style={styles.nextColumn}>
-            <Text style={[styles.nextLabel, { color: theme.colors.textTertiary }]}>{hasArrived ? t('trip.completed') : isPreview ? t('trip.preview') : isApproaching ? t('navigation.approaching') : hasCurrentStation ? t('navigation.you_are_here') : navigationConfidenceLabel}</Text>
+            <Text style={[styles.nextLabel, { color: theme.colors.textTertiary }]}>{hasArrived ? t('trip.completed') : isPreview ? t('navigation.origin') : isApproaching ? t('navigation.approaching') : hasCurrentStation ? t('navigation.current_station') : navigationConfidenceLabel}</Text>
             <Text style={[styles.nextStationName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{isApproaching ? nextStation?.name : hasCurrentStation ? currentStation?.name : origin}</Text>
           </View>
           {!hasArrived && (
             <View style={styles.nextColumn}>
-              <Text style={[styles.nextLabel, { color: theme.colors.textTertiary }]}>{t('navigation.next')}</Text>
+              <Text style={[styles.nextLabel, { color: theme.colors.textTertiary }]}>{t('navigation.next_station')}</Text>
               <Text style={[styles.nextStationName, { color: theme.colors.textPrimary }]} numberOfLines={1}>{nextStation?.name ?? destination}</Text>
             </View>
           )}
@@ -355,7 +364,7 @@ export function NavigationProgress({
           <View style={styles.alternativeCopy}>
             <Text style={[styles.alternativeTitle, { color: theme.colors.textPrimary }]}>{t('navigation.alternative_available')}</Text>
             <Text style={[styles.alternativeReason, { color: theme.colors.textTertiary }]} numberOfLines={1}>
-              {[alternativeRoute.reason, alternativeRoute.differenceLabel].filter(Boolean).join(' · ')}
+              {[alternativeReasonText, alternativeRoute.differenceLabel].filter(Boolean).join(' · ')}
             </Text>
           </View>
           <Text style={[styles.alternativeAction, { color: lineColor }]}>{t('navigation.view_alternative')}</Text>

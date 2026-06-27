@@ -41,8 +41,12 @@ import {
   buildActiveTripState,
   deriveStationProgress,
   EMPTY_SENT_TRIP_NOTIFICATIONS,
+  buildOneBeforeDestinationNoticeId,
+  buildOneBeforeTransferNoticeId,
+  markOneBeforeTransferSent,
   markOneBeforeDestinationSent,
   markStationArrivalSent,
+  shouldNotifyOneBeforeTransfer,
   shouldNotifyOneBeforeDestination,
   shouldNotifyStationArrival,
   shouldAutoStartTracking,
@@ -68,7 +72,22 @@ import type { ResolvedAddressDestination } from '../src/search/address/addressSe
 import type { ResolvedPlaceDestination } from '../src/search/places/placesSearchTypes';
 import { ConsentService } from '../src/privacy/consent.service';
 import { PermissionExplainerModal } from '../src/components/movia/PermissionExplainerModal';
-import { buildActiveTripProgress } from '../src/trip/tripProgress';
+import { buildActiveTripProgress, getActiveTimelineNotice } from '../src/trip/tripProgress';
+import {
+  getAudioSafetyReminderState,
+  markAudioSafetyReminderShown,
+  shouldShowAudioSafetyReminder,
+} from '../src/safety/audioSafetyReminder';
+import {
+  clearActiveTripCache,
+  createActiveTripCache,
+  hasActiveTripNoticeFired,
+  markActiveTripNoticeFired,
+  recalculateProgressClockFromCache,
+  saveActiveTripCache,
+  updateActiveTripCache,
+  type ActiveTripCache,
+} from '../src/trip/activeTripCache';
 import { getAccessesForStation } from '../src/poi/search/getAccessesForStation';
 
 const { width, height } = Dimensions.get('window');
@@ -81,6 +100,7 @@ const SANTIAGO_DEFAULT = {
 const SANTIAGO_CENTER = { latitude: -33.4372, longitude: -70.6344 };
 const SANTIAGO_RADIUS_METERS = 35_000;
 const NEARBY_STATION_RADIUS_METERS = 500;
+const ACTIVE_STATION_SYNC_INTERVAL_MS = 5_000;
 const NEARBY_SUGGESTION_RADIUS_METERS = 2_000;
 
 const HAS_GOOGLE_MAPS_KEY = Boolean(
@@ -187,7 +207,7 @@ function getIncidentDescription(incident: MetroIncident, locale: SupportedLocale
 function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: SupportedLocale): string {
   const labels: Record<SupportedLocale, Record<NavigationConfidenceMode, string>> = {
     'pt-BR': {
-      normal: 'Navegação normal',
+      normal: 'Operação normal',
       'gps-unstable': 'Sinal instável',
       hybrid: 'Modo híbrido',
       approximate: 'Estimativa aproximada',
@@ -196,7 +216,7 @@ function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: Su
       error: 'Rota perdida',
     },
     'es-CL': {
-      normal: 'Navegación normal',
+      normal: 'Operación normal',
       'gps-unstable': 'Señal inestable',
       hybrid: 'Modo híbrido',
       approximate: 'Estimación aproximada',
@@ -205,7 +225,7 @@ function getNavigationConfidenceLabel(mode: NavigationConfidenceMode, locale: Su
       error: 'Ruta perdida',
     },
     'en-US': {
-      normal: 'Normal navigation',
+      normal: 'Normal operation',
       'gps-unstable': 'Unstable signal',
       hybrid: 'Hybrid mode',
       approximate: 'Approximate estimate',
@@ -273,9 +293,12 @@ export default function HomeScreen() {
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState('recommended');
   const [showLocationPermission, setShowLocationPermission] = useState(false);
   const [showNotificationPermission, setShowNotificationPermission] = useState(false);
+  const [showAudioSafetyReminder, setShowAudioSafetyReminder] = useState(false);
   const [progressClock, setProgressClock] = useState(() => Date.now());
   const activeStationIdRef = useRef<string | null>(null);
   const routeStartedAtRef = useRef(Date.now());
+  const activeTripCacheRef = useRef<ActiveTripCache | null>(null);
+  const noticeBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const promptOpacity = useRef(new Animated.Value(0)).current;
   const promptTranslateY = useRef(new Animated.Value(8)).current;
 
@@ -403,7 +426,26 @@ export default function HomeScreen() {
       estimatedArrivalTime: etaData.arrivalTime,
     })
     : null;
+  const timelineNotice = activeTripState ? getActiveTimelineNotice(activeTripState) : null;
   const alternativeRoute = etaResponse?.routes?.find(route => route.type === 'alternative') ?? null;
+
+  useEffect(() => {
+    if (!activeTripState || !tripProgress || !etaData || tripStatus !== 'active') return;
+
+    const previousCache = activeTripCacheRef.current;
+    activeTripCacheRef.current = previousCache?.routeId === activeTripState.routeId
+      ? updateActiveTripCache(previousCache, {
+        routeSnapshot: etaData,
+        progressState: tripProgress,
+        phase: activeTripState.phase,
+      })
+      : createActiveTripCache({
+        routeId: activeTripState.routeId,
+        routeSnapshot: etaData,
+        progressState: tripProgress,
+        phase: activeTripState.phase,
+      });
+  }, [activeTripState?.routeId, activeTripState?.phase, etaData, tripProgress, tripStatus]);
 
   function applyTripStatusTransition(nextStatus: TripStatus) {
     setTripStatus(currentStatus => (
@@ -430,6 +472,17 @@ export default function HomeScreen() {
     setNavigationConfidenceMode(nextTripState.navigationMode);
     applyTripStatusTransition(nextTripState.tripStatus);
 
+  }
+
+  function showTransientRouteBanner(message: string) {
+    setArrivalBanner(message);
+    if (noticeBannerTimerRef.current) {
+      clearTimeout(noticeBannerTimerRef.current);
+    }
+    noticeBannerTimerRef.current = setTimeout(() => {
+      setArrivalBanner(null);
+      noticeBannerTimerRef.current = null;
+    }, 4500);
   }
 
   // TODO(active-trip-state): remover estado paralelo
@@ -568,6 +621,27 @@ export default function HomeScreen() {
     return () => sub.remove();
   }, []);
 
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      const cache = activeTripCacheRef.current;
+      if (!cache) return;
+
+      if (state === 'background' || state === 'inactive') {
+        saveActiveTripCache(cache).catch(() => undefined);
+        return;
+      }
+
+      if (state === 'active' && cache.routeId === activeTripState?.routeId) {
+        routeStartedAtRef.current = recalculateProgressClockFromCache({
+          routeStartedAtMs: routeStartedAtRef.current,
+          cachedAt: cache.lastUpdatedAt,
+        });
+        setProgressClock(Date.now());
+      }
+    });
+    return () => sub.remove();
+  }, [activeTripState?.routeId]);
+
   // Boot: idioma + GPS
   useEffect(() => {
     TripNotificationService.configure();
@@ -576,11 +650,21 @@ export default function HomeScreen() {
       Animated.timing(promptOpacity, { toValue: 1, duration: 560, delay: 180, useNativeDriver: true }),
       Animated.timing(promptTranslateY, { toValue: 0, duration: 560, delay: 180, useNativeDriver: true }),
     ]).start();
+    return () => {
+      if (noticeBannerTimerRef.current) {
+        clearTimeout(noticeBannerTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
     setSentNotifications(EMPTY_SENT_TRIP_NOTIFICATIONS);
     activeStationIdRef.current = null;
+    activeTripCacheRef.current = null;
+    if (noticeBannerTimerRef.current) {
+      clearTimeout(noticeBannerTimerRef.current);
+      noticeBannerTimerRef.current = null;
+    }
     setCurrentTrackedStationIndex(null);
     setVisualFocusedStationIndex(0);
     setArrivalBanner(null);
@@ -590,6 +674,9 @@ export default function HomeScreen() {
     applyTripStatusTransition(routeKey ? 'preview' : 'ended');
     routeStartedAtRef.current = Date.now();
     setProgressClock(Date.now());
+    if (!routeKey) {
+      clearActiveTripCache().catch(() => undefined);
+    }
   }, [routeKey]);
 
   useEffect(() => {
@@ -617,6 +704,24 @@ export default function HomeScreen() {
     });
     return () => { cancelled = true; };
   }, [tripStatus]);
+
+  useEffect(() => {
+    if (tripStatus !== 'active') return;
+    let cancelled = false;
+    getAudioSafetyReminderState()
+      .then(state => {
+        if (!cancelled && shouldShowAudioSafetyReminder(state)) {
+          setShowAudioSafetyReminder(true);
+        }
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [tripStatus]);
+
+  async function handleDismissAudioSafetyReminder() {
+    setShowAudioSafetyReminder(false);
+    await markAudioSafetyReminderShown();
+  }
 
   useEffect(() => {
     if (
@@ -768,23 +873,75 @@ export default function HomeScreen() {
         tripStatus,
       });
 
-      if (
-        shouldNotifyOneBeforeDestination(notificationTripState) &&
-        (await ConsentService.canUseNotifications())
-      ) {
-        try {
-          await TripNotificationService.notifyNextStation(
-            translate('notification.next_station.title', locale),
-            `${translate('notification.next_station.body', locale)} ${routeDestination.name}.`,
+      const pendingTransferNotice = notificationTripState.transferPoints.find(
+        transferPoint => shouldNotifyOneBeforeTransfer(notificationTripState, transferPoint),
+      );
+      if (pendingTransferNotice) {
+        const noticeId = buildOneBeforeTransferNoticeId(
+          notificationTripState.routeId,
+          pendingTransferNotice.stationId,
+        );
+        const hasFired = hasActiveTripNoticeFired(activeTripCacheRef.current, noticeId);
+        if (!hasFired) {
+          const transferBody = `${translate('notification.transfer.prepare_body', locale)} ${pendingTransferNotice.stationName}. ${translate('navigation.take_line', locale)} ${toLineNumber(pendingTransferNotice.toLine)}${pendingTransferNotice.directionTerminal ? ` · ${translate('direction', locale)} ${pendingTransferNotice.directionTerminal}` : ''}.`;
+          showTransientRouteBanner(transferBody);
+          if (await ConsentService.canUseNotifications()) {
+            try {
+              await TripNotificationService.notifyNextStation(
+                translate('notification.transfer.prepare_title', locale),
+                transferBody,
+              );
+            } catch {
+              // Falha de notificação não dispara retry automático nesta viagem.
+            }
+          }
+
+          notificationTripState = markOneBeforeTransferSent(
+            notificationTripState,
+            pendingTransferNotice.stationId,
           );
-        } catch {
-          // Falha de notificação não dispara retry automático nesta viagem.
-        } finally {
+          setSentNotifications(notificationTripState.sentNotifications);
+          if (activeTripCacheRef.current) {
+            activeTripCacheRef.current = markActiveTripNoticeFired(
+              activeTripCacheRef.current,
+              noticeId,
+            );
+          }
+        }
+      }
+
+      if (
+        shouldNotifyOneBeforeDestination(notificationTripState)
+      ) {
+        const noticeId = buildOneBeforeDestinationNoticeId(
+          notificationTripState.routeId,
+          notificationTripState.destinationStation.id,
+        );
+        const hasFired = hasActiveTripNoticeFired(activeTripCacheRef.current, noticeId);
+        if (!hasFired) {
+          const destinationBody = `${translate('notification.next_station.body', locale)} ${routeDestination.name}.`;
+          showTransientRouteBanner(destinationBody);
+          if (await ConsentService.canUseNotifications()) {
+            try {
+              await TripNotificationService.notifyNextStation(
+                translate('notification.next_station.title', locale),
+                destinationBody,
+              );
+            } catch {
+              // Falha de notificação não dispara retry automático nesta viagem.
+            }
+          }
           notificationTripState = markOneBeforeDestinationSent(notificationTripState);
           // Marcação em finally garante execução independente de sucesso ou falha.
           // Sem retry automático dentro da mesma viagem.
           // Trade-off aceito: notificação pode ser perdida, nunca duplicada.
           setSentNotifications(notificationTripState.sentNotifications);
+          if (activeTripCacheRef.current) {
+            activeTripCacheRef.current = markActiveTripNoticeFired(
+              activeTripCacheRef.current,
+              noticeId,
+            );
+          }
         }
       }
     }
@@ -798,7 +955,7 @@ export default function HomeScreen() {
 
     const timer = setInterval(
       syncActiveStation,
-      getLocationMemoryCacheTtlForTripStatus('active') + 250,
+      ACTIVE_STATION_SYNC_INTERVAL_MS,
     );
 
     return () => {
@@ -1136,6 +1293,12 @@ export default function HomeScreen() {
 
   function handleCloseNavigation() {
     if (routeKey) TripNotificationService.endActiveTrip(routeKey).catch(() => undefined);
+    activeTripCacheRef.current = null;
+    if (noticeBannerTimerRef.current) {
+      clearTimeout(noticeBannerTimerRef.current);
+      noticeBannerTimerRef.current = null;
+    }
+    clearActiveTripCache().catch(() => undefined);
     setDestination(null);
     setDestinationDisplayName(null);
     setCurrentTrackedStationIndex(null);
@@ -1256,6 +1419,39 @@ export default function HomeScreen() {
         </View>
       )}
 
+      {showAudioSafetyReminder && screen === 'navigating' && (
+        <View style={[
+          styles.safetyReminder,
+          {
+            top: insets.top + (arrivalBanner ? 178 : 116),
+            backgroundColor: theme.colors.surfaceElevated,
+            borderColor: theme.colors.borderSubtle,
+            shadowColor: theme.colors.shadow,
+          },
+        ]}>
+          <View style={[styles.safetyReminderIcon, { backgroundColor: `${Colors.actionBlue}18` }]}>
+            <Feather name="volume-2" size={15} color={Colors.actionBlue} />
+          </View>
+          <View style={styles.safetyReminderCopy}>
+            <Text style={[styles.safetyReminderTitle, { color: theme.colors.textPrimary }]}>
+              {translate('safety.audio.title', locale)}
+            </Text>
+            <Text style={[styles.safetyReminderText, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+              {translate('safety.audio.body', locale)}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.safetyReminderButton, { borderColor: theme.colors.border }]}
+            onPress={() => { void handleDismissAudioSafetyReminder(); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.safetyReminderButtonText, { color: Colors.actionBlue }]}>
+              {translate('common.understood', locale)}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <TouchableOpacity
         accessibilityLabel="Centralizar no usuario"
         activeOpacity={0.82}
@@ -1313,6 +1509,7 @@ export default function HomeScreen() {
           tripProgress={tripProgress}
           originAccess={originAccess}
           destinationAccess={destinationAccess}
+          timelineNotice={timelineNotice}
           alternativeRoute={selectedRouteOptionId === 'recommended' ? alternativeRoute : null}
           showingAlternative={selectedRouteOptionId !== 'recommended'}
           onSelectAlternative={handleSelectAlternativeRoute}
@@ -1388,6 +1585,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  safetyReminder: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    minHeight: 58,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  safetyReminderIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  safetyReminderCopy: { flex: 1 },
+  safetyReminderTitle: { fontSize: 12, fontWeight: '900' },
+  safetyReminderText: { marginTop: 2, fontSize: 11, lineHeight: 15, fontWeight: '600' },
+  safetyReminderButton: {
+    minHeight: 30,
+    borderWidth: 1,
+    borderRadius: 15,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  safetyReminderButtonText: { fontSize: 11, fontWeight: '900' },
   searchWrapper: { position: 'absolute', left: 16, right: 16 },
   homePrompt: {
     marginBottom: 7,

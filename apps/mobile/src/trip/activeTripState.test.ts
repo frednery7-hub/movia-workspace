@@ -1,5 +1,8 @@
 import {
   buildActiveTripState,
+  buildOneBeforeDestinationNoticeId,
+  buildOneBeforeTransferNoticeId,
+  deriveActiveTripPhase,
   deriveStationProgress,
   markAtTransferSent,
   markDestinationArrivalSent,
@@ -43,6 +46,11 @@ const transferPath: RouteStation[] = [
   station('st_tobalaba', 'Tobalaba', 'L1'),
   station('st_tobalaba', 'Tobalaba', 'L4'),
   station('st_cristobal_colon', 'Cristobal Colon', 'L4'),
+];
+
+const transferLongPath: RouteStation[] = [
+  ...transferPath,
+  station('st_francisco_bilbao', 'Francisco Bilbao', 'L4'),
 ];
 
 function buildState(
@@ -106,6 +114,18 @@ describe('buildActiveTripState', () => {
     ]);
   });
 
+  it('deriva phase approachingTransfer uma estação antes da baldeação', () => {
+    expect(buildState(0).phase).toBe('approachingTransfer');
+  });
+
+  it('deriva phase transfer na estação de baldeação', () => {
+    expect(buildState(1).phase).toBe('transfer');
+  });
+
+  it('deriva phase waitingNextTrain logo após mudar para a próxima linha', () => {
+    expect(buildState(2, transferLongPath).phase).toBe('waitingNextTrain');
+  });
+
   it('directionTerminal correto para cada linha', () => {
     expect(buildState(0).directionTerminal).toBe('Los Dominicos');
     expect(buildState(1).directionTerminal).toBe('Plaza de Puente Alto');
@@ -129,6 +149,35 @@ describe('buildActiveTripState', () => {
       type: 'green',
       availability: 'active',
     });
+  });
+});
+
+describe('deriveActiveTripPhase', () => {
+  it('retorna notStarted em preview', () => {
+    const state = buildState(null, transferPath, 'preview');
+    expect(deriveActiveTripPhase(state)).toBe('notStarted');
+  });
+
+  it('retorna approachingDestination uma estação antes do destino', () => {
+    expect(buildState(2).phase).toBe('approachingDestination');
+  });
+
+  it('retorna arrived no destino final', () => {
+    expect(buildState(3).phase).toBe('arrived');
+  });
+});
+
+describe('notice ids', () => {
+  it('cria ID único para aviso antes da baldeação', () => {
+    expect(buildOneBeforeTransferNoticeId('route-1', 'st_tobalaba')).toBe(
+      'transfer-before:route-1:st_tobalaba',
+    );
+  });
+
+  it('cria ID único para aviso antes do destino', () => {
+    expect(buildOneBeforeDestinationNoticeId('route-1', 'st_dest')).toBe(
+      'destination-before:route-1:st_dest',
+    );
   });
 });
 

@@ -21,6 +21,8 @@ export interface EtaBreakdown {
   transferWalkMinutes: number;
   transferWaitMinutes: number;
   totalMinutes: number;
+  minTotalMinutes?: number;
+  maxTotalMinutes?: number;
 }
 
 export interface EtaPrediction {
@@ -33,6 +35,20 @@ export interface EtaPrediction {
 
 export interface EtaResponse {
   destination: string;
+  requestedDestination?: {
+    type: string;
+    label: string;
+    formattedAddress?: string;
+    latitude?: number;
+    longitude?: number;
+    placeId?: string;
+  };
+  routeDestinationStation?: {
+    id: string;
+    name: string;
+    lineIds: string[];
+    distanceMeters?: number;
+  };
   path: EtaPath[];
   stationsCount: number;
   linesOnRoute: string[];
@@ -46,11 +62,25 @@ export interface EtaResponse {
   routes?: EtaRouteOption[];
 }
 
+export type AlternativeRouteReason =
+  | 'lessWalking'
+  | 'fewerTransfers'
+  | 'differentLines'
+  | 'simplerRoute';
+
+export interface AlternativeRouteSummary {
+  reason: AlternativeRouteReason;
+  differenceMinutes: number;
+  label: string;
+}
+
 export interface EtaRouteOption {
   id: string;
   type: 'recommended' | 'alternative';
   label: string;
   reason?: string;
+  reasonCode?: AlternativeRouteReason;
+  summary?: AlternativeRouteSummary;
   differenceLabel?: string;
   durationMinutes: number;
   walkMeters: number;
