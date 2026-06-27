@@ -1,9 +1,14 @@
 const {
   withAndroidManifest,
   withAppBuildGradle,
+  withDangerousMod,
+  withMainApplication,
 } = require("@expo/config-plugins");
+const fs = require("fs");
+const path = require("path");
 
 const googleMapsApiKeyPlaceholder = "${GOOGLE_MAPS_ANDROID_API_KEY}";
+const androidPackagePath = ["app", "movia", "mobile"];
 const googleMapsGradleSnippet = `def readDotEnvValue = { String key ->
     def candidates = [
         file("../.env"),
@@ -29,6 +34,60 @@ def googleMapsAndroidApiKey =
         ?: readDotEnvValue("EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY")
         ?: readDotEnvValue("EXPO_PUBLIC_GOOGLE_MAPS_API_KEY")
         ?: ""`;
+
+const audioActivityModuleSource = `package app.movia.mobile
+
+import android.content.Context
+import android.media.AudioManager
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+
+class AudioActivityModule(
+  reactContext: ReactApplicationContext,
+) : ReactContextBaseJavaModule(reactContext) {
+  override fun getName(): String = "MoviaAudioActivity"
+
+  @ReactMethod
+  fun getAudioActivityStatus(promise: Promise) {
+    val audioManager = reactApplicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    val status = Arguments.createMap()
+
+    if (audioManager == null) {
+      status.putBoolean("isActive", false)
+      status.putString("source", "unsupported")
+      promise.resolve(status)
+      return
+    }
+
+    status.putBoolean("isActive", audioManager.isMusicActive)
+    status.putString("source", "android-audio-manager")
+    promise.resolve(status)
+  }
+}
+`;
+
+const audioActivityPackageSource = `package app.movia.mobile
+
+import com.facebook.react.ReactPackage
+import com.facebook.react.bridge.NativeModule
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.uimanager.ViewManager
+
+class AudioActivityPackage : ReactPackage {
+  override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
+    return listOf(AudioActivityModule(reactContext))
+  }
+
+  override fun createViewManagers(
+    reactContext: ReactApplicationContext,
+  ): List<ViewManager<*, *>> {
+    return emptyList()
+  }
+}
+`;
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "";
 const isProductionBuild =
@@ -102,8 +161,40 @@ const withGoogleMapsManifestPlaceholder = (config) => {
   });
 };
 
+const withAudioActivityModule = (config) => {
+  config = withDangerousMod(config, [
+    "android",
+    (modConfig) => {
+      const packageDir = path.join(
+        modConfig.modRequest.platformProjectRoot,
+        "app",
+        "src",
+        "main",
+        "java",
+        ...androidPackagePath,
+      );
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(path.join(packageDir, "AudioActivityModule.kt"), audioActivityModuleSource);
+      fs.writeFileSync(path.join(packageDir, "AudioActivityPackage.kt"), audioActivityPackageSource);
+      return modConfig;
+    },
+  ]);
+
+  return withMainApplication(config, (modConfig) => {
+    let contents = modConfig.modResults.contents;
+    if (!contents.includes("AudioActivityPackage()")) {
+      contents = contents.replace(
+        "            // packages.add(new MyReactNativePackage());",
+        "            // packages.add(new MyReactNativePackage());\n            packages.add(AudioActivityPackage())",
+      );
+    }
+    modConfig.modResults.contents = contents;
+    return modConfig;
+  });
+};
+
 module.exports = ({ config }) =>
-  withGoogleMapsManifestPlaceholder({
+  withAudioActivityModule(withGoogleMapsManifestPlaceholder({
     ...config,
     android: {
       ...config.android,
@@ -120,4 +211,4 @@ module.exports = ({ config }) =>
         },
       },
     },
-  });
+  }));

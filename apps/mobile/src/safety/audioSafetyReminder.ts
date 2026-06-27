@@ -1,4 +1,5 @@
 import { CacheService } from '../config/cache.service';
+import { getDeviceAudioActivityStatus } from './deviceAudioActivity';
 
 export const AUDIO_SAFETY_REMINDER_CACHE_KEY = 'audio_safety_reminder';
 const AUDIO_SAFETY_REMINDER_TTL_MS = 365 * 24 * 60 * 60 * 1000;
@@ -8,8 +9,20 @@ export type SafetyReminderState = {
   audioSafetyReminderShownAt?: string;
 };
 
-export function shouldShowAudioSafetyReminder(state: SafetyReminderState | null): boolean {
+export function hasAudioSafetyReminderBeenShownRecently(state: SafetyReminderState | null): boolean {
+  return state?.audioSafetyReminderShown === true;
+}
+
+export function shouldShowAudioSafetyReminderForState(state: SafetyReminderState | null): boolean {
   return state?.audioSafetyReminderShown !== true;
+}
+
+export async function shouldShowAudioSafetyReminder(): Promise<boolean> {
+  const status = await getDeviceAudioActivityStatus();
+  if (!status.isActive) return false;
+
+  const state = await getAudioSafetyReminderState();
+  return !hasAudioSafetyReminderBeenShownRecently(state);
 }
 
 export function createAudioSafetyReminderShownState(now = new Date()): SafetyReminderState {

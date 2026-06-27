@@ -74,7 +74,6 @@ import { ConsentService } from '../src/privacy/consent.service';
 import { PermissionExplainerModal } from '../src/components/movia/PermissionExplainerModal';
 import { buildActiveTripProgress, getActiveTimelineNotice } from '../src/trip/tripProgress';
 import {
-  getAudioSafetyReminderState,
   markAudioSafetyReminderShown,
   shouldShowAudioSafetyReminder,
 } from '../src/safety/audioSafetyReminder';
@@ -708,9 +707,9 @@ export default function HomeScreen() {
   useEffect(() => {
     if (tripStatus !== 'active') return;
     let cancelled = false;
-    getAudioSafetyReminderState()
-      .then(state => {
-        if (!cancelled && shouldShowAudioSafetyReminder(state)) {
+    shouldShowAudioSafetyReminder()
+      .then(shouldShow => {
+        if (!cancelled && shouldShow) {
           setShowAudioSafetyReminder(true);
         }
       })
