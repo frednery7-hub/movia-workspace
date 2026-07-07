@@ -1435,7 +1435,7 @@ export default function HomeScreen() {
             <Text style={[styles.safetyReminderTitle, { color: theme.colors.textPrimary }]}>
               {translate('safety.audio.title', locale)}
             </Text>
-            <Text style={[styles.safetyReminderText, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+            <Text style={[styles.safetyReminderText, { color: theme.colors.textSecondary }]} numberOfLines={3}>
               {translate('safety.audio.body', locale)}
             </Text>
           </View>
@@ -1599,7 +1599,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    elevation: 20,
+    zIndex: 20,
   },
   safetyReminderIcon: {
     width: 30,
