@@ -92,3 +92,53 @@ resource "google_cloud_run_v2_service" "backend_staging" {
     percent = 100
   }
 }
+
+# ─────────────────────────────────────────────────────────────────
+# Cloud SQL — banco de dados PostgreSQL 15
+# Migrado do AWS RDS em 2026-07-07.
+# Conectado ao Cloud Run via socket Unix (Cloud SQL Connector),
+# sem IP público exposto ao backend.
+# ─────────────────────────────────────────────────────────────────
+resource "google_sql_database_instance" "movia_staging" {
+  name             = "movia-staging-db"
+  database_version = "POSTGRES_15"
+  region           = var.region
+
+  settings {
+    tier              = "db-f1-micro"
+    availability_type = "ZONAL"
+
+    disk_type       = "PD_SSD"
+    disk_size       = 10
+    disk_autoresize = true
+
+    backup_configuration {
+      enabled    = true
+      start_time = "03:00"
+    }
+
+    ip_configuration {
+      ipv4_enabled = true
+      ssl_mode     = "ALLOW_UNENCRYPTED_AND_ENCRYPTED"
+    }
+  }
+
+  deletion_protection = false
+}
+
+resource "google_sql_database" "movia_db" {
+  name     = "movia_db"
+  instance = google_sql_database_instance.movia_staging.name
+}
+
+resource "google_sql_user" "movia" {
+  name     = "movia"
+  instance = google_sql_database_instance.movia_staging.name
+  password = "managed-via-secret-manager"
+}
+
+resource "google_project_iam_member" "cloud_run_cloud_sql" {
+  project = var.project_id
+  role    = "roles/cloudsql.client"
+  member  = "serviceAccount:${local.runtime_service_account}"
+}
