@@ -1,7 +1,7 @@
 {
   "name": "movia-workspace",
   "private": true,
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@11.10.0",
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
@@ -16,54 +16,16 @@
     "clean": "rimraf node_modules apps/*/node_modules packages/*/node_modules .turbo dist",
     "prepare": "husky"
   },
-  "pnpm": {
-    "auditConfig": {
-      "ignoreCves": [
-        "CVE-2026-24842",
-        "CVE-2026-23745",
-        "CVE-2026-26960",
-        "CVE-2026-29786",
-        "CVE-2026-31802",
-        "CVE-2026-23950",
-        "CVE-2026-53655"
-      ]
-    },
-    "overrides": {
-      "tar": ">=7.5.11",
-      "uuid": ">=9.0.0",
-      "@xmldom/xmldom": ">=0.8.10",
-      "postcss": ">=8.5.10",
-      "shell-quote": ">=1.8.4",
-      "esbuild": "0.28.1",
-      "@hono/node-server": "1.19.13",
-      "form-data": "^4.0.6",
-      "@opentelemetry/core": "^2.8.0",
-      "multer": "^2.2.0",
-      "ws@>=8.0.0 <8.21.0": "8.21.0",
-      "ws@>=7.0.0 <7.5.11": "7.5.11",
-      "ws@>=6.0.0 <6.2.4": "6.2.4",
-      "vite@<=6.4.2": "6.4.3",
-      "piscina@<=4.9.2": "4.9.3",
-      "protobufjs@>=8.0.0 <=8.5.0": "8.6.0",
-      "protobufjs-cli@>=2.0.0 <=2.5.0": "2.5.1",
-      "tar@<=7.5.15": "7.5.16",
-      "js-yaml@<=4.1.1": "4.2.0",
-      "@babel/core@<=7.29.0": "7.29.6",
-      "react-router@>=7.12.0 <7.15.1": "7.15.1",
-      "undici@<6.27.0": "6.27.0",
-      "@expo/cli>undici": "6.27.0",
-      "@expo/cli>tar": "^6.2.1",
-      "@xhmikosr/decompress": ">=11.1.3"
-    }
-  },
   "devDependencies": {
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
+    "@eslint/js": "^9.39.4",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "prettier": "^3.4.2",
     "rimraf": "^5.0.5",
-    "turbo": "^2.0.0"
+    "turbo": "^2.0.0",
+    "typescript-eslint": "^8.59.4"
   },
   "dependencies": {
     "docx": "^9.6.1"

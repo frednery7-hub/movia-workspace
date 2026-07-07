@@ -46,5 +46,5 @@ usuário ou de rede.
 ### Quando remover esta exceção
 
 - Quando `@expo/cli` atualizar sua dependência interna de `tar` para v7+, ou
-- Quando o pnpm do projeto migrar para v11+ (nesse caso, migrar para
-  `auditConfig.ignoreGhsas` em vez de `ignoreCves`, que deixa de ser reconhecido)
+- ✅ **pnpm migrado para v11.10.0 em 2026-07-07** — `ignoreCves` migrado para
+  `ignoreGhsas` no `pnpm-workspace.yaml` (novo padrão do pnpm 11)
