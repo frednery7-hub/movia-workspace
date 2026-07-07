@@ -1,4 +1,5 @@
 import { useEffect, useState, createContext, useContext } from 'react';
+import { onSessionExpired } from '../src/events/sessionEvents';
 import { Stack, router } from 'expo-router';
 import { StatusBar, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
@@ -121,6 +122,24 @@ function RootLayoutContent() {
       router.replace({ pathname: '/consent', params: { updated: isConsentUpdate ? '1' : '0' } });
     }
   }, [isReady, isConsentUpdate, needsConsent]);
+
+  // Quando o interceptor de 401 detecta que o refresh também falhou,
+  // destrói a sessão local e refaz o boot — o usuário recebe nova sessão
+  // de forma transparente, sem precisar reiniciar o app.
+  useEffect(() => {
+    return onSessionExpired(async () => {
+      try {
+        await IdentityService.destroySession();
+        const deviceId  = await IdentityService.getDeviceIdentifier();
+        const deviceLang = await IdentityService.getPreferredLanguage();
+        const session   = await fetchSessionWithRetry(deviceId, deviceLang);
+        await IdentityService.saveAccessToken(session.access_token);
+        await IdentityService.saveRefreshToken(session.refresh_token);
+      } catch {
+        // Falha silenciosa — próxima requisição tentará novamente
+      }
+    });
+  }, []);
 
   useEffect(() => {
     async function boot() {
