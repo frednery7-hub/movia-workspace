@@ -1,6 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../config/api';
 import { CacheService } from '../config/cache.service';
+import {
+  getAllStations as getStationsFromDb,
+  saveStations as saveStationsToDb,
+  searchStationsByName,
+  hasStations,
+} from '../database/stationsRepository';
 
 const CACHE_KEY = 'stations_v2';
 const CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -19,21 +25,56 @@ export interface NearbyStation {
   distanceMeters: number;
 }
 
+/**
+ * Busca todas as estações, com três camadas de resiliência:
+ *   1. Rede (fonte de verdade) — persiste no SQLite e no AsyncStorage
+ *   2. SQLite local — sobrevive a reinstalação do cache, permite query
+ *   3. AsyncStorage — fallback legado, mantido por compatibilidade
+ *
+ * A gravação no SQLite é best-effort: se falhar, o app continua
+ * funcionando com os dados da rede. Um banco local corrompido não
+ * pode derrubar a funcionalidade principal.
+ */
 async function fetchAllStations(): Promise<StationResult[]> {
   try {
     const { data } = await api.get<StationResult[]>('/stations');
+
     await CacheService.set(CACHE_KEY, data, CACHE_TTL);
+    saveStationsToDb(data).catch(() => undefined);
+
     return data;
   } catch {
+    try {
+      const local = await getStationsFromDb();
+      if (local.length > 0) return local;
+    } catch {
+      // Banco local indisponível — tenta o AsyncStorage abaixo.
+    }
+
     const cached = await CacheService.get<StationResult[]>(CACHE_KEY);
     if (cached) return cached;
+
     throw new Error('Sem conexão e sem cache de estações.');
   }
 }
 
+/**
+ * Busca estações por nome. Se a rede falhar, cai para o SQLite local.
+ *
+ * Antes desta mudança, a busca simplesmente quebrava sem internet,
+ * mesmo com as 126 estações já em cache.
+ */
 async function searchStations(q: string): Promise<StationResult[]> {
-  const { data } = await api.get<StationResult[]>(`/stations?q=${encodeURIComponent(q)}`);
-  return data;
+  try {
+    const { data } = await api.get<StationResult[]>(`/stations?q=${encodeURIComponent(q)}`);
+    return data;
+  } catch {
+    const hasLocal = await hasStations().catch(() => false);
+    if (hasLocal) {
+      return searchStationsByName(q);
+    }
+    throw new Error('Sem conexão e sem estações salvas localmente.');
+  }
 }
 
 
