@@ -18,6 +18,8 @@
     .section { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     .section h2 { font-size: 1rem; font-weight: 700; color: #1a1a2e; margin-bottom: 0.75rem; }
     .section p { font-size: 0.9rem; line-height: 1.6; color: #444; }
+    .section a { color: #4fc3f7; text-decoration: none; }
+    .section a:hover { text-decoration: underline; }
     .last-updated { text-align: center; font-size: 0.8rem; color: #888; padding: 1rem; }
     @media (max-width: 600px) { .lang-tab { padding: 0.6rem 1rem; font-size: 0.8rem; } }
   </style>
@@ -28,9 +30,9 @@
     <p>Privacy Policy · Política de Privacidad · Política de Privacidade</p>
   </header>
   <div class="lang-tabs">
-    <button class="lang-tab active" onclick="showLang('es')">Español</button>
-    <button class="lang-tab" onclick="showLang('pt')">Português</button>
-    <button class="lang-tab" onclick="showLang('en')">English</button>
+    <button class="lang-tab active" onclick="showLang('es', event)">Español</button>
+    <button class="lang-tab" onclick="showLang('pt', event)">Português</button>
+    <button class="lang-tab" onclick="showLang('en', event)">English</button>
   </div>
 
   <div id="lang-es" class="lang-content active">
@@ -82,7 +84,7 @@
     </div>
     <div class="section">
       <h2>Contacto</h2>
-      <p>Para solicitudes de privacidad, utiliza los controles de Configuración o el canal de soporte publicado por Movia.</p>
+      <p>Para solicitudes de privacidad, utiliza los controles de Configuración o escríbenos a <a href="mailto:frednery7@gmail.com">frednery7@gmail.com</a>.</p>
     </div>
   </div>
 
@@ -135,7 +137,7 @@
     </div>
     <div class="section">
       <h2>Contato</h2>
-      <p>Para solicitações de privacidade, use os controles de Configurações ou o canal de suporte publicado pelo Movia.</p>
+      <p>Para solicitações de privacidade, use os controles de Configurações ou escreva para <a href="mailto:frednery7@gmail.com">frednery7@gmail.com</a>.</p>
     </div>
   </div>
 
@@ -188,12 +190,12 @@
     </div>
     <div class="section">
       <h2>Contact</h2>
-      <p>For privacy requests, use the controls in Settings or Movia's published support channel.</p>
+      <p>For privacy requests, use the controls in Settings or email us at <a href="mailto:frednery7@gmail.com">frednery7@gmail.com</a>.</p>
     </div>
   </div>
 
   <script>
-    function showLang(lang) {
+    function showLang(lang, event) {
       document.querySelectorAll('.lang-content').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.lang-tab').forEach(el => el.classList.remove('active'));
       document.getElementById('lang-' + lang).classList.add('active');
