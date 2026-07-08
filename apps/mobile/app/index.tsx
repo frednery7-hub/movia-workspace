@@ -72,6 +72,8 @@ import type { ResolvedAddressDestination } from '../src/search/address/addressSe
 import type { ResolvedPlaceDestination } from '../src/search/places/placesSearchTypes';
 import { ConsentService } from '../src/privacy/consent.service';
 import { PermissionExplainerModal } from '../src/components/movia/PermissionExplainerModal';
+import { ConnectivityBanner } from '../src/components/movia/ConnectivityBanner';
+import { useConnectivity } from '../src/network/useConnectivity';
 import { buildActiveTripProgress, getActiveTimelineNotice } from '../src/trip/tripProgress';
 import {
   markAudioSafetyReminderShown,
@@ -293,6 +295,9 @@ export default function HomeScreen() {
   const [showLocationPermission, setShowLocationPermission] = useState(false);
   const [showNotificationPermission, setShowNotificationPermission] = useState(false);
   const [showAudioSafetyReminder, setShowAudioSafetyReminder] = useState(false);
+  const { isOffline, justReconnected } = useConnectivity();
+  const connectivityBannerVisible = isOffline || justReconnected;
+  const bannerOffset = connectivityBannerVisible ? 56 : 0;
   const [progressClock, setProgressClock] = useState(() => Date.now());
   const activeStationIdRef = useRef<string | null>(null);
   const routeStartedAtRef = useRef(Date.now());
@@ -1390,11 +1395,13 @@ export default function HomeScreen() {
         />
       </View>
 
+      <ConnectivityBanner locale={toLocale(language)} top={insets.top + 116} />
+
       {locationMode !== 'nearby' && locationMode !== 'manual' && (
         <View style={[
           styles.contextBanner,
           {
-            top: insets.top + 116,
+            top: insets.top + 116 + bannerOffset,
             backgroundColor: theme.isDark ? 'rgba(23,32,51,0.96)' : 'rgba(255,255,255,0.96)',
             borderColor: theme.colors.border,
             shadowColor: theme.colors.shadow,
@@ -1412,7 +1419,7 @@ export default function HomeScreen() {
       )}
 
       {arrivalBanner && (
-        <View style={[styles.arrivalBanner, { top: insets.top + 116 }]}>
+        <View style={[styles.arrivalBanner, { top: insets.top + 116 + bannerOffset }]}>
           <Feather name="map-pin" size={16} color="#fff" />
           <Text style={styles.arrivalBannerText} numberOfLines={2}>{arrivalBanner}</Text>
         </View>
@@ -1422,7 +1429,7 @@ export default function HomeScreen() {
         <View style={[
           styles.safetyReminder,
           {
-            top: insets.top + (arrivalBanner ? 178 : 116),
+            top: insets.top + (arrivalBanner ? 178 : 116) + bannerOffset,
             backgroundColor: theme.colors.surfaceElevated,
             borderColor: theme.colors.borderSubtle,
             shadowColor: theme.colors.shadow,
