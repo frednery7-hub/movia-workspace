@@ -157,6 +157,33 @@ const withGoogleMapsManifestPlaceholder = (config) => {
     }
 
     modConfig.modResults.contents = contents;
+
+    // Injeta configuração de assinatura de release
+    if (!modConfig.modResults.contents.includes("MOVIA_UPLOAD_STORE_FILE")) {
+      const releaseSnippet = [
+        '        release {',
+        "            def storeFilePath = project.hasProperty('MOVIA_UPLOAD_STORE_FILE') ? project.property('MOVIA_UPLOAD_STORE_FILE') : System.getenv('MOVIA_UPLOAD_STORE_FILE')",
+        '            if (storeFilePath) {',
+        '                storeFile file(storeFilePath)',
+        "                storePassword project.hasProperty('MOVIA_UPLOAD_STORE_PASSWORD') ? project.property('MOVIA_UPLOAD_STORE_PASSWORD') : System.getenv('MOVIA_UPLOAD_STORE_PASSWORD')",
+        "                keyAlias project.hasProperty('MOVIA_UPLOAD_KEY_ALIAS') ? project.property('MOVIA_UPLOAD_KEY_ALIAS') : System.getenv('MOVIA_UPLOAD_KEY_ALIAS')",
+        "                keyPassword project.hasProperty('MOVIA_UPLOAD_KEY_PASSWORD') ? project.property('MOVIA_UPLOAD_KEY_PASSWORD') : System.getenv('MOVIA_UPLOAD_KEY_PASSWORD')",
+        '            }',
+        '        }',
+        ''
+      ].join('\n');
+      let c = modConfig.modResults.contents;
+      c = c.replace(
+        /(signingConfigs\s*\{[\s\S]*?keyPassword\s+'android'\s*\}\s*)(\})/,
+        '$1' + releaseSnippet + '$2'
+      );
+      c = c.replace(
+        /(buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?signingConfig\s+signingConfigs\.)debug/,
+        '$1release'
+      );
+      modConfig.modResults.contents = c;
+    }
+
     return modConfig;
   });
 };

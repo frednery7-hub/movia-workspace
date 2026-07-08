@@ -56,3 +56,20 @@ allowBuilds:
   '@tailwindcss/oxide': true
   esbuild: true
   prisma: true
+
+# ── Hoisting para Expo/React Native ─────────────────────────────
+# pnpm 11 tem hoisting estrito por padrão, o que quebra o Metro
+# bundler do Expo (que espera resolver expo-asset, @expo/config-plugins
+# e outros a partir da raiz de node_modules).
+publicHoistPattern:
+  - 'expo'
+  - 'expo-*'
+  - '@expo/*'
+  - 'react-native'
+  - 'react-native-*'
+  - '@react-native/*'
+  - 'metro'
+  - 'metro-*'
+  - 'babel-preset-expo'
+  - 'babel-plugin-*'
+  - '@babel/*'
