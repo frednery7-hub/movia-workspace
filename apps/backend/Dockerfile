@@ -1,8 +1,8 @@
-FROM node:20-alpine
+FROM node:22-alpine
 RUN apk add --no-cache openssl libc6-compat
 RUN addgroup -S movia && adduser -S movia -G movia
 WORKDIR /app
-RUN npm install -g pnpm@9
+RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/backend/package.json ./apps/backend/
