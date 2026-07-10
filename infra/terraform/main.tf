@@ -43,8 +43,11 @@ locals {
 }
 
 resource "google_secret_manager_secret_iam_member" "backend_secret_access" {
-  for_each  = google_secret_manager_secret.backend_secrets
-  secret_id = each.value.id
+  # Itera sobre a lista estatica de nomes (conhecida em plan-time), nao
+  # sobre o recurso backend_secrets (cujas chaves so existem apos apply).
+  # Isso permite plan/import sem o erro "Invalid for_each argument".
+  for_each  = toset(var.secret_names)
+  secret_id = google_secret_manager_secret.backend_secrets[each.key].id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${local.runtime_service_account}"
 }
