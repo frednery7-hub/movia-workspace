@@ -95,7 +95,7 @@ Volume: ~28 mil linhas de TS/TSX próprias, 408 arquivos versionados, 195 commit
 | B4 | Senha default fraca do Redis no compose | ✅ Corrigido — `REDIS_PASSWORD` obrigatória (`:?`); valor dev adicionado ao seu `.env` local |
 | B5 | Header obsoleto `X-XSS-Protection` e CSP ampla no nginx | ✅ Corrigido — header removido, `connect-src` restrito a `'self'` |
 | B6 | `/v1/auth/session` aceita qualquer `deviceId` (spoofing anônimo, mitigado por throttle) | ⏸ Em aberto — decisão de design (proof-of-possession) |
-| B7 | Restrições da chave Google Maps Android | ⏸ Em aberto — verificar no console GCP (package name + SHA-1 + APIs) |
+| B7 | Restrições da chave Google Maps Android | ✅ Corrigido — SHA-1 de produção (317996dc...) adicionado à chave Maps, mantendo o de debug. Mapa validado em dispositivo real em 2026-07-10. |
 
 ---
 
