@@ -36,7 +36,7 @@
         "POST_NOTIFICATIONS"
       ],
       "allowBackup": false,
-      "versionCode": 220
+      "versionCode": 221
     },
     "ios": {
       "supportsTablet": true,
