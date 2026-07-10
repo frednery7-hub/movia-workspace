@@ -6,7 +6,7 @@ import {
   saveStations,
   searchStationsByName,
 } from './stationsRepository';
-import { getDatabase, getMetaValue, setMetaValue } from './database';
+import { getDatabase, setMetaValue } from './database';
 
 jest.mock('./database', () => ({
   getDatabase: jest.fn(),
