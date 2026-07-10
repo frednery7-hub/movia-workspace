@@ -54,6 +54,7 @@ export class AuthService {
         deviceId,
         refreshToken: refreshTokenHash,
         language,
+        role,
         ipAddress,
         expiresAt,
       },
@@ -84,7 +85,13 @@ export class AuthService {
       data: { revoked: true },
     });
 
-    return this.generateToken(session.deviceId, session.language);
+    // Preserva a role da sessao original — sem isso, tokens
+    // operator/admin degradariam para anonymous_device no refresh.
+    return this.generateToken(
+      session.deviceId,
+      session.language,
+      (session.role as Role | undefined) ?? 'anonymous_device',
+    );
   }
 
   async revokeSession(refreshToken: string): Promise<void> {

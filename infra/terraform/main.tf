@@ -23,15 +23,23 @@ resource "google_secret_manager_secret" "backend_secrets" {
 }
 
 # ─────────────────────────────────────────────────────────────────
-# IAM — permite que a service account de runtime do Cloud Run
-# acesse os secrets acima.
+# IAM — service account dedicada de runtime do Cloud Run, com
+# menor privilegio: apenas acesso aos secrets e ao Cloud SQL.
+# (Substitui a SA default do Compute Engine, que tem permissoes
+# amplas no projeto.)
 # ─────────────────────────────────────────────────────────────────
 data "google_project" "current" {
   project_id = var.project_id
 }
 
+resource "google_service_account" "backend_runtime" {
+  account_id   = "movia-backend-runtime"
+  display_name = "Movia backend runtime (Cloud Run)"
+  description  = "SA dedicada com menor privilegio para o backend staging"
+}
+
 locals {
-  runtime_service_account = "${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+  runtime_service_account = google_service_account.backend_runtime.email
 }
 
 resource "google_secret_manager_secret_iam_member" "backend_secret_access" {
@@ -46,8 +54,8 @@ resource "google_secret_manager_secret_iam_member" "backend_secret_access" {
 #
 # Espelha a configuracao real confirmada via `gcloud run services
 # describe` em 2026-06-27: 1 CPU, 1Gi memoria, concorrencia 80,
-# max 5 instancias, timeout 300s, service account padrao do
-# Compute Engine.
+# max 5 instancias, timeout 300s. Roda com SA dedicada de menor
+# privilegio e conecta ao Cloud SQL via socket Unix (connector).
 # ─────────────────────────────────────────────────────────────────
 resource "google_cloud_run_v2_service" "backend_staging" {
   name     = var.cloud_run_service
@@ -62,8 +70,20 @@ resource "google_cloud_run_v2_service" "backend_staging" {
       max_instance_count = 5
     }
 
+    volumes {
+      name = "cloudsql"
+      cloud_sql_instance {
+        instances = [google_sql_database_instance.movia_staging.connection_name]
+      }
+    }
+
     containers {
       image = var.cloud_run_image
+
+      volume_mounts {
+        name       = "cloudsql"
+        mount_path = "/cloudsql"
+      }
 
       resources {
         limits = {
@@ -118,12 +138,15 @@ resource "google_sql_database_instance" "movia_staging" {
     }
 
     ip_configuration {
+      # Sem authorized_networks: o IP publico nao aceita conexoes
+      # diretas — acesso apenas via Cloud SQL Connector (IAM).
+      # TLS obrigatorio para qualquer conexao.
       ipv4_enabled = true
-      ssl_mode     = "ALLOW_UNENCRYPTED_AND_ENCRYPTED"
+      ssl_mode     = "ENCRYPTED_ONLY"
     }
   }
 
-  deletion_protection = false
+  deletion_protection = true
 }
 
 resource "google_sql_database" "movia_db" {
@@ -134,7 +157,7 @@ resource "google_sql_database" "movia_db" {
 resource "google_sql_user" "movia" {
   name     = "movia"
   instance = google_sql_database_instance.movia_staging.name
-  password = "managed-via-secret-manager"
+  password = var.db_user_password
 }
 
 resource "google_project_iam_member" "cloud_run_cloud_sql" {

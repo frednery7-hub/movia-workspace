@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
+    "@movia/geo-engine": "workspace:*",
     "@movia/shared-data": "workspace:*",
     "@movia/shared-types": "workspace:*",
     "@react-native-async-storage/async-storage": "^1.23.1",
@@ -59,7 +60,8 @@
     "preset": "ts-jest",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^@movia/shared-data/(.*)$": "<rootDir>/../../packages/shared-data/src/$1"
+      "^@movia/shared-data/(.*)$": "<rootDir>/../../packages/shared-data/src/$1",
+      "^@movia/geo-engine$": "<rootDir>/../../packages/geo-engine/src/index.ts"
     },
     "transform": {
       "^.+\\.ts$": [

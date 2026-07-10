@@ -1,7 +1,16 @@
 import { Controller, Get, Res, Headers } from '@nestjs/common';
 import * as express from 'express';
+import { timingSafeEqual } from 'crypto';
 import { MetricsService } from './metrics.service';
 import { Public } from '../../auth/public.decorator';
+
+/** Comparacao em tempo constante para evitar timing attacks. */
+function safeEquals(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 @Public()
 @Controller('metrics')
@@ -22,7 +31,7 @@ export class MetricsController {
       return;
     }
 
-    if (token && auth !== `Bearer ${token}`) {
+    if (token && !safeEquals(auth ?? '', `Bearer ${token}`)) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }

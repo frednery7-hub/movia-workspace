@@ -32,11 +32,11 @@
   },
   "lint-staged": {
     "apps/backend/src/**/*.ts": [
-      "eslint --fix",
-      "prettier --write"
+      "pnpm --filter backend exec eslint --fix",
+      "pnpm exec prettier --write"
     ],
     "packages/**/*.ts": [
-      "prettier --write"
+      "pnpm exec prettier --write"
     ]
   }
 }

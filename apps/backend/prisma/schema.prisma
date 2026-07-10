@@ -146,6 +146,7 @@ model DeviceSession {
   deviceId     String
   refreshToken String   @unique
   language     String   @default("es-CL")
+  role         String   @default("anonymous_device")
   ipAddress    String?
   expiresAt    DateTime
   createdAt    DateTime @default(now())

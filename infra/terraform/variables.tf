@@ -26,6 +26,12 @@ variable "cloud_run_image" {
   type        = string
 }
 
+variable "db_user_password" {
+  description = "Senha do usuario da aplicacao no Cloud SQL. Nunca commitar o valor: passar via TF_VAR_db_user_password ou tfvars local fora do git. Fica registrada no state -- use backend remoto criptografado."
+  type        = string
+  sensitive   = true
+}
+
 variable "secret_names" {
   description = "Nomes dos secrets no Secret Manager consumidos pelo backend. Os VALORES nunca ficam aqui -- sao inseridos fora do Terraform, via gcloud ou console."
   type        = list(string)
