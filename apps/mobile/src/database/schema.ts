@@ -10,7 +10,7 @@
  * você está.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const CREATE_TABLES = `
   PRAGMA journal_mode = WAL;
@@ -28,11 +28,12 @@ export const CREATE_TABLES = `
   );
 
   CREATE TABLE IF NOT EXISTS stations (
-    id         TEXT PRIMARY KEY NOT NULL,
-    name       TEXT NOT NULL,
-    short_code TEXT NOT NULL,
-    latitude   REAL NOT NULL,
-    longitude  REAL NOT NULL
+    id              TEXT PRIMARY KEY NOT NULL,
+    name            TEXT NOT NULL,
+    name_normalized TEXT NOT NULL,
+    short_code      TEXT NOT NULL,
+    latitude        REAL NOT NULL,
+    longitude       REAL NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS station_lines (
@@ -44,6 +45,7 @@ export const CREATE_TABLES = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_stations_name ON stations(name);
+  CREATE INDEX IF NOT EXISTS idx_stations_name_norm ON stations(name_normalized);
   CREATE INDEX IF NOT EXISTS idx_stations_coords ON stations(latitude, longitude);
   CREATE INDEX IF NOT EXISTS idx_station_lines_line ON station_lines(line_id);
 `;

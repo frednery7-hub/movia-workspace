@@ -1,4 +1,5 @@
 import { getDatabase, getMetaValue, setMetaValue } from './database';
+import { normalizeSearchText } from '../poi/search/normalizeSearchText';
 import { META_KEYS } from './schema';
 import type { StationResult } from '../hooks/useStations';
 import type { LineResponse } from '../hooks/useLines';
@@ -47,8 +48,8 @@ export async function saveStations(stations: StationResult[]): Promise<void> {
 
     for (const station of stations) {
       await db.runAsync(
-        'INSERT INTO stations (id, name, short_code, latitude, longitude) VALUES (?, ?, ?, ?, ?)',
-        [station.id, station.name, station.shortCode, station.latitude, station.longitude],
+        'INSERT INTO stations (id, name, name_normalized, short_code, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?)',
+        [station.id, station.name, normalizeSearchText(station.name), station.shortCode, station.latitude, station.longitude],
       );
 
       for (const lineId of station.lines ?? []) {
@@ -127,10 +128,12 @@ export async function getAllLines(): Promise<LineResponse[]> {
  */
 export async function searchStationsByName(query: string): Promise<StationResult[]> {
   const db = await getDatabase();
-  const pattern = `%${query}%`;
+  // Normaliza a query do mesmo jeito que o name_normalized foi gravado,
+  // para que 'nuble' encontre 'Ñuble' e 'bio bio' encontre 'Bío Bío'.
+  const pattern = `%${normalizeSearchText(query)}%`;
 
   const rows = await db.getAllAsync<StationRow>(
-    'SELECT id, name, short_code, latitude, longitude FROM stations WHERE name LIKE ? COLLATE NOCASE ORDER BY name LIMIT 20',
+    'SELECT id, name, short_code, latitude, longitude FROM stations WHERE name_normalized LIKE ? ORDER BY name LIMIT 20',
     [pattern],
   );
 

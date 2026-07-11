@@ -64,7 +64,7 @@ describe('stationsRepository', () => {
       );
       expect(db.runAsync).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO stations'),
-        ['st_tobalaba', 'Tobalaba', 'TOB', -33.41822, -70.60149],
+        ['st_tobalaba', 'Tobalaba', 'tobalaba', 'TOB', -33.41822, -70.60149],
       );
       expect(db.runAsync).toHaveBeenCalledWith(
         expect.stringContaining('INSERT OR IGNORE INTO station_lines'),
@@ -97,7 +97,7 @@ describe('stationsRepository', () => {
 
       expect(db.runAsync).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO stations'),
-        ['st_orphan', 'Órfã', 'ORF', 0, 0],
+        ['st_orphan', 'Órfã', 'orfa', 'ORF', 0, 0],
       );
       // Nenhuma inserção em station_lines
       const lineInserts = db.runAsync.mock.calls.filter(
@@ -162,10 +162,38 @@ describe('stationsRepository', () => {
       const result = await searchStationsByName('baque');
 
       expect(db.getAllAsync).toHaveBeenCalledWith(
-        expect.stringContaining('LIKE ? COLLATE NOCASE'),
+        expect.stringContaining('name_normalized LIKE ?'),
         ['%baque%'],
       );
       expect(result[0]?.lines).toEqual(['L1']);
+    });
+
+    it('normaliza acentos: busca "nuble" encontra "Ñuble"', async () => {
+      db.getAllAsync
+        .mockResolvedValueOnce([
+          { id: 'st_nuble', name: 'Ñuble', short_code: 'NUB', latitude: 1, longitude: 2 },
+        ])
+        .mockResolvedValueOnce([]);
+
+      await searchStationsByName('nuble');
+
+      // A query do usuário (sem acento/til) vira o pattern normalizado
+      // que casa com o name_normalized gravado ('nuble').
+      expect(db.getAllAsync).toHaveBeenCalledWith(
+        expect.stringContaining('name_normalized LIKE ?'),
+        ['%nuble%'],
+      );
+    });
+
+    it('normaliza maiúsculas e acentos juntos: "BIO" casa com "Bío Bío"', async () => {
+      db.getAllAsync.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      await searchStationsByName('BÍO');
+
+      expect(db.getAllAsync).toHaveBeenCalledWith(
+        expect.stringContaining('name_normalized LIKE ?'),
+        ['%bio%'],
+      );
     });
   });
 
