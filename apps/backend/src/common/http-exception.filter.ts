@@ -11,6 +11,9 @@ import type { Logger } from 'winston';
 import { Request, Response } from 'express';
 import * as Sentry from '@sentry/nestjs';
 import { MetricsService } from '../observability/metrics/metrics.service';
+import { getCorrelationId } from '../observability/context/request-context';
+import { AppException } from './app.exception';
+import { defaultCodeForStatus, type ErrorEnvelope } from './error-codes';
 
 type RequestWithUser = Request & {
   user?: {
@@ -30,9 +33,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<RequestWithUser>();
-    const correlationId = request.headers['x-correlation-id'] as
-      | string
-      | undefined;
+    // Prefere o contexto assíncrono; cai para o header se o erro ocorrer
+    // fora do escopo do interceptor (ex.: falha no próprio middleware).
+    const correlationId =
+      getCorrelationId() ??
+      (request.headers['x-correlation-id'] as string | undefined);
 
     const status =
       exception instanceof HttpException
@@ -81,12 +86,21 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       this.logger.warn('http_exception', logPayload);
     }
 
-    response.status(status).json({
-      statusCode: status,
+    // Envelope estável: o cliente reage ao `code`, nunca à `message`.
+    // O correlationId permite ao usuário citar um id que cruza com os logs.
+    const envelope: ErrorEnvelope = {
+      code:
+        exception instanceof AppException
+          ? exception.code
+          : defaultCodeForStatus(status),
       message,
+      statusCode: status,
       path: request.url,
       timestamp: new Date().toISOString(),
-    });
+      ...(correlationId ? { correlationId } : {}),
+    };
+
+    response.status(status).json(envelope);
   }
 }
 
