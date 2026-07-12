@@ -1,5 +1,23 @@
 # Checklist de Build/Release — Android
 
+> **O build de APK agora é automatizado.** Ver `.github/workflows/build-apk.yml`.
+>
+> - **Release oficial:** crie uma tag `v*` (ex.: `git tag v2.3.0 && git push origin v2.3.0`).
+>   O CI gera o APK assinado, valida a assinatura contra a keystore de produção
+>   e anexa o arquivo à Release do GitHub.
+> - **Build de teste sob demanda:** `gh workflow run build-apk.yml`.
+>   O APK sai como artifact (retido 30 dias).
+>
+> O CI falha se o certificado do APK não bater com o SHA-256 da keystore de
+> produção — um APK assinado com debug não chega a ser publicado.
+>
+> O checklist abaixo continua válido para **build local** (depuração, ou quando
+> for preciso inspecionar o APK antes de publicar).
+
+---
+
+## Build local
+
 Checklist fixo para gerar um APK de release sem erro de ambiente.
 Seguir em ordem; não pular etapas.
 

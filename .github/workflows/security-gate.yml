@@ -104,3 +104,58 @@ jobs:
       # ── Step 11: Docker Build Check ───────────────────────────
       - name: Docker Build Check
         run: docker build -f apps/backend/Dockerfile -t movia-backend:ci .
+
+      # ── Step 12: Docker Image Size ────────────────────────────
+      # A imagem multi-stage ficou em ~1.6GB. O limite existe para pegar
+      # regressao grave (ex.: alguem voltar ao build single-stage, que
+      # produzia 3.9GB), nao para policiar variacoes pequenas.
+      - name: Docker Image Size Check
+        run: |
+          LIMIT_MB=2200
+          SIZE_BYTES=$(docker image inspect movia-backend:ci --format='{{.Size}}')
+          SIZE_MB=$((SIZE_BYTES / 1024 / 1024))
+
+          echo "Tamanho da imagem: ${SIZE_MB} MB (limite: ${LIMIT_MB} MB)"
+
+          if [ "$SIZE_MB" -gt "$LIMIT_MB" ]; then
+            echo "ERRO: a imagem passou do limite."
+            echo "Provavel causa: devDependencies ou fontes vazando para o estagio de runtime."
+            exit 1
+          fi
+          echo "Tamanho dentro do limite."
+
+      # ── Step 13: Required Secrets ─────────────────────────────
+      # Falha cedo, com mensagem clara, se um secret necessario sumir --
+      # em vez de quebrar la na frente com um erro obscuro de deploy ou
+      # de assinatura de APK.
+      - name: Required Secrets Check
+        env:
+          # WIF usa `vars`, nao `secrets`: provider e service account sao
+          # identificadores publicos. A seguranca vem da federacao OIDC
+          # restrita a este repositorio, nao do sigilo dos nomes.
+          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          GCP_DEPLOYER_SA: ${{ vars.GCP_DEPLOYER_SA }}
+          MOVIA_KEYSTORE_BASE64: ${{ secrets.MOVIA_KEYSTORE_BASE64 }}
+          MOVIA_KEYSTORE_PASSWORD: ${{ secrets.MOVIA_KEYSTORE_PASSWORD }}
+          MOVIA_KEY_ALIAS: ${{ secrets.MOVIA_KEY_ALIAS }}
+          MOVIA_KEY_PASSWORD: ${{ secrets.MOVIA_KEY_PASSWORD }}
+          EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY }}
+        run: |
+          MISSING=""
+          for NAME in GCP_WIF_PROVIDER GCP_DEPLOYER_SA \
+                      MOVIA_KEYSTORE_BASE64 MOVIA_KEYSTORE_PASSWORD \
+                      MOVIA_KEY_ALIAS MOVIA_KEY_PASSWORD \
+                      EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY; do
+            if [ -z "${!NAME}" ]; then
+              MISSING="$MISSING $NAME"
+            fi
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo "ERRO: secrets/vars ausentes:$MISSING"
+            echo "Configure em Settings > Secrets and variables > Actions"
+            echo "(GCP_* sao Variables; MOVIA_* e EXPO_* sao Secrets)."
+            exit 1
+          fi
+          echo "Todos os secrets necessarios estao presentes."
+
