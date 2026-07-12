@@ -35,7 +35,7 @@ export interface NearbyStation {
  * funcionando com os dados da rede. Um banco local corrompido não
  * pode derrubar a funcionalidade principal.
  */
-async function fetchAllStations(): Promise<StationResult[]> {
+export async function fetchAllStations(): Promise<StationResult[]> {
   try {
     const { data } = await api.get<StationResult[]>('/stations');
 
@@ -64,7 +64,7 @@ async function fetchAllStations(): Promise<StationResult[]> {
  * Antes desta mudança, a busca simplesmente quebrava sem internet,
  * mesmo com as 126 estações já em cache.
  */
-async function searchStations(q: string): Promise<StationResult[]> {
+export async function searchStations(q: string): Promise<StationResult[]> {
   try {
     const { data } = await api.get<StationResult[]>(`/stations?q=${encodeURIComponent(q)}`);
     return data;

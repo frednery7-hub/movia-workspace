@@ -104,4 +104,35 @@ describe('placesSearchApi', () => {
     expect(shouldSearchPlacesQuery('ab')).toBe(false);
     expect(shouldSearchPlacesQuery('abc')).toBe(true);
   });
+
+  it('falha de rede no autocomplete devolve lista vazia, não quebra', async () => {
+    // Places depende do Google e não tem equivalente offline. O correto é
+    // degradar em silêncio: a busca de estação (que funciona offline)
+    // continua servindo o usuário.
+    mockedApi.get.mockRejectedValue(new Error('sem conexão'));
+
+    await expect(
+      searchPlacesAutocomplete('plaza de armas', { sessionToken: 'tok' }),
+    ).resolves.toEqual([]);
+  });
+
+  it('falha de rede no details devolve null, não quebra', async () => {
+    mockedApi.get.mockRejectedValue(new Error('sem conexão'));
+
+    await expect(getPlaceDetails('place_123')).resolves.toBeNull();
+  });
+
+  it('requisição cancelada devolve vazio sem tratar como erro', async () => {
+    // O usuário digitando rápido cancela requisições anteriores. Isso é
+    // fluxo normal, não falha.
+    const canceled = Object.assign(new Error('canceled'), {
+      code: 'ERR_CANCELED',
+      isAxiosError: true,
+    });
+    mockedApi.get.mockRejectedValue(canceled);
+
+    await expect(
+      searchPlacesAutocomplete('plaza', { sessionToken: 'tok' }),
+    ).resolves.toEqual([]);
+  });
 });
