@@ -12,6 +12,7 @@ import { Observable, tap } from 'rxjs';
 import { Request, Response } from 'express';
 import * as crypto from 'crypto';
 import { MetricsService } from '../observability/metrics/metrics.service';
+import { runWithRequestContext } from '../observability/context/request-context';
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -30,54 +31,59 @@ export class LoggingInterceptor implements NestInterceptor {
 
     req.headers['x-correlation-id'] = correlationId;
 
-    return next.handle().pipe(
-      tap({
-        next: () => {
-          const ms = Date.now() - startMs;
-          const res = context.switchToHttp().getResponse<Response>();
-          const status = String(res.statusCode);
+    // Abre o contexto da requisição: tudo que rodar dentro daqui —
+    // controllers, services, repositories — enxerga o correlationId,
+    // e o Winston o injeta automaticamente em cada log emitido.
+    return runWithRequestContext({ correlationId, method, route }, () =>
+      next.handle().pipe(
+        tap({
+          next: () => {
+            const ms = Date.now() - startMs;
+            const res = context.switchToHttp().getResponse<Response>();
+            const status = String(res.statusCode);
 
-          if (!res.headersSent) {
-            res.setHeader('x-correlation-id', correlationId);
-          }
+            if (!res.headersSent) {
+              res.setHeader('x-correlation-id', correlationId);
+            }
 
-          this.logger.info('http_request', {
-            correlationId,
-            method,
-            url,
-            route,
-            statusCode: res.statusCode,
-            durationMs: ms,
-          });
+            this.logger.info('http_request', {
+              correlationId,
+              method,
+              url,
+              route,
+              statusCode: res.statusCode,
+              durationMs: ms,
+            });
 
-          this.metrics.httpRequestDuration
-            .labels(method, route, status)
-            .observe(ms);
-        },
-        error: (err: Error) => {
-          const ms = Date.now() - startMs;
-          const statusCode =
-            err instanceof HttpException ? err.getStatus() : 500;
-          const logPayload = {
-            correlationId,
-            method,
-            url,
-            durationMs: ms,
-            error: err.message,
-            statusCode,
-          };
+            this.metrics.httpRequestDuration
+              .labels(method, route, status)
+              .observe(ms);
+          },
+          error: (err: Error) => {
+            const ms = Date.now() - startMs;
+            const statusCode =
+              err instanceof HttpException ? err.getStatus() : 500;
+            const logPayload = {
+              correlationId,
+              method,
+              url,
+              durationMs: ms,
+              error: err.message,
+              statusCode,
+            };
 
-          if (statusCode >= 500) {
-            this.logger.error('http_request_error', logPayload);
-          } else {
-            this.logger.warn('http_request_error', logPayload);
-          }
+            if (statusCode >= 500) {
+              this.logger.error('http_request_error', logPayload);
+            } else {
+              this.logger.warn('http_request_error', logPayload);
+            }
 
-          this.metrics.httpRequestDuration
-            .labels(method, route, String(statusCode))
-            .observe(ms);
-        },
-      }),
+            this.metrics.httpRequestDuration
+              .labels(method, route, String(statusCode))
+              .observe(ms);
+          },
+        }),
+      ),
     );
   }
 }
